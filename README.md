@@ -1,50 +1,48 @@
 # SP26SE070 - Internal Consulting Chatbot Platform for Businesses using RAG
 
-## 📝 Giới thiệu dự án (Project Introduction)
-Dự án được phát triển nhằm giải quyết thách thức trong việc quản lý tri thức tại các tổ chức hiện đại, nơi thông tin thường bị phân mảnh và khó tiếp cận. Chúng mình xây dựng một nền tảng **SaaS Multi-tenant** cung cấp chatbot tư vấn nội bộ, cho phép doanh nghiệp khai thác dữ liệu riêng tư một cách an toàn thông qua kỹ thuật **Retrieval-Augmented Generation (RAG)**.
+## 📝 Project Introduction
+This project is developed to address the challenges of knowledge management in modern organizations, where information is often fragmented and difficult to access. We are building a **Multi-tenant SaaS** platform providing an internal consulting chatbot that allows businesses to safely leverage their private data using **Retrieval-Augmented Generation (RAG)**. 
 
-Hệ thống đảm bảo các câu trả lời của AI luôn chính xác và có căn cứ nhờ việc truy xuất trực tiếp từ các tài liệu nội bộ như chính sách nhân sự, hướng dẫn CNTT và quy trình vận hành. Điều này không chỉ giúp giảm tải cho các bộ phận hỗ trợ mà còn tăng cường hiệu suất làm việc cho toàn bộ nhân viên.
+The system ensures AI responses are accurate and grounded by retrieving information directly from internal documents such as HR policies, IT guidelines, and operational procedures. This not only reduces the burden on support departments but also enhances the overall productivity of all employees.
 
-* **Tên dự án (English):** Internal consulting chatbot platform for businesses using RAG.
-* **Tên dự án (Vietnamese):** Nền tảng chatbot tư vấn nội bộ cho doanh nghiệp dùng RAG.
-* **Mã dự án:** SP26SE070.
-* **Mã nhóm:** GSP26SE114.
-* **Thời gian thực hiện:** 01/01/2026 - 30/04/2026.
-
-
+* **Project Name (English):** Internal consulting chatbot platform for businesses using RAG.
+* **Project Name (Vietnamese):** Nền tảng chatbot tư vấn nội bộ cho doanh nghiệp dùng RAG.
+* **Project Code:** SP26SE070.
+* **Group Code:** GSP26SE114.
+* **Duration:** January 1, 2026 - April 30, 2026.
 
 ---
 
-## 👥 Thông tin nhóm (Team GSP26SE114)
-Dự án được thực hiện bởi các sinh viên chuyên ngành **Kỹ thuật Phần mềm (Software Engineering)** tại **Đại học FPT**:
+## 👥 Team Information (Group GSP26SE114)
+The project is conducted by Software Engineering students at **FPT University**:
 
-| STT | Họ và Tên | Mã Sinh Viên | Vai trò chính |
+| No. | Full Name | Student ID | Primary Role |
 | :---: | :--- | :---: | :--- |
 | 1 | **Phạm Hồng Quân** | SE161574 | Leader & Backend Developer |
 | 2 | **Đại Kim Nguyên** | SE151283 | Backend Developer |
 | 3 | **Trương Trí Sỹ** | SE173472 | Frontend Developer |
 | 4 | **Lê Minh Quân** | SE182901 | Frontend Developer |
 
-* **Giảng viên hướng dẫn:** Phan Minh Tâm.
+* **Supervisor:** Mr. Phan Minh Tâm.
 
 ---
 
-## 💻 Công nghệ cốt lõi (Core Tech Stack)
-Phần Backend được thiết kế để đáp ứng yêu cầu khắt khe về bảo mật và khả năng mở rộng của doanh nghiệp:
+## 💻 Core Tech Stack (Backend)
+The Backend is designed to meet strict enterprise security and scalability requirements:
 
-* **Ngôn ngữ lập trình:** Java 21 (LTS).
-* **Framework chính:** Spring Boot 3.x.
-* **Cơ sở dữ liệu:**
-    * **Relational Database:** PostgreSQL để lưu trữ metadata và quản lý thông tin hệ thống.
-    * **Vector Database:** Tích hợp extension **pgvector** để lưu trữ và truy vấn embeddings cho RAG.
-* **Trí tuệ nhân tạo (AI):** Spring AI tích hợp các Large Language Models (LLMs) hỗ trợ tiếng Việt.
-* **Bảo mật:** Spring Security & JWT (JSON Web Token) để quản lý phiên đăng nhập và định danh người dùng.
-* **Quản lý quyền:** Hệ thống Role-Based Access Control (RBAC) hỗ trợ phân quyền truy cập tài liệu theo phòng ban.
+* **Programming Language:** Java 21 (LTS).
+* **Core Framework:** Spring Boot 3.x.
+* **Database:**
+    * **Relational Database:** PostgreSQL for metadata storage and system management.
+    * **Vector Database:** Integrated **pgvector** extension for storing and querying embeddings for RAG.
+* **Artificial Intelligence (AI):** Spring AI integrating Large Language Models (LLMs) with Vietnamese support.
+* **Security:** Spring Security & JWT (JSON Web Token) for session management and user identification.
+* **Access Control:** Role-Based Access Control (RBAC) supporting department-based document access.
 
 ---
 
-## 💳 Thanh toán (Payment)
-*(Hiện tại mục này đang để trống theo kế hoạch phát triển của nhóm)*
+## 💳 Payment
+*(This section is currently blank according to the group's development roadmap)*
 
 ---
 © 2026 **Group GSP26SE114** - FPT Education.
