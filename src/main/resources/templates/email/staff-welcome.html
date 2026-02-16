@@ -1,0 +1,83 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <style>
+        body { font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; line-height: 1.6; color: #333; margin: 0; padding: 0; background-color: #f4f4f4; }
+        .container { max-width: 600px; margin: 20px auto; background: white; border-radius: 8px; overflow: hidden; box-shadow: 0 2px 10px rgba(0,0,0,0.1); }
+        .header { background: linear-gradient(135deg, #667eea 0%, #764ba2 100%); color: white; padding: 30px 20px; text-align: center; }
+        .header h1 { margin: 0; font-size: 28px; }
+        .content { padding: 30px; }
+        .greeting { font-size: 18px; margin-bottom: 20px; color: #333; }
+        .credentials { background: #e7f3ff; border: 2px dashed #0066cc; padding: 20px; margin: 20px 0; border-radius: 8px; }
+        .credentials .item { margin: 10px 0; font-size: 15px; }
+        .credentials .item strong { color: #0066cc; display: inline-block; min-width: 180px; }
+        .danger { background: #fff3cd; border-left: 4px solid #ff6b6b; padding: 15px; margin: 20px 0; border-radius: 4px; color: #856404; }
+        .info-box { background: #f8f9fa; border-left: 4px solid #667eea; padding: 15px; margin: 20px 0; border-radius: 4px; }
+        .footer { background: #f8f9fa; padding: 20px; text-align: center; font-size: 13px; color: #6c757d; border-top: 1px solid #dee2e6; }
+        .footer a { color: #667eea; text-decoration: none; }
+        ul { padding-left: 20px; }
+        ul li { margin: 8px 0; }
+        .badge { display: inline-block; background: #28a745; color: white; padding: 6px 12px; border-radius: 20px; font-weight: bold; font-size: 14px; }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <div class="header">
+            <h1>🎉 Chào Mừng Đến Với Đội Ngũ STAFF!</h1>
+            <p>Tài Khoản STAFF Của Bạn Đã Được Tạo</p>
+        </div>
+        <div class="content">
+            <p class="greeting">Xin chào <strong>${staffName}</strong>,</p>
+            <p>Chúc mừng! Bạn đã được bổ nhiệm làm <span class="badge">STAFF</span> của <strong>Chatbot RAG Platform</strong>! 🎊</p>
+            
+            <div class="credentials">
+                <p style="margin: 0 0 15px; font-size: 18px; color: #0066cc;"><strong>🔐 THÔNG TIN ĐĂNG NHẬP</strong></p>
+                <div class="item"><strong>📧 Email:</strong> <code style="background: #fff; padding: 4px 8px; border-radius: 3px; color: #d63384;">${staffEmail}</code></div>
+                <div class="item"><strong>🔑 Mật khẩu tạm thời:</strong> <code style="background: #fff; padding: 4px 8px; border-radius: 3px; color: #d63384;">${temporaryPassword}</code></div>
+                <div class="item"><strong>👤 Vai trò:</strong> <span style="color: #28a745; font-weight: bold;">STAFF (Platform Manager)</span></div>
+            </div>
+            
+            <div class="danger">
+                <p style="margin: 0; font-size: 16px;"><strong>⚠️ BẢO MẬT CỰC KỲ QUAN TRỌNG!</strong></p>
+                <ul style="margin: 10px 0 0; padding-left: 20px;">
+                    <li><strong>SAO CHÉP</strong> mật khẩu tạm thời này ngay (không thể lấy lại)</li>
+                    <li><strong>ĐỔI MẬT KHẨU NGAY</strong> sau khi đăng nhập lần đầu</li>
+                    <li>KHÔNG chia sẻ thông tin đăng nhập với bất kỳ ai</li>
+                    <li>Email này chứa thông tin nhạy cảm - vui lòng xóa sau khi đổi mật khẩu</li>
+                </ul>
+            </div>
+            
+            <div class="info-box">
+                <p style="margin: 0;"><strong>📌 VAI TRÒ VÀ TRÁCH NHIỆM STAFF:</strong></p>
+                <ul style="margin: 10px 0 0; padding-left: 20px;">
+                    <li><strong>Phê duyệt Tenant:</strong> Xét duyệt và kích hoạt các tổ chức đăng ký mới</li>
+                    <li><strong>Quản lý Tenant:</strong> Tạm ngưng, kích hoạt lại hoặc xóa tenant</li>
+                    <li><strong>Giám sát hệ thống:</strong> Theo dõi thống kê và hoạt động của các tenant</li>
+                    <li><strong>Hỗ trợ khách hàng:</strong> Xử lý các vấn đề liên quan đến tenant</li>
+                </ul>
+            </div>
+            
+            <div class="info-box">
+                <p style="margin: 0;"><strong>🚀 BƯỚC TIẾP THEO:</strong></p>
+                <ul style="margin: 10px 0 0; padding-left: 20px;">
+                    <li>Đăng nhập vào hệ thống tại: <a href="http://localhost:8080" style="color: #667eea;">http://localhost:8080</a></li>
+                    <li>Hệ thống sẽ yêu cầu bạn đổi mật khẩu ngay lập tức</li>
+                    <li>Mật khẩu mới phải có ít nhất 8 ký tự, bao gồm chữ hoa, chữ thường, số và ký tự đặc biệt</li>
+                    <li>Sau khi đổi mật khẩu, bạn có thể bắt đầu quản lý các tenant</li>
+                </ul>
+            </div>
+            
+            <p style="margin-top: 25px;">Nếu bạn có câu hỏi hoặc cần hỗ trợ, vui lòng liên hệ SUPER_ADMIN.</p>
+            
+            <p style="margin-top: 25px;">Chúc bạn làm việc hiệu quả! 🚀</p>
+        </div>
+        <div class="footer">
+            <p><strong>Chatbot RAG Team</strong></p>
+            <p>📧 support@chatbot-rag.com | 🌐 <a href="http://localhost:8080">chatbot-rag.com</a></p>
+            <p style="margin-top: 15px; font-size: 11px; color: #999;">Email này chứa thông tin bảo mật. Vui lòng không chuyển tiếp.</p>
+        </div>
+    </div>
+</body>
+</html>

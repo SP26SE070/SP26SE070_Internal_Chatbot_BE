@@ -1,0 +1,67 @@
+﻿<!DOCTYPE html>
+<html>
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <style>
+        body { font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; line-height: 1.6; color: #333; margin: 0; padding: 0; background-color: #f4f4f4; }
+        .container { max-width: 600px; margin: 20px auto; background: white; border-radius: 8px; overflow: hidden; box-shadow: 0 2px 10px rgba(0,0,0,0.1); }
+        .header { background: linear-gradient(135deg, #dc3545 0%, #c82333 100%); color: white; padding: 30px 20px; text-align: center; }
+        .header h1 { margin: 0; font-size: 28px; }
+        .content { padding: 30px; }
+        .greeting { font-size: 18px; margin-bottom: 20px; color: #333; }
+        .info-box { background: #f8f9fa; border-left: 4px solid #667eea; padding: 15px; margin: 20px 0; border-radius: 4px; }
+        .info-box .label { font-weight: bold; color: #667eea; display: inline-block; min-width: 180px; }
+        .danger { background: #f8d7da; border-left: 4px solid #dc3545; padding: 15px; margin: 20px 0; border-radius: 4px; color: #721c24; }
+        .warning { background: #fff3cd; border-left: 4px solid #ffc107; padding: 15px; margin: 20px 0; border-radius: 4px; color: #856404; }
+        .footer { background: #f8f9fa; padding: 20px; text-align: center; font-size: 13px; color: #6c757d; border-top: 1px solid #dee2e6; }
+        .footer a { color: #667eea; text-decoration: none; }
+        ul { padding-left: 20px; }
+        ul li { margin: 8px 0; }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <div class="header">
+            <h1>📋 Thông Báo Yêu Cầu</h1>
+            <p>Kết Quả Xét Duyệt Chuyển Phòng Ban</p>
+        </div>
+        <div class="content">
+            <p class="greeting">Xin chào <strong>${userName}</strong>,</p>
+            <p>Chúng tôi đã xem xét yêu cầu chuyển phòng ban của bạn. Rất tiếc, yêu cầu của bạn đã bị <strong style="color: #dc3545;">TỪ CHỐI</strong>.</p>
+            
+            <div class="danger">
+                <p style="margin: 0; font-size: 16px;"><strong>❌ YÊU CẦU BỊ TỪ CHỐI</strong></p>
+            </div>
+            
+            <div class="info-box">
+                <p><span class="label">📅 Thời gian phê duyệt:</span> <span>${reviewedAt}</span></p>
+                <p><span class="label">👤 Người xét duyệt:</span> <span>Quản trị viên</span></p>
+            </div>
+            
+            <div class="info-box">
+                <p style="margin: 0;"><strong>💬 Lý do từ chối:</strong></p>
+                <p style="margin: 10px 0 0; padding: 10px; background: white; border-radius: 4px; color: #dc3545; font-weight: 500;">${reviewNote}</p>
+            </div>
+            
+            <div class="warning">
+                <strong>📌 Hướng dẫn tiếp theo:</strong>
+                <ul style="margin: 10px 0 0; padding-left: 20px;">
+                    <li>Đọc kỹ lý do từ chối để hiểu rõ tình hình</li>
+                    <li>Trao đổi với quản lý trực tiếp nếu có thắc mắc</li>
+                    <li>Bạn có thể gửi yêu cầu mới sau khi đã giải quyết các vấn đề được nêu</li>
+                    <li>Liên hệ HR nếu cần hỗ trợ thêm</li>
+                </ul>
+            </div>
+            
+            <p style="margin-top: 25px;">Chúng tôi rất tiếc vì sự bất tiện này. Nếu bạn có bất kỳ câu hỏi nào, vui lòng liên hệ với bộ phận HR hoặc quản lý của bạn.</p>
+        </div>
+        <div class="footer">
+            <p><strong>Chatbot RAG Team</strong></p>
+            <p>📧 support@chatbot-rag.com | 🌐 <a href="http://localhost:8080">chatbot-rag.com</a></p>
+            <p style="margin-top: 15px; font-size: 11px; color: #999;">Email tự động từ hệ thống. Vui lòng không trả lời email này.</p>
+        </div>
+    </div>
+</body>
+</html>
+

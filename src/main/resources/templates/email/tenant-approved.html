@@ -1,0 +1,90 @@
+﻿<!DOCTYPE html>
+<html>
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <style>
+        body { font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; line-height: 1.6; color: #333; margin: 0; padding: 0; background-color: #f4f4f4; }
+        .container { max-width: 600px; margin: 20px auto; background: white; border-radius: 8px; overflow: hidden; box-shadow: 0 2px 10px rgba(0,0,0,0.1); }
+        .header { background: linear-gradient(135deg, #667eea 0%, #764ba2 100%); color: white; padding: 30px 20px; text-align: center; }
+        .header h1 { margin: 0; font-size: 28px; }
+        .content { padding: 30px; }
+        .greeting { font-size: 18px; margin-bottom: 20px; color: #333; }
+        .info-box { background: #f8f9fa; border-left: 4px solid #667eea; padding: 15px; margin: 20px 0; border-radius: 4px; }
+        .credentials { background: #e7f3ff; border: 2px dashed #0066cc; padding: 20px; margin: 20px 0; border-radius: 8px; }
+        .credentials .item { margin: 10px 0; font-size: 15px; }
+        .credentials .item strong { color: #0066cc; display: inline-block; min-width: 200px; }
+        .danger { background: #fff3cd; border-left: 4px solid #ff6b6b; padding: 15px; margin: 20px 0; border-radius: 4px; color: #856404; }
+        .success { background: #d4edda; border-left: 4px solid #28a745; padding: 15px; margin: 20px 0; border-radius: 4px; color: #155724; }
+        .button { display: inline-block; padding: 12px 30px; background: linear-gradient(135deg, #667eea 0%, #764ba2 100%); color: white; text-decoration: none; border-radius: 5px; margin: 20px 0; font-weight: bold; }
+        .footer { background: #f8f9fa; padding: 20px; text-align: center; font-size: 13px; color: #6c757d; border-top: 1px solid #dee2e6; }
+        .footer a { color: #667eea; text-decoration: none; }
+        ul { padding-left: 20px; }
+        ul li { margin: 8px 0; }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <div class="header">
+            <h1>🎉 Chào Mừng Đến Với Chatbot RAG!</h1>
+            <p>Tài Khoản Của Bạn Đã Được Kích Hoạt</p>
+        </div>
+        <div class="content">
+            <p class="greeting">Xin chào <strong>${representativeName}</strong>,</p>
+            <p>Chúc mừng! Yêu cầu sử dụng <strong>Chatbot RAG Platform</strong> của công ty <strong>${tenantName}</strong> đã được phê duyệt thành công! 🎊</p>
+            
+            <div class="success">
+                <p style="margin: 0; font-size: 16px;"><strong>✅ TÀI KHOẢN ĐÃ SẴN SÀNG SỬ DỤNG</strong></p>
+            </div>
+            
+            <div class="credentials">
+                <p style="margin: 0 0 15px; font-size: 18px; color: #0066cc;"><strong>🔐 THÔNG TIN ĐĂNG NHẬP</strong></p>
+                <div class="item"><strong>📧 Email đăng nhập:</strong> <code style="background: #fff; padding: 4px 8px; border-radius: 3px; color: #d63384;">${loginEmail}</code></div>
+                <div class="item"><strong>🔑 Mật khẩu tạm thời:</strong> <code style="background: #fff; padding: 4px 8px; border-radius: 3px; color: #d63384;">${temporaryPassword}</code></div>
+                <div class="item"><strong>👑 Vai trò:</strong> <span style="color: #28a745; font-weight: bold;">TENANT_ADMIN</span> (Quản trị viên tổ chức)</div>
+                <div class="item"><strong>🏢 Tổ chức:</strong> <span>${tenantName}</span></div>
+                <div class="item"><strong>📮 Email nhận thông báo:</strong> <span>${contactEmail}</span></div>
+            </div>
+            
+            <div class="danger">
+                <p style="margin: 0; font-size: 16px;"><strong>⚠️ BẢO MẬT CỰC KỲ QUAN TRỌNG!</strong></p>
+                <ul style="margin: 10px 0 0; padding-left: 20px;">
+                    <li><strong>ĐỔI MẬT KHẨU NGAY</strong> sau khi đăng nhập lần đầu</li>
+                    <li>KHÔNG chia sẻ thông tin đăng nhập với bất kỳ ai</li>
+                    <li>Lưu mật khẩu tạm thời này ở nơi an toàn</li>
+                    <li>Email này chứa thông tin nhạy cảm - vui lòng xóa sau khi đổi mật khẩu</li>
+                </ul>
+            </div>
+            
+            <div class="success">
+                <p style="margin: 0 0 10px;"><strong>✨ Với vai trò TENANT_ADMIN, bạn có thể:</strong></p>
+                <ul style="margin: 0; padding-left: 20px;">
+                    <li>Quản lý subscription và billing của tổ chức</li>
+                    <li>Upload và quản lý tài liệu (documents)</li>
+                    <li>Tạo tài khoản cho CONTENT_MANAGER và EMPLOYEE</li>
+                    <li>Xem báo cáo analytics và thống kê</li>
+                    <li>Quản lý cấu hình chatbot cho tổ chức</li>
+                </ul>
+            </div>
+            
+            <div class="info-box">
+                <p style="margin: 0;"><strong>📌 LƯU Ý QUAN TRỌNG:</strong></p>
+                <ul style="margin: 10px 0 0; padding-left: 20px;">
+                    <li>Email này gửi đến địa chỉ bạn đăng ký: <strong>${contactEmail}</strong></li>
+                    <li>Chỉ bạn nhận được email này mới có thông tin đăng nhập</li>
+                    <li>Đăng nhập thành công = Email đã được xác thực tự động ✅</li>
+                    <li>Không cần bước xác thực email riêng</li>
+                </ul>
+            </div>
+            
+            <p style="margin-top: 25px;">Nếu bạn cần hỗ trợ hoặc có câu hỏi, vui lòng liên hệ đội ngũ của chúng tôi.</p>
+        </div>
+        <div class="footer">
+            <p><strong>Chatbot RAG Team</strong></p>
+            <p>📧 support@chatbot-rag.com | 🌐 <a href="http://localhost:8080">chatbot-rag.com</a></p>
+            <p style="margin-top: 15px; font-size: 11px; color: #999;">Email này chứa thông tin bảo mật. Vui lòng không chuyển tiếp.</p>
+        </div>
+    </div>
+</body>
+</html>
+

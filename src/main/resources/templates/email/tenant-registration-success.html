@@ -1,0 +1,584 @@
+<!DOCTYPE html>
+<html lang="vi" xmlns:th="http://www.thymeleaf.org">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Đăng ký thành công - Chatbot RAG Platform</title>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+        
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            padding: 20px;
+            line-height: 1.6;
+        }
+        
+        .email-wrapper {
+            max-width: 650px;
+            margin: 0 auto;
+            background: #ffffff;
+            border-radius: 16px;
+            overflow: hidden;
+            box-shadow: 0 20px 60px rgba(0, 0, 0, 0.3);
+        }
+        
+        .header {
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            padding: 50px 40px;
+            text-align: center;
+            position: relative;
+        }
+        
+        .header::before {
+            content: '';
+            position: absolute;
+            top: 0;
+            left: 0;
+            right: 0;
+            bottom: 0;
+            background: url('data:image/svg+xml,<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1440 320"><path fill="%23ffffff" fill-opacity="0.1" d="M0,96L48,112C96,128,192,160,288,160C384,160,480,128,576,122.7C672,117,768,139,864,144C960,149,1056,139,1152,128C1248,117,1344,107,1392,101.3L1440,96L1440,320L1392,320C1344,320,1248,320,1152,320C1056,320,960,320,864,320C768,320,672,320,576,320C480,320,384,320,288,320C192,320,96,320,48,320L0,320Z"></path></svg>') no-repeat bottom;
+            background-size: cover;
+            opacity: 0.3;
+        }
+        
+        .success-icon {
+            width: 80px;
+            height: 80px;
+            background: rgba(255, 255, 255, 0.2);
+            border-radius: 50%;
+            display: inline-flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 45px;
+            margin-bottom: 20px;
+            position: relative;
+            animation: successPulse 2s infinite;
+        }
+        
+        @keyframes successPulse {
+            0%, 100% { transform: scale(1); }
+            50% { transform: scale(1.05); }
+        }
+        
+        .header h1 {
+            color: #ffffff;
+            font-size: 32px;
+            font-weight: 700;
+            margin-bottom: 10px;
+            position: relative;
+        }
+        
+        .header p {
+            color: rgba(255, 255, 255, 0.95);
+            font-size: 16px;
+            position: relative;
+        }
+        
+        .content {
+            padding: 45px 40px;
+        }
+        
+        .greeting {
+            font-size: 24px;
+            color: #2d3748;
+            margin-bottom: 20px;
+            font-weight: 600;
+        }
+        
+        .greeting span {
+            color: #667eea;
+        }
+        
+        .intro-text {
+            color: #4a5568;
+            font-size: 16px;
+            margin-bottom: 30px;
+            line-height: 1.8;
+        }
+        
+        .info-card {
+            background: linear-gradient(135deg, #f6f8fb 0%, #f0f4f8 100%);
+            border-radius: 12px;
+            padding: 25px;
+            margin: 25px 0;
+            border: 2px solid #e2e8f0;
+            position: relative;
+            overflow: hidden;
+        }
+        
+        .info-card::before {
+            content: '';
+            position: absolute;
+            top: 0;
+            left: 0;
+            width: 5px;
+            height: 100%;
+            background: linear-gradient(180deg, #667eea 0%, #764ba2 100%);
+        }
+        
+        .info-card h3 {
+            color: #667eea;
+            font-size: 18px;
+            margin-bottom: 15px;
+            display: flex;
+            align-items: center;
+            gap: 8px;
+        }
+        
+        .info-row {
+            display: flex;
+            padding: 10px 0;
+            border-bottom: 1px solid #e2e8f0;
+        }
+        
+        .info-row:last-child {
+            border-bottom: none;
+        }
+        
+        .info-label {
+            font-weight: 600;
+            color: #2d3748;
+            min-width: 140px;
+            font-size: 14px;
+        }
+        
+        .info-value {
+            color: #4a5568;
+            font-size: 14px;
+            flex: 1;
+        }
+        
+        .request-id {
+            background: #667eea;
+            color: #ffffff;
+            padding: 4px 12px;
+            border-radius: 6px;
+            font-family: 'Courier New', monospace;
+            font-size: 13px;
+            font-weight: 600;
+            letter-spacing: 0.5px;
+        }
+        
+        .status-banner {
+            text-align: center;
+            margin: 30px 0;
+        }
+        
+        .status-badge {
+            display: inline-flex;
+            align-items: center;
+            gap: 8px;
+            background: linear-gradient(135deg, #fbbf24 0%, #f59e0b 100%);
+            color: #ffffff;
+            padding: 12px 28px;
+            border-radius: 50px;
+            font-weight: 600;
+            font-size: 15px;
+            box-shadow: 0 4px 15px rgba(251, 191, 36, 0.4);
+        }
+        
+        .timeline-section {
+            background: #ffffff;
+            border-radius: 12px;
+            padding: 30px;
+            margin: 30px 0;
+            border: 2px solid #e2e8f0;
+        }
+        
+        .timeline-section h3 {
+            color: #2d3748;
+            font-size: 20px;
+            margin-bottom: 25px;
+            display: flex;
+            align-items: center;
+            gap: 10px;
+        }
+        
+        .timeline-step {
+            display: flex;
+            gap: 20px;
+            margin-bottom: 25px;
+            position: relative;
+            padding-left: 10px;
+        }
+        
+        .timeline-step:not(:last-child)::after {
+            content: '';
+            position: absolute;
+            left: 29px;
+            top: 45px;
+            width: 2px;
+            height: calc(100% - 20px);
+            background: linear-gradient(180deg, #667eea 0%, #e2e8f0 100%);
+        }
+        
+        .step-icon {
+            width: 40px;
+            height: 40px;
+            border-radius: 50%;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 20px;
+            flex-shrink: 0;
+            position: relative;
+            z-index: 1;
+        }
+        
+        .step-completed {
+            background: linear-gradient(135deg, #10b981 0%, #059669 100%);
+            box-shadow: 0 4px 12px rgba(16, 185, 129, 0.4);
+        }
+        
+        .step-active {
+            background: linear-gradient(135deg, #fbbf24 0%, #f59e0b 100%);
+            box-shadow: 0 4px 12px rgba(251, 191, 36, 0.4);
+            animation: pulse 2s infinite;
+        }
+        
+        @keyframes pulse {
+            0%, 100% { box-shadow: 0 4px 12px rgba(251, 191, 36, 0.4); }
+            50% { box-shadow: 0 4px 20px rgba(251, 191, 36, 0.7); }
+        }
+        
+        .step-pending {
+            background: #e2e8f0;
+            color: #94a3b8;
+        }
+        
+        .step-content {
+            flex: 1;
+            padding-top: 5px;
+        }
+        
+        .step-title {
+            font-size: 16px;
+            font-weight: 600;
+            color: #2d3748;
+            margin-bottom: 5px;
+        }
+        
+        .step-description {
+            font-size: 14px;
+            color: #64748b;
+            line-height: 1.6;
+        }
+        
+        .note-box {
+            background: linear-gradient(135deg, #dbeafe 0%, #bfdbfe 100%);
+            border-left: 4px solid #3b82f6;
+            border-radius: 8px;
+            padding: 20px;
+            margin: 25px 0;
+        }
+        
+        .note-box h4 {
+            color: #1e40af;
+            font-size: 16px;
+            margin-bottom: 12px;
+            display: flex;
+            align-items: center;
+            gap: 8px;
+        }
+        
+        .note-box ul {
+            list-style: none;
+            padding: 0;
+            margin: 0;
+        }
+        
+        .note-box li {
+            color: #1e40af;
+            font-size: 14px;
+            padding: 6px 0;
+            padding-left: 20px;
+            position: relative;
+        }
+        
+        .note-box li::before {
+            content: '▸';
+            position: absolute;
+            left: 0;
+            color: #3b82f6;
+            font-weight: bold;
+        }
+        
+        .support-section {
+            text-align: center;
+            background: linear-gradient(135deg, #f9fafb 0%, #f3f4f6 100%);
+            border-radius: 12px;
+            padding: 30px;
+            margin: 30px 0;
+        }
+        
+        .support-section h3 {
+            color: #667eea;
+            font-size: 20px;
+            margin-bottom: 15px;
+        }
+        
+        .support-section p {
+            color: #4a5568;
+            font-size: 14px;
+            margin-bottom: 20px;
+        }
+        
+        .contact-info {
+            display: flex;
+            justify-content: center;
+            gap: 30px;
+            flex-wrap: wrap;
+            margin-top: 20px;
+        }
+        
+        .contact-item {
+            display: flex;
+            align-items: center;
+            gap: 8px;
+            color: #2d3748;
+            font-size: 14px;
+            font-weight: 500;
+        }
+        
+        .footer {
+            background: #f9fafb;
+            padding: 35px 40px;
+            text-align: center;
+            border-top: 2px solid #e2e8f0;
+        }
+        
+        .footer-logo {
+            font-size: 18px;
+            font-weight: 700;
+            color: #667eea;
+            margin-bottom: 10px;
+        }
+        
+        .footer-description {
+            color: #64748b;
+            font-size: 13px;
+            margin-bottom: 15px;
+        }
+        
+        .footer-links {
+            margin: 20px 0;
+        }
+        
+        .footer-links a {
+            color: #667eea;
+            text-decoration: none;
+            font-size: 13px;
+            margin: 0 12px;
+            font-weight: 500;
+        }
+        
+        .footer-links a:hover {
+            text-decoration: underline;
+        }
+        
+        .footer-copyright {
+            color: #94a3b8;
+            font-size: 12px;
+            margin-top: 15px;
+        }
+        
+        .footer-note {
+            color: #cbd5e1;
+            font-size: 11px;
+            margin-top: 10px;
+            font-style: italic;
+        }
+        
+        @media only screen and (max-width: 600px) {
+            body {
+                padding: 10px;
+            }
+            
+            .email-wrapper {
+                border-radius: 12px;
+            }
+            
+            .header {
+                padding: 40px 25px;
+            }
+            
+            .content {
+                padding: 30px 25px;
+            }
+            
+            .greeting {
+                font-size: 20px;
+            }
+            
+            .info-row {
+                flex-direction: column;
+                gap: 5px;
+            }
+            
+            .info-label {
+                min-width: auto;
+            }
+            
+            .contact-info {
+                flex-direction: column;
+                gap: 15px;
+                align-items: center;
+            }
+            
+            .footer {
+                padding: 25px 20px;
+            }
+        }
+    </style>
+</head>
+<body>
+    <div class="email-wrapper">
+        <!-- Header -->
+        <div class="header">
+            <div class="success-icon">✅</div>
+            <h1>Đăng ký thành công!</h1>
+            <p>Chào mừng đến với Chatbot RAG Platform</p>
+        </div>
+
+        <!-- Main Content -->
+        <div class="content">
+            <div class="greeting">
+                Xin chào <span th:text="${companyName}">Công ty</span>! 👋
+            </div>
+            
+            <p class="intro-text">
+                Cảm ơn bạn đã đăng ký sử dụng <strong>Chatbot RAG Platform</strong>. 
+                Chúng tôi đã nhận được yêu cầu của bạn và đang trong quá trình xem xét kỹ lưỡng để đảm bảo chất lượng dịch vụ tốt nhất.
+            </p>
+            
+            <!-- Company Info Card -->
+            <div class="info-card">
+                <h3>📋 Thông tin đăng ký của bạn</h3>
+                <div class="info-row">
+                    <div class="info-label">🏢 Tên công ty:</div>
+                    <div class="info-value" th:text="${companyName}">Công ty ABC</div>
+                </div>
+                <div class="info-row">
+                    <div class="info-label">📧 Email liên hệ:</div>
+                    <div class="info-value" th:text="${contactEmail}">email@example.com</div>
+                </div>
+                <div class="info-row">
+                    <div class="info-label">👤 Người đại diện:</div>
+                    <div class="info-value" th:text="${representativeName}">Nguyễn Văn A</div>
+                </div>
+                <div class="info-row">
+                    <div class="info-label">📱 Số điện thoại:</div>
+                    <div class="info-value" th:text="${representativePhone}">0901234567</div>
+                </div>
+                <div class="info-row">
+                    <div class="info-label">🔖 Mã yêu cầu:</div>
+                    <div class="info-value">
+                        <span class="request-id" th:text="${requestId}">REQ-123456</span>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Status Banner -->
+            <div class="status-banner">
+                <div class="status-badge">
+                    <span>⏳</span>
+                    <span>Đang chờ phê duyệt</span>
+                </div>
+            </div>
+
+            <!-- Timeline Section -->
+            <div class="timeline-section">
+                <h3>🗓️ Quy trình xét duyệt</h3>
+                
+                <div class="timeline-step">
+                    <div class="step-icon step-completed">✓</div>
+                    <div class="step-content">
+                        <div class="step-title">Bước 1: Đăng ký tài khoản</div>
+                        <div class="step-description">Yêu cầu của bạn đã được gửi thành công vào hệ thống.</div>
+                    </div>
+                </div>
+
+                <div class="timeline-step">
+                    <div class="step-icon step-active">⏳</div>
+                    <div class="step-content">
+                        <div class="step-title">Bước 2: Xét duyệt hồ sơ</div>
+                        <div class="step-description">Đội ngũ quản trị viên đang xem xét thông tin. Thời gian dự kiến: 24-48 giờ làm việc.</div>
+                    </div>
+                </div>
+
+                <div class="timeline-step">
+                    <div class="step-icon step-pending">📧</div>
+                    <div class="step-content">
+                        <div class="step-title">Bước 3: Thông báo kết quả</div>
+                        <div class="step-description">Bạn sẽ nhận email thông báo kết quả phê duyệt kèm hướng dẫn chi tiết.</div>
+                    </div>
+                </div>
+
+                <div class="timeline-step">
+                    <div class="step-icon step-pending">🚀</div>
+                    <div class="step-content">
+                        <div class="step-title">Bước 4: Bắt đầu sử dụng</div>
+                        <div class="step-description">Đăng nhập bằng tài khoản được cấp và khám phá các tính năng của nền tảng.</div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Important Note -->
+            <div class="note-box">
+                <h4>💡 Lưu ý quan trọng</h4>
+                <ul>
+                    <li>Vui lòng kiểm tra email thường xuyên, kể cả trong thư mục spam/junk</li>
+                    <li>Thông tin đăng nhập sẽ được gửi sau khi yêu cầu được phê duyệt</li>
+                    <li>Thời gian xét duyệt: <strong>24-48 giờ làm việc</strong> (Thứ 2 - Thứ 6)</li>
+                    <li>Mọi thắc mắc xin liên hệ bộ phận hỗ trợ phía dưới</li>
+                </ul>
+            </div>
+
+            <!-- Support Section -->
+            <div class="support-section">
+                <h3>💬 Cần hỗ trợ?</h3>
+                <p>Đội ngũ của chúng tôi luôn sẵn sàng hỗ trợ bạn 24/7</p>
+                <div class="contact-info">
+                    <div class="contact-item">
+                        <span>📧</span>
+                        <span>support@chatbot-rag.com</span>
+                    </div>
+                    <div class="contact-item">
+                        <span>📞</span>
+                        <span>1900-xxx-xxx</span>
+                    </div>
+                    <div class="contact-item">
+                        <span>🌐</span>
+                        <span>chatbot-rag.com</span>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Footer -->
+        <div class="footer">
+            <div class="footer-logo">🤖 Chatbot RAG Platform</div>
+            <div class="footer-description">
+                Nền tảng chatbot thông minh dựa trên công nghệ RAG<br>
+                (Retrieval-Augmented Generation)
+            </div>
+            <div class="footer-links">
+                <a href="#">Chính sách bảo mật</a> • 
+                <a href="#">Điều khoản sử dụng</a> • 
+                <a href="#">Liên hệ</a>
+            </div>
+            <div class="footer-copyright">
+                © 2026 Chatbot RAG Platform. All rights reserved.
+            </div>
+            <div class="footer-note">
+                Email này được gửi tự động. Vui lòng không trả lời trực tiếp.
+            </div>
+        </div>
+    </div>
+</body>
+</html>
