@@ -1,0 +1,62 @@
+spring:
+  application:
+    name: chatbot-rag-be
+  
+  profiles:
+    include: sepay, gemini-local  # Added gemini-local for RAG
+
+  datasource:
+    url: jdbc:postgresql://localhost:5433/chatbot_db  # Port 5433 for Docker PostgreSQL
+    username: postgres
+    password: postgres  # Docker PostgreSQL password
+    driver-class-name: org.postgresql.Driver
+
+  mail:
+    host: smtp.gmail.com
+    port: 587
+    username: anhphamle2002@gmail.com
+    password: cfhk umcm slvh rahs 
+    properties:
+      mail:
+        smtp:
+          auth: true
+          starttls:
+            enable: true
+
+  sql:
+    init:
+      mode: always 
+
+  jpa:
+    database-platform: org.hibernate.dialect.PostgreSQLDialect
+    defer-datasource-initialization: true 
+    hibernate:
+      ddl-auto: none
+    show-sql: true
+    properties:
+      hibernate:
+        format_sql: true
+
+  # PHẢI ĐẶT Ở ĐÂY (THỤT VÀO 2 DẤU CÁCH SO VỚI SPRING)
+  autoconfigure:
+    exclude:
+      - org.springframework.ai.model.google.genai.autoconfigure.chat.GoogleGenAiChatAutoConfiguration
+      - org.springframework.ai.model.google.genai.autoconfigure.embedding.GoogleGenAiEmbeddingAutoConfiguration
+
+# Server configuration for proxy support (ngrok)
+server:
+  forward-headers-strategy: framework
+  port: 8080
+
+# MinIO Configuration (S3-compatible object storage)
+minio:
+  enabled: true  # Đã có Docker, enable MinIO
+  endpoint: http://localhost:9000
+  access-key: minioadmin
+  secret-key: minioadmin123
+  bucket-name: chatbot-documents
+
+jwt:
+  secret: "GSP26SE114_Super_Secret_Key_For_Internal_Chatbot_RAG_2026_FPTU"
+  expiration: 86400000 
+  refreshExpiration: 604800000

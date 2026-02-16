@@ -1,56 +1,33 @@
-### JetBrains IDE (IntelliJ IDEA) ###
-.idea/
-*.iml
-*.iws
-*.ipr
-out/
+HELP.md
+target/
+.mvn/wrapper/maven-wrapper.jar
+!**/src/main/**/target/
+!**/src/test/**/target/
 
-### Eclipse IDE ###
-.settings/
+### STS ###
+.apt_generated
 .classpath
+.factorypath
 .project
-.metadata/
-bin/
-*.tmp
-*.bak
-*.swp
-*~.nib
-local.properties
+.settings
+.springBeans
+.sts4-cache
+
+### IntelliJ IDEA ###
+.idea
+*.iws
+*.iml
+*.ipr
+
+### NetBeans ###
+/nbproject/private/
+/nbbuild/
+/dist/
+/nbdist/
+/.nb-gradle/
+build/
+!**/src/main/**/build/
+!**/src/test/**/build/
 
 ### VS Code ###
 .vscode/
-
-### Build Tool (Maven) ###
-target/
-pom.xml.tag
-pom.xml.releaseBackup
-pom.xml.versionsBackup
-pom.xml.next
-release.properties
-dependency-reduced-pom.xml
-buildNumber.properties
-.mvn/timing.properties
-# Tránh đẩy file wrapper nếu không cần thiết
-.mvn/wrapper/maven-wrapper.jar
-
-### Operating System ###
-managed/
-.DS_Store
-Thumbs.db
-
-### Log files ###
-*.log
-logs/
-
-### Security & Environment (QUAN TRỌNG) ###
-# Không đẩy các file cấu hình chứa API Key (Gemini/OpenAI) lên GitHub
-application-dev.yml
-application-local.yml
-application-prod.yml
-.env
-*.key
-*.pem
-
-### Virtual Machine & Docker ###
-.vagrant/
-docker-compose.override.yml
