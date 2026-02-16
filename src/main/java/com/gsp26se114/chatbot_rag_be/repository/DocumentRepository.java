@@ -1,0 +1,94 @@
+package com.gsp26se114.chatbot_rag_be.repository;
+
+import com.gsp26se114.chatbot_rag_be.entity.DocumentEntity;
+import com.gsp26se114.chatbot_rag_be.entity.DocumentVisibility;
+import org.springframework.data.jpa.repository.JpaRepository;
+import org.springframework.data.jpa.repository.Query;
+import org.springframework.data.repository.query.Param;
+import org.springframework.stereotype.Repository;
+
+import java.util.List;
+import java.util.Optional;
+import java.util.UUID;
+
+@Repository
+public interface DocumentRepository extends JpaRepository<DocumentEntity, UUID> {
+    
+    /**
+     * Lấy tất cả documents của tenant (cho Knowledge Dashboard)
+     */
+    List<DocumentEntity> findByTenantIdAndIsActiveOrderByUploadedAtDesc(UUID tenantId, Boolean isActive);
+    
+    /**
+     * Lấy documents theo category
+     */
+    List<DocumentEntity> findByTenantIdAndCategoryAndIsActiveOrderByUploadedAtDesc(
+        UUID tenantId, 
+        String category, 
+        Boolean isActive
+    );
+    
+    /**
+     * Lấy documents mà user có quyền xem (cho RAG query)
+     * Logic:
+     * 1. COMPANY_WIDE → Tất cả xem được
+     * 2. SPECIFIC_DEPARTMENTS → Check userDepartmentId trong JSONB array
+     * 3. SPECIFIC_ROLES → Check userRoleId trong JSONB array
+     * 
+     * Dùng native query vì Hibernate 6 không support MEMBER OF với JSONB
+     */
+    @Query(value = """
+        SELECT * FROM documents 
+        WHERE tenant_id = :tenantId 
+        AND is_active = true
+        AND (
+            visibility = 'COMPANY_WIDE'
+            OR (visibility = 'SPECIFIC_DEPARTMENTS' 
+                AND jsonb_exists(accessible_departments::jsonb, CAST(:userDepartmentId AS TEXT)))
+            OR (visibility = 'SPECIFIC_ROLES' 
+                AND jsonb_exists(accessible_roles::jsonb, CAST(:userRoleId AS TEXT)))
+        )
+        ORDER BY uploaded_at DESC
+        """, nativeQuery = true)
+    List<DocumentEntity> findAccessibleDocuments(
+        @Param("tenantId") UUID tenantId,
+        @Param("userDepartmentId") Integer userDepartmentId,
+        @Param("userRoleId") Integer userRoleId
+    );
+    
+    /**
+     * Count documents theo visibility
+     */
+    Long countByTenantIdAndVisibilityAndIsActive(UUID tenantId, DocumentVisibility visibility, Boolean isActive);
+    
+    /**
+     * Lấy documents được upload bởi user
+     */
+    List<DocumentEntity> findByUploadedByAndIsActiveOrderByUploadedAtDesc(UUID uploadedBy, Boolean isActive);
+    
+    /**
+     * Count documents của user (để check quota)
+     */
+    Long countByTenantIdAndIsActive(UUID tenantId, Boolean isActive);
+    
+    /**
+     * Lấy document by ID và check tenant isolation
+     */
+    Optional<DocumentEntity> findByIdAndTenantId(UUID id, UUID tenantId);
+    
+    /**
+     * Lấy documents có embedding status = PENDING (để process)
+     */
+    List<DocumentEntity> findByEmbeddingStatusAndIsActive(String embeddingStatus, Boolean isActive);
+    
+    /**
+     * Count documents được upload bởi specific role (để check trước khi xóa role)
+     */
+    @Query("SELECT COUNT(d) FROM DocumentEntity d WHERE d.uploadedByRole = :roleName AND d.isActive = true")
+    Long countByUploadedByRole(@Param("roleName") String roleName);
+    
+    /**
+     * Count total documents by tenant ID
+     */
+    long countByTenantId(UUID tenantId);
+}
