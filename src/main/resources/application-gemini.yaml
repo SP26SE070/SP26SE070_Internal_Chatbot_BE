@@ -1,0 +1,42 @@
+# Gemini AI Configuration
+# Copy file này thành application-gemini-local.yaml và thay YOUR_API_KEY
+# Get API key: https://aistudio.google.com/app/apikey
+
+spring:
+  ai:
+    vertex:
+      ai:
+        gemini:
+          project-id: YOUR_PROJECT_ID  # Optional, có thể để trống nếu dùng API key
+          location: us-central1
+          chat:
+            options:
+              model: gemini-2.0-flash  # Fast & cheap
+              temperature: 0.7
+              max-tokens: 2048
+          embedding:
+            options:
+              model: text-embedding-004  # 768 dimensions
+              task-type: RETRIEVAL_DOCUMENT
+
+# Hoặc dùng Google AI Studio API (đơn giản hơn):
+# Uncomment block dưới và comment block trên
+#spring:
+#  ai:
+#    google:
+#      genai:
+#        api-key: YOUR_API_KEY_HERE
+#        chat:
+#          options:
+#            model: gemini-2.0-flash-exp
+#            temperature: 0.7
+#        embedding:
+#          options:
+#            model: text-embedding-004
+
+# RAG Configuration
+rag:
+  chunk-size: 500  # Max tokens per chunk
+  chunk-overlap: 50  # Overlap between chunks
+  top-k: 5  # Number of similar chunks to retrieve
+  embedding-batch-size: 10  # Process 10 documents at a time
