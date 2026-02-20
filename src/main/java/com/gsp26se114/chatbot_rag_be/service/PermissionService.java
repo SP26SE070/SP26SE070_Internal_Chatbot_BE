@@ -1,6 +1,7 @@
 package com.gsp26se114.chatbot_rag_be.service;
 
 import com.gsp26se114.chatbot_rag_be.constants.PermissionConstants;
+import com.gsp26se114.chatbot_rag_be.constants.RolePermissionConstants;
 import com.gsp26se114.chatbot_rag_be.entity.RoleEntity;
 import com.gsp26se114.chatbot_rag_be.entity.User;
 import com.gsp26se114.chatbot_rag_be.payload.response.PermissionCategoryResponse;
@@ -23,21 +24,58 @@ public class PermissionService {
     
     /**
      * Kiểm tra user có permission cụ thể không
+     * Kiểm tra theo thứ tự:
+     * 1. Basic role permissions (từ RolePermissionConstants)
+     * 2. User-specific permissions (trong user.permissions field)
      */
     public boolean hasPermission(User user, String requiredPermission) {
         if (user == null || user.getRoleId() == null) {
             return false;
         }
         
-        RoleEntity role = roleRepository.findById(user.getRoleId())
-                .orElse(null);
-        
-        if (role == null || role.getPermissions() == null) {
+        // 1. Kiểm tra basic role permissions
+        RoleEntity role = roleRepository.findById(user.getRoleId()).orElse(null);
+        if (role == null) {
             return false;
         }
         
-        // Use RoleEntity's hasPermission method
-        return role.hasPermission(requiredPermission);
+        List<String> basicPermissions = RolePermissionConstants.getBasicPermissions(role.getCode());
+        
+        // Check for ALL permission (SUPER_ADMIN)
+        if (basicPermissions.contains(PermissionConstants.ALL)) {
+            return true;
+        }
+        
+        // Check direct permission
+        if (basicPermissions.contains(requiredPermission)) {
+            return true;
+        }
+        
+        // Check wildcard permission (e.g., USER_ALL includes USER_READ, USER_WRITE, USER_DELETE)
+        if (requiredPermission.contains("_")) {
+            String category = requiredPermission.split("_")[0];
+            if (basicPermissions.contains(category + "_ALL")) {
+                return true;
+            }
+        }
+        
+        // 2. Kiểm tra user-specific permissions (trong user.permissions)
+        if (user.getPermissions() != null && !user.getPermissions().isEmpty()) {
+            // Check direct permission
+            if (user.getPermissions().contains(requiredPermission)) {
+                return true;
+            }
+            
+            // Check wildcard in user permissions
+            if (requiredPermission.contains("_")) {
+                String category = requiredPermission.split("_")[0];
+                if (user.getPermissions().contains(category + "_ALL")) {
+                    return true;
+                }
+            }
+        }
+        
+        return false;
     }
     
     /**
@@ -147,6 +185,30 @@ public class PermissionService {
                 .build());
         
         return categories;
+    }
+    
+    /**
+     * Lấy tất cả permissions của user (basic + user-specific)
+     */
+    public List<String> getAllUserPermissions(User user) {
+        List<String> allPermissions = new ArrayList<>();
+        
+        if (user == null || user.getRoleId() == null) {
+            return allPermissions;
+        }
+        
+        // 1. Add basic role permissions
+        RoleEntity role = roleRepository.findById(user.getRoleId()).orElse(null);
+        if (role != null) {
+            allPermissions.addAll(RolePermissionConstants.getBasicPermissions(role.getCode()));
+        }
+        
+        // 2. Add user-specific permissions
+        if (user.getPermissions() != null) {
+            allPermissions.addAll(user.getPermissions());
+        }
+        
+        return allPermissions;
     }
     
     /**

@@ -7,6 +7,7 @@ import jakarta.validation.constraints.Past;
 import jakarta.validation.constraints.Size;
 
 import java.time.LocalDate;
+import java.util.List;
 
 public record CreateUserRequest(
         @NotBlank(message = "Họ tên không được để trống")
@@ -28,5 +29,7 @@ public record CreateUserRequest(
         @NotNull(message = "Role không được để trống")
         Integer roleId,  // Foreign key to roles table
         
-        Integer departmentId  // Foreign key to departments table (optional)
+        Integer departmentId,  // Foreign key to departments table (optional)
+        
+        List<String> permissions  // Permissions bổ sung (optional)
 ) {}

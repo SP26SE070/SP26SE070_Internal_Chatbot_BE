@@ -1,6 +1,7 @@
 package com.gsp26se114.chatbot_rag_be.service;
 
 
+import com.gsp26se114.chatbot_rag_be.constants.RolePermissionConstants;
 import com.gsp26se114.chatbot_rag_be.entity.Department;
 import com.gsp26se114.chatbot_rag_be.entity.RoleEntity;
 import com.gsp26se114.chatbot_rag_be.entity.Tenant;
@@ -240,6 +241,15 @@ public class TenantAdminService {
         // Generate temporary password
         String temporaryPassword = UserUtil.generateRandomPassword();
         
+        // Validate permissions if provided
+        if (request.permissions() != null && !request.permissions().isEmpty()) {
+            for (String permission : request.permissions()) {
+                if (!RolePermissionConstants.isGrantable(permission)) {
+                    throw new RuntimeException("Permission '" + permission + "' không thể được cấp");
+                }
+            }
+        }
+        
         User newUser = new User();
         newUser.setEmail(loginEmail);  // Email ảo để đăng nhập
         newUser.setContactEmail(request.contactEmail());  // Email thật nhận thông báo
@@ -251,6 +261,7 @@ public class TenantAdminService {
         newUser.setRoleId(request.roleId());
         newUser.setDepartmentId(request.departmentId());
         newUser.setTenantId(tenantId);
+        newUser.setPermissions(request.permissions());    // Set permissions bổ sung
         newUser.setMustChangePassword(true);  // Bắt buộc đổi mật khẩu lần đầu
         newUser.setCreatedAt(LocalDateTime.now());
         
@@ -492,16 +503,57 @@ public class TenantAdminService {
                 user.getPhoneNumber(),
                 user.getDateOfBirth(),
                 user.getAddress(),
-                role != null ? role.getId() : null,
-                role != null ? role.getCode() : null,
                 role != null ? role.getName() : null,
-                department != null ? department.getId() : null,
-                department != null ? department.getCode() : null,
                 department != null ? department.getName() : null,
                 tenantName,
+                user.getPermissions(),
                 user.getCreatedAt(),
                 user.getUpdatedAt(),
                 user.getLastLoginAt()
         );
+    }
+    
+    /**
+     * Update user permissions (TENANT_ADMIN cấp quyền bổ sung cho user)
+     */
+    @Transactional
+    public UserResponse updateUserPermissions(String tenantAdminEmail, UUID userId, List<String> permissions) {
+        User tenantAdmin = getUserByEmail(tenantAdminEmail);
+        User user = userRepository.findById(userId)
+                .orElseThrow(() -> new RuntimeException("User không tồn tại với ID: " + userId));
+        
+        // Verify same tenant
+        if (!user.getTenantId().equals(tenantAdmin.getTenantId())) {
+            throw new RuntimeException("Bạn không có quyền cập nhật user này!");
+        }
+        
+        // Cannot change TENANT_ADMIN permissions
+        RoleEntity tenantAdminRole = roleRepository.findByCode("TENANT_ADMIN")
+                .orElseThrow(() -> new RuntimeException("Role TENANT_ADMIN không tồn tại"));
+        if (user.getRoleId().equals(tenantAdminRole.getId())) {
+            throw new RuntimeException("Không thể thay đổi quyền của TENANT_ADMIN!");
+        }
+        
+        // Validate all permissions are grantable
+        for (String permission : permissions) {
+            if (!RolePermissionConstants.isGrantable(permission)) {
+                throw new RuntimeException("Permission '" + permission + "' không thể được cấp");
+            }
+        }
+        
+        // Update permissions
+        user.setPermissions(permissions);
+        user.setUpdatedAt(LocalDateTime.now());
+        user = userRepository.save(user);
+        
+        log.info("TENANT_ADMIN {} updated permissions for user {}: {}", 
+                tenantAdminEmail, user.getEmail(), permissions);
+        
+        RoleEntity role = user.getRoleId() != null ? 
+            roleRepository.findById(user.getRoleId()).orElse(null) : null;
+        Department department = user.getDepartmentId() != null ? 
+            departmentRepository.findById(user.getDepartmentId()).orElse(null) : null;
+        
+        return mapToUserResponse(user, role, department);
     }
 }

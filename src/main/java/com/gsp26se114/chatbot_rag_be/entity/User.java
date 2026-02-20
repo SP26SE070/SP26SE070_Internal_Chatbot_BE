@@ -2,8 +2,13 @@ package com.gsp26se114.chatbot_rag_be.entity;
 
 import jakarta.persistence.*;
 import lombok.*;
+import org.hibernate.annotations.JdbcTypeCode;
+import org.hibernate.type.SqlTypes;
+
 import java.time.LocalDate;
 import java.time.LocalDateTime;
+import java.util.ArrayList;
+import java.util.List;
 import java.util.UUID;
 
 @Entity
@@ -45,6 +50,12 @@ public class User {
 
     @Column(name = "tenant_id")
     private UUID tenantId;
+    
+    // Permissions bổ sung được TENANT_ADMIN cấp cho user này
+    // Ví dụ: ["DOCUMENT_READ", "DOCUMENT_WRITE", "ANALYTICS_VIEW"]
+    @JdbcTypeCode(SqlTypes.JSON)
+    @Column(name = "permissions", columnDefinition = "jsonb")
+    private List<String> permissions = new ArrayList<>();
 
     private String resetPasswordToken;
     private LocalDateTime tokenExpiry;
