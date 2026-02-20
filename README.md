@@ -42,7 +42,19 @@ The Backend is designed to meet strict enterprise security and scalability requi
 ---
 
 ## 💳 Payment
-*(This section is currently blank according to the group's development roadmap)*
+To support the **SaaS** business model and automate the subscription renewal process for businesses, the system integrates an automated payment solution:
 
+* **Payment Gateway:** **SePay** (Real-time bank transaction automation via API/Webhook).
+* **Payment Method:** Bank transfer via **Dynamic VietQR**.
+* **Technical Mechanism:**
+    * **VietQR Pro:** The Backend calls SePay API to generate a dynamic QR code containing the exact amount and a unique transaction ID for each tenant/invoice.
+    * **Webhook Integration:** SePay sends a real-time HTTP POST request (Webhook) to the Backend as soon as a matching transaction is detected in the bank account.
+    * **Automatic Provisioning:** The system verifies the Webhook signature for security, reconciles the order code in the database, and automatically updates the subscription status without manual intervention.
+* **Business Workflow:**
+    1.  The business (Tenant) selects a service plan (Basic/Premium/Enterprise).
+    2.  The system displays a unique QR code generated via SePay.
+    3.  The user scans and pays via their Mobile Banking app.
+    4.  SePay triggers a Webhook to the `SP26SE070` Backend endpoint.
+    5.  The Backend validates the signature, extends the subscription validity, and unlocks features for the Tenant.
 ---
 © 2026 **Group GSP26SE114** - FPT Education.
