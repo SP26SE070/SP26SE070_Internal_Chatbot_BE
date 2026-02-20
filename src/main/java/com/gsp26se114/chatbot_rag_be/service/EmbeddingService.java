@@ -26,78 +26,144 @@ public class EmbeddingService {
     @Value("${spring.ai.google.genai.api-key}")
     private String apiKey;
 
-    @Value("${spring.ai.google.genai.embedding.options.model:text-embedding-004}")
+    @Value("${spring.ai.google.genai.embedding.options.model:gemini-embedding-001}")
     private String embeddingModel;
 
     @Value("${spring.ai.google.genai.embedding.options.output-dimensionality:768}")
     private int outputDimensionality;
 
-    private final OkHttpClient httpClient = new OkHttpClient();
+    private final OkHttpClient httpClient = new OkHttpClient.Builder()
+            .connectTimeout(30, java.util.concurrent.TimeUnit.SECONDS)
+            .readTimeout(30, java.util.concurrent.TimeUnit.SECONDS)
+            .writeTimeout(30, java.util.concurrent.TimeUnit.SECONDS)
+            .build();
     private final Gson gson = new Gson();
 
+    private static final int MAX_RETRIES = 3;
+    private static final long RETRY_DELAY_MS = 1000;
+
     /**
-     * Tạo embedding cho một đoạn text
+     * Tạo embedding cho một đoạn text với retry logic
      * 
      * @param text Text cần embedding
      * @return Vector embedding (outputDimensionality dimensions)
      */
     public float[] createEmbedding(String text) {
-        try {
-            // Build request body - Gemini API format
-            JsonObject requestBody = new JsonObject();
-            
-            // Add content field
-            JsonObject content = new JsonObject();
-            JsonArray parts = new JsonArray();
-            JsonObject part = new JsonObject();
-            part.addProperty("text", text);
-            parts.add(part);
-            content.add("parts", parts);
-            requestBody.add("content", content);
-            
-            // Add outputDimensionality to reduce vector size (Matryoshka support)
-            requestBody.addProperty("outputDimensionality", outputDimensionality);
+        int retries = 0;
+        Exception lastException = null;
 
-            // API URL - use models/ prefix in path
-            String url = String.format(
-                "https://generativelanguage.googleapis.com/v1beta/models/%s:embedContent?key=%s",
-                embeddingModel, apiKey
-            );
-
-            // HTTP Request
-            RequestBody body = RequestBody.create(
-                gson.toJson(requestBody),
-                MediaType.get("application/json")
-            );
-
-            Request request = new Request.Builder()
-                    .url(url)
-                    .post(body)
-                    .build();
-
-            // Execute
-            try (Response response = httpClient.newCall(request).execute()) {
-                if (!response.isSuccessful()) {
-                    throw new RuntimeException("Gemini API error: " + response.code());
+        while (retries < MAX_RETRIES) {
+            try {
+                // Add small delay between retries to avoid rate limiting
+                if (retries > 0) {
+                    Thread.sleep(RETRY_DELAY_MS * retries);
+                    log.info("Retrying embedding creation (attempt {}/{})", retries + 1, MAX_RETRIES);
                 }
 
-                String responseBody = response.body().string();
-                JsonObject json = gson.fromJson(responseBody, JsonObject.class);
-                JsonArray values = json.getAsJsonObject("embedding")
-                                      .getAsJsonArray("values");
+                return createEmbeddingInternal(text);
 
-                float[] embedding = new float[values.size()];
-                for (int i = 0; i < values.size(); i++) {
-                    embedding[i] = values.get(i).getAsFloat();
+            } catch (InterruptedException e) {
+                Thread.currentThread().interrupt();
+                throw new RuntimeException("Embedding creation interrupted", e);
+            } catch (Exception e) {
+                lastException = e;
+                retries++;
+                log.warn("Embedding attempt {}/{} failed: {}", retries, MAX_RETRIES, e.getMessage());
+            }
+        }
+
+        log.error("Failed to create embedding after {} retries", MAX_RETRIES, lastException);
+        throw new RuntimeException("Embedding creation failed after " + MAX_RETRIES + " retries. " +
+                "Error: " + (lastException != null ? lastException.getMessage() : "Unknown"), lastException);
+    }
+
+    /**
+     * Internal method để tạo embedding (không có retry logic)
+     */
+    private float[] createEmbeddingInternal(String text) throws IOException {
+        // Build request body - Gemini API format
+        JsonObject requestBody = new JsonObject();
+        
+        // Add content field
+        JsonObject content = new JsonObject();
+        JsonArray parts = new JsonArray();
+        JsonObject part = new JsonObject();
+        part.addProperty("text", text);
+        parts.add(part);
+        content.add("parts", parts);
+        requestBody.add("content", content);
+        
+        // Add outputDimensionality to reduce vector size (Matryoshka support)
+        requestBody.addProperty("outputDimensionality", outputDimensionality);
+
+        // API URL - use models/ prefix in path
+        String url = String.format(
+            "https://generativelanguage.googleapis.com/v1beta/models/%s:embedContent?key=%s",
+            embeddingModel, apiKey
+        );
+
+        log.debug("Calling Gemini Embedding API: model={}, dimensions={}", embeddingModel, outputDimensionality);
+
+        // HTTP Request
+        RequestBody body = RequestBody.create(
+            gson.toJson(requestBody),
+            MediaType.get("application/json")
+        );
+
+        Request request = new Request.Builder()
+                .url(url)
+                .post(body)
+                .build();
+
+        // Execute
+        try (Response response = httpClient.newCall(request).execute()) {
+            String responseBody = response.body() != null ? response.body().string() : "";
+            
+            if (!response.isSuccessful()) {
+                log.error("Gemini API error: code={}, body={}", response.code(), responseBody);
+                
+                // Parse error details if available
+                String errorMessage = "Gemini API error: " + response.code();
+                try {
+                    JsonObject errorJson = gson.fromJson(responseBody, JsonObject.class);
+                    if (errorJson.has("error")) {
+                        JsonObject error = errorJson.getAsJsonObject("error");
+                        String message = error.has("message") ? error.get("message").getAsString() : "";
+                        errorMessage += " - " + message;
+                        
+                        // Add helpful hints based on error code
+                        if (response.code() == 403) {
+                            errorMessage += "\nKiểm tra: 1) API key hợp lệ, 2) Enable Generative Language API tại Google Cloud Console, 3) Quota còn";
+                        } else if (response.code() == 429) {
+                            errorMessage += "\nRate limit exceeded. Đợi một chút và thử lại.";
+                        } else if (response.code() == 400) {
+                            errorMessage += "\nKiểm tra model name và request format.";
+                        }
+                    }
+                } catch (Exception e) {
+                    log.debug("Could not parse error response", e);
                 }
+                
+                throw new RuntimeException(errorMessage);
+            }
 
-                log.debug("Created embedding: dimensions={}", embedding.length);
-                return embedding;
+            JsonObject json = gson.fromJson(responseBody, JsonObject.class);
+            
+            if (!json.has("embedding") || !json.getAsJsonObject("embedding").has("values")) {
+                log.error("Invalid response format: {}", responseBody);
+                throw new RuntimeException("Invalid embedding response format");
             }
             
-        } catch (IOException e) {
-            log.error("Failed to create embedding", e);
-            throw new RuntimeException("Embedding creation failed", e);
+            JsonArray values = json.getAsJsonObject("embedding")
+                                  .getAsJsonArray("values");
+
+            float[] embedding = new float[values.size()];
+            for (int i = 0; i < values.size(); i++) {
+                embedding[i] = values.get(i).getAsFloat();
+            }
+
+            log.debug("Created embedding: dimensions={}", embedding.length);
+            return embedding;
         }
     }
 

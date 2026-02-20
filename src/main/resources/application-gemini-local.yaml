@@ -4,7 +4,7 @@ spring:
   ai:
     google:
       genai:
-        api-key: AIzaSyAP0u1X65JZjOx_qzFNDnv1WlEP0hFJCrM
+        api-key: AIzaSyC3OrfoqMt6K_cQLfMoybUtb2cV8eVQ0Es
         chat:
           options:
             model: gemini-2.5-flash
@@ -13,3 +13,4 @@ spring:
         embedding:
           options:
             model: gemini-embedding-001
+            output-dimensionality: 768
