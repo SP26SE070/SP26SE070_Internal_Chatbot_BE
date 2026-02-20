@@ -56,6 +56,25 @@ public class GeminiChatService {
      * Build prompt with RAG pattern: context + instruction + question
      */
     private String buildPrompt(String context, String question) {
+        // If no context (no documents), answer with general knowledge
+        if (context == null || context.isBlank()) {
+            return """
+                    Bạn là trợ lý AI thông minh của hệ thống chatbot doanh nghiệp.
+                    Hiện tại chưa có tài liệu nào được tải lên hệ thống, nhưng bạn vẫn có thể trả lời dựa trên kiến thức chung.
+                    
+                    QUY TẮC:
+                    - Luôn trả lời bằng TIẾNG VIỆT, trừ khi người dùng hỏi bằng tiếng Anh.
+                    - Trả lời chính xác, hữu ích dựa trên kiến thức chung của bạn.
+                    - Nếu cần thông tin cụ thể từ tài liệu công ty, hãy khuyên người dùng tải tài liệu lên hệ thống.
+                    - Trả lời ngắn gọn, rõ ràng, dễ hiểu.
+                    
+                    CÂU HỎI: %s
+                    
+                    TRẢ LỜI:
+                    """.formatted(question);
+        }
+        
+        // With context from documents - answer based on RAG
         return """
                 Bạn là trợ lý AI thông minh của hệ thống chatbot doanh nghiệp.
                 Hãy sử dụng ngữ cảnh từ tài liệu công ty bên dưới để trả lời câu hỏi.
@@ -63,7 +82,7 @@ public class GeminiChatService {
                 QUY TẮC:
                 - Luôn trả lời bằng TIẾNG VIỆT, trừ khi người dùng hỏi bằng tiếng Anh.
                 - Trả lời chính xác dựa trên ngữ cảnh, không bịa đặt thông tin.
-                - Nếu không tìm thấy câu trả lời trong ngữ cảnh, hãy nói: "Tôi không tìm thấy thông tin liên quan trong tài liệu hiện có. Vui lòng tải lên thêm tài liệu hoặc hỏi câu hỏi khác."
+                - Nếu không tìm thấy câu trả lời trong ngữ cảnh, hãy nói: "Tôi không tìm thấy thông tin liên quan trong tài liệu hiện có. Bạn có thể hỏi câu hỏi khác hoặc tải thêm tài liệu."
                 - Trả lời ngắn gọn, rõ ràng, dễ hiểu.
                 - Nếu ngữ cảnh chứa bảng biểu hoặc danh sách, hãy trình bày lại gọn gàng.
                 

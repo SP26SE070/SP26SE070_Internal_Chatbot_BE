@@ -67,41 +67,42 @@ public class ChatbotController {
 
             log.info("Found {} similar chunks", similarChunks.size());
 
+            // Step 3: Build context from chunks (if any)
+            String context;
+            List<ChatResponse.SourceDocument> sources;
+            
             if (similarChunks.isEmpty()) {
-                return ResponseEntity.ok(ChatResponse.builder()
-                        .answer("Tôi chưa tìm thấy tài liệu liên quan để trả lời câu hỏi của bạn. Vui lòng tải lên tài liệu trước.")
-                        .conversationId(request.getConversationId())
-                        .sources(List.of())
-                        .responseTimeMs(System.currentTimeMillis() - startTime)
-                        .build());
+                // No documents uploaded - chatbot can still answer using general knowledge
+                context = "";
+                sources = List.of();
+                log.info("No relevant documents found - answering with general knowledge");
+            } else {
+                // Build context from relevant chunks
+                context = similarChunks.stream()
+                        .map(DocumentChunkEntity::getContent)
+                        .collect(Collectors.joining("\n\n---\n\n"));
+                log.debug("Context built: {} characters", context.length());
+                
+                // Build source references from relevant chunks
+                sources = similarChunks.stream()
+                        .map(chunk -> {
+                            DocumentEntity doc = documentRepository.findById(chunk.getDocumentId()).orElse(null);
+                            return ChatResponse.SourceDocument.builder()
+                                    .documentId(chunk.getDocumentId().toString())
+                                    .fileName(doc != null ? doc.getOriginalFileName() : "Unknown")
+                                    .chunkContent(chunk.getContent().substring(0, Math.min(200, chunk.getContent().length())) + "...")
+                                    .chunkIndex(chunk.getChunkIndex())
+                                    .relevanceScore(null) // Could calculate from cosine distance
+                                    .build();
+                        })
+                        .toList();
             }
 
-            // Step 3: Build context from chunks
-            String context = similarChunks.stream()
-                    .map(DocumentChunkEntity::getContent)
-                    .collect(Collectors.joining("\n\n---\n\n"));
-
-            log.debug("Context built: {} characters", context.length());
-
-            // Step 4: Generate answer with Gemini
+            // Step 4: Generate answer with Gemini (works with or without context)
             String answer = geminiChatService.generateAnswer(context, request.getMessage());
             log.info("Answer generated: {} characters", answer.length());
 
-            // Step 5: Build source references
-            List<ChatResponse.SourceDocument> sources = similarChunks.stream()
-                    .map(chunk -> {
-                        DocumentEntity doc = documentRepository.findById(chunk.getDocumentId()).orElse(null);
-                        return ChatResponse.SourceDocument.builder()
-                                .documentId(chunk.getDocumentId().toString())
-                                .fileName(doc != null ? doc.getOriginalFileName() : "Unknown")
-                                .chunkContent(chunk.getContent().substring(0, Math.min(200, chunk.getContent().length())) + "...")
-                                .chunkIndex(chunk.getChunkIndex())
-                                .relevanceScore(null) // Could calculate from cosine distance
-                                .build();
-                    })
-                    .toList();
-
-            // Step 6: Build response
+            // Step 5: Build response
             ChatResponse response = ChatResponse.builder()
                     .answer(answer)
                     .conversationId(request.getConversationId() != null ? request.getConversationId() : UUID.randomUUID().toString())
