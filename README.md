@@ -42,18 +42,19 @@ The Backend is designed to meet strict enterprise security and scalability requi
 ---
 
 ## 💳 Payment
-Để hỗ trợ mô hình kinh doanh **SaaS** và tự động hóa quy trình gia hạn gói dịch vụ cho doanh nghiệp, hệ thống tích hợp giải pháp thanh toán tự động:
+To support the **SaaS** business model and automate the subscription renewal process for businesses, the system integrates an automated payment solution:
 
-* **Payment Gateway:** **SePay** (Giải pháp tự động hóa ngân hàng qua API/Webhook).
-* **Cơ chế hoạt động (Mechanism):**
-    * **VietQR Dynamic:** Backend gọi API SePay để tạo mã QR động chứa số tiền và nội dung chuyển khoản định danh cho từng giao dịch/tenant.
-    * **Webhook Integration:** SePay gửi tín hiệu (Webhook) thời gian thực về Backend ngay khi nhận được biến động số dư ngân hàng.
-    * **Automatic Provisioning:** Hệ thống tự động kiểm tra nội dung chuyển khoản, đối soát với đơn hàng trong Database và cập nhật trạng thái gói dịch vụ (Subscription) ngay lập tức mà không cần nhân viên phê duyệt.
-* **Quy trình nghiệp vụ:**
-    1.  Doanh nghiệp (Tenant) chọn gói dịch vụ (Basic/Premium/Enterprise).
-    2.  Hệ thống hiển thị mã QR thanh toán từ SePay.
-    3.  Người dùng quét mã và thanh toán qua App Ngân hàng.
-    4.  SePay gọi Webhook tới Endpoint của Backend `SP26SE070`.
-    5.  Backend xác thực chữ ký (Signature), cập nhật hạn sử dụng và kích hoạt quyền truy cập cho doanh nghiệp.
+* **Payment Gateway:** **SePay** (Real-time bank transaction automation via API/Webhook).
+* **Payment Method:** Bank transfer via **Dynamic VietQR**.
+* **Technical Mechanism:**
+    * **VietQR Pro:** The Backend calls SePay API to generate a dynamic QR code containing the exact amount and a unique transaction ID for each tenant/invoice.
+    * **Webhook Integration:** SePay sends a real-time HTTP POST request (Webhook) to the Backend as soon as a matching transaction is detected in the bank account.
+    * **Automatic Provisioning:** The system verifies the Webhook signature for security, reconciles the order code in the database, and automatically updates the subscription status without manual intervention.
+* **Business Workflow:**
+    1.  The business (Tenant) selects a service plan (Basic/Premium/Enterprise).
+    2.  The system displays a unique QR code generated via SePay.
+    3.  The user scans and pays via their Mobile Banking app.
+    4.  SePay triggers a Webhook to the `SP26SE070` Backend endpoint.
+    5.  The Backend validates the signature, extends the subscription validity, and unlocks features for the Tenant.
 ---
 © 2026 **Group GSP26SE114** - FPT Education.
