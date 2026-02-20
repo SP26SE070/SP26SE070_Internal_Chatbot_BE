@@ -20,12 +20,11 @@ public class UserProfileResponse {
     private String contactEmail;       // Email thật để nhận thông báo
     private String fullName;           // Họ tên đầy đủ
     private String phoneNumber;        // Số điện thoại
-    private String employeeCode;       // Mã nhân viên
     private LocalDate dateOfBirth;     // Ngày sinh
     private String address;            // Địa chỉ
     private String roleName;           // Role name (Employee, Manager, Admin, etc)
     private String departmentName;     // Department name (Development, HR, Sales, etc)
-    private UUID tenantId;             // UUID tenant
+    private String tenantName;         // Tên tenant
     private LocalDateTime createdAt;   // Ngày tạo
     private LocalDateTime updatedAt;   // Lần cập nhật cuối
     private LocalDateTime lastLoginAt; // Lần đăng nhập cuối

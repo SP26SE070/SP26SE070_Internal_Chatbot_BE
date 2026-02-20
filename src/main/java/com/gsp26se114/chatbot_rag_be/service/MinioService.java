@@ -35,7 +35,6 @@ public class MinioService {
         try {
             // Generate unique filename
             String originalFilename = file.getOriginalFilename();
-            String extension = originalFilename.substring(originalFilename.lastIndexOf("."));
             String uniqueFilename = UUID.randomUUID().toString() + "_" + originalFilename;
             String objectName = folder + "/" + uniqueFilename;
             

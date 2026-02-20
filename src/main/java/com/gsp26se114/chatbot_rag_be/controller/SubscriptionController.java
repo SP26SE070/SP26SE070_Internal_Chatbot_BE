@@ -1,12 +1,9 @@
 package com.gsp26se114.chatbot_rag_be.controller;
 
-import com.gsp26se114.chatbot_rag_be.entity.BillingCycle;
 import com.gsp26se114.chatbot_rag_be.entity.PaymentTransaction;
 import com.gsp26se114.chatbot_rag_be.entity.Subscription;
-import com.gsp26se114.chatbot_rag_be.entity.SubscriptionTier;
 import com.gsp26se114.chatbot_rag_be.payload.request.CancelSubscriptionRequest;
 import com.gsp26se114.chatbot_rag_be.payload.request.SelectPlanRequest;
-import com.gsp26se114.chatbot_rag_be.payload.response.MessageResponse;
 import com.gsp26se114.chatbot_rag_be.payload.response.SubscriptionResponse;
 import com.gsp26se114.chatbot_rag_be.security.service.UserPrincipal;
 import com.gsp26se114.chatbot_rag_be.service.SubscriptionService;
@@ -23,7 +20,6 @@ import org.springframework.web.bind.annotation.*;
 
 import java.util.HashMap;
 import java.util.Map;
-import java.util.UUID;
 
 @Slf4j
 @RestController
@@ -183,6 +179,7 @@ public class SubscriptionController {
     /**
      * Helper: Map entity to response
      */
+    @SuppressWarnings("unused")
     private SubscriptionResponse mapToResponse(Subscription s) {
         return SubscriptionResponse.builder()
                 .id(s.getId())

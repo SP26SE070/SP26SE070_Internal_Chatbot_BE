@@ -84,8 +84,9 @@ public class TenantRoleService {
         log.info("Creating custom role: {} for tenant: {}", request.code(), tenantId);
         
         // Validate tenant exists
-        Tenant tenant = tenantRepository.findById(tenantId)
-                .orElseThrow(() -> new RuntimeException("Tenant không tồn tại"));
+        if (!tenantRepository.existsById(tenantId)) {
+            throw new RuntimeException("Tenant không tồn tại");
+        }
         
         // Validate code uniqueness within tenant
         if (roleRepository.existsByCodeAndTenantIdAndRoleType(request.code(), tenantId, RoleType.CUSTOM)) {

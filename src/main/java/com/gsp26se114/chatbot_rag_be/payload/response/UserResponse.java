@@ -10,7 +10,6 @@ public record UserResponse(
         String contactEmail,
         String fullName,
         String phoneNumber,
-        String employeeCode,
         LocalDate dateOfBirth,
         String address,
         Integer roleId,
@@ -19,7 +18,7 @@ public record UserResponse(
         Integer departmentId,
         String departmentCode,
         String departmentName,
-        UUID tenantId,
+        String tenantName,
         LocalDateTime createdAt,
         LocalDateTime updatedAt,
         LocalDateTime lastLoginAt

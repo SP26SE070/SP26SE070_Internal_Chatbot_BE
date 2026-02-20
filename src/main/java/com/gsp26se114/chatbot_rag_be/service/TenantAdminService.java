@@ -198,15 +198,22 @@ public class TenantAdminService {
         
         log.info("Creating new user in tenant: {} ({})", tenant.getName(), tenantId);
         
-        // Validate role: TENANT_ADMIN can only create CONTENT_MANAGER or EMPLOYEE
-        RoleEntity contentManagerRole = roleRepository.findByCode("CONTENT_MANAGER")
-                .orElseThrow(() -> new RuntimeException("Role CONTENT_MANAGER không tồn tại"));
-        RoleEntity employeeRole = roleRepository.findByCode("EMPLOYEE")
-                .orElseThrow(() -> new RuntimeException("Role EMPLOYEE không tồn tại"));
+        // Validate role: TENANT_ADMIN can only create roles within their tenant (not TENANT_ADMIN)
+        RoleEntity tenantAdminRole = roleRepository.findByCode("TENANT_ADMIN")
+                .orElseThrow(() -> new RuntimeException("Role TENANT_ADMIN không tồn tại"));
         
-        if (!request.roleId().equals(contentManagerRole.getId()) && 
-            !request.roleId().equals(employeeRole.getId())) {
-            throw new RuntimeException("TENANT_ADMIN chỉ có thể tạo CONTENT_MANAGER hoặc EMPLOYEE");
+        RoleEntity selectedRole = roleRepository.findById(request.roleId())
+                .orElseThrow(() -> new RuntimeException("Role không tồn tại"));
+        
+        // Check role belongs to this tenant (for tenant-specific roles) or is system-wide
+        if (selectedRole.getTenantId() != null && 
+            !selectedRole.getTenantId().equals(tenantId)) {
+            throw new RuntimeException("Role không thuộc tenant này");
+        }
+        
+        // TENANT_ADMIN cannot create another TENANT_ADMIN
+        if (selectedRole.getId().equals(tenantAdminRole.getId())) {
+            throw new RuntimeException("TENANT_ADMIN không thể tạo user với role TENANT_ADMIN");
         }
         
         // Validate required fields
@@ -230,13 +237,6 @@ public class TenantAdminService {
         String loginEmail = generateLoginEmail(request.fullName(), tenant);
         log.info("Generated login email: {} for user: {}", loginEmail, request.fullName());
         
-        // Validate employee code uniqueness if provided
-        if (request.employeeCode() != null && !request.employeeCode().trim().isEmpty()) {
-            if (userRepository.existsByEmployeeCode(request.employeeCode())) {
-                throw new RuntimeException("Mã nhân viên đã tồn tại: " + request.employeeCode());
-            }
-        }
-        
         // Generate temporary password
         String temporaryPassword = UserUtil.generateRandomPassword();
         
@@ -246,7 +246,6 @@ public class TenantAdminService {
         newUser.setPassword(passwordEncoder.encode(temporaryPassword));
         newUser.setFullName(request.fullName());
         newUser.setPhoneNumber(request.phoneNumber());
-        newUser.setEmployeeCode(request.employeeCode());  // Mã nhân viên
         newUser.setDateOfBirth(request.dateOfBirth());    // Ngày sinh
         newUser.setAddress(request.address());            // Địa chỉ
         newUser.setRoleId(request.roleId());
@@ -330,14 +329,21 @@ public class TenantAdminService {
         
         // Validate role change
         if (request.roleId() != null) {
-            RoleEntity contentManagerRole = roleRepository.findByCode("CONTENT_MANAGER")
-                    .orElseThrow(() -> new RuntimeException("Role CONTENT_MANAGER không tồn tại"));
-            RoleEntity employeeRole = roleRepository.findByCode("EMPLOYEE")
-                    .orElseThrow(() -> new RuntimeException("Role EMPLOYEE không tồn tại"));
+            RoleEntity newRole = roleRepository.findById(request.roleId())
+                    .orElseThrow(() -> new RuntimeException("Role không tồn tại"));
             
-            if (!request.roleId().equals(contentManagerRole.getId()) && 
-                !request.roleId().equals(employeeRole.getId())) {
-                throw new RuntimeException("TENANT_ADMIN chỉ có thể đặt role là CONTENT_MANAGER hoặc EMPLOYEE");
+            // Check role belongs to this tenant (for tenant-specific roles) or is system-wide
+            if (newRole.getTenantId() != null && 
+                !newRole.getTenantId().equals(user.getTenantId())) {
+                throw new RuntimeException("Role không thuộc tenant này");
+            }
+            
+            RoleEntity tenantAdminRoleCheck = roleRepository.findByCode("TENANT_ADMIN")
+                    .orElseThrow(() -> new RuntimeException("Role TENANT_ADMIN không tồn tại"));
+            
+            // TENANT_ADMIN cannot change role to TENANT_ADMIN
+            if (newRole.getId().equals(tenantAdminRoleCheck.getId())) {
+                throw new RuntimeException("TENANT_ADMIN không thể đặt role thành TENANT_ADMIN");
             }
         }
         
@@ -348,14 +354,7 @@ public class TenantAdminService {
         if (request.phoneNumber() != null) {
             user.setPhoneNumber(request.phoneNumber());
         }
-        if (request.employeeCode() != null) {
-            // Validate employee code uniqueness if changed
-            if (!request.employeeCode().equals(user.getEmployeeCode()) && 
-                userRepository.existsByEmployeeCode(request.employeeCode())) {
-                throw new RuntimeException("Mã nhân viên đã tồn tại: " + request.employeeCode());
-            }
-            user.setEmployeeCode(request.employeeCode());
-        }
+
         if (request.dateOfBirth() != null) {
             user.setDateOfBirth(request.dateOfBirth());
         }
@@ -477,13 +476,20 @@ public class TenantAdminService {
      * Map User entity to UserResponse DTO
      */
     private UserResponse mapToUserResponse(User user, RoleEntity role, Department department) {
+        // Get tenant name
+        String tenantName = null;
+        if (user.getTenantId() != null) {
+            tenantName = tenantRepository.findById(user.getTenantId())
+                    .map(Tenant::getName)
+                    .orElse(null);
+        }
+        
         return new UserResponse(
                 user.getId(),
                 user.getEmail(),
                 user.getContactEmail(),
                 user.getFullName(),
                 user.getPhoneNumber(),
-                user.getEmployeeCode(),
                 user.getDateOfBirth(),
                 user.getAddress(),
                 role != null ? role.getId() : null,
@@ -492,7 +498,7 @@ public class TenantAdminService {
                 department != null ? department.getId() : null,
                 department != null ? department.getCode() : null,
                 department != null ? department.getName() : null,
-                user.getTenantId(),
+                tenantName,
                 user.getCreatedAt(),
                 user.getUpdatedAt(),
                 user.getLastLoginAt()

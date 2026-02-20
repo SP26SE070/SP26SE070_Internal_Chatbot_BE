@@ -39,8 +39,8 @@ public class ChatbotController {
     private final DocumentRepository documentRepository;
 
     @PostMapping("/chat")
-    @PreAuthorize("hasAnyRole('TENANT_ADMIN', 'TENANT_USER')")
-    @Operation(summary = "Chat with RAG-powered bot")
+    @PreAuthorize("isAuthenticated()")
+    @Operation(summary = "Chat with RAG-powered bot", description = "Tất cả user trong tenant đều có thể dùng chatbot")
     public ResponseEntity<ChatResponse> chat(
             @Valid @RequestBody ChatRequest request,
             @AuthenticationPrincipal UserPrincipal userDetails

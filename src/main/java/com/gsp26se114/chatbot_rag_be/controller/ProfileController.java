@@ -2,6 +2,7 @@ package com.gsp26se114.chatbot_rag_be.controller;
 
 import com.gsp26se114.chatbot_rag_be.entity.Department;
 import com.gsp26se114.chatbot_rag_be.entity.RoleEntity;
+import com.gsp26se114.chatbot_rag_be.entity.Tenant;
 import com.gsp26se114.chatbot_rag_be.entity.User;
 import com.gsp26se114.chatbot_rag_be.payload.request.ChangePasswordRequest;
 import com.gsp26se114.chatbot_rag_be.payload.request.UpdateContactEmailRequest;
@@ -11,6 +12,7 @@ import com.gsp26se114.chatbot_rag_be.payload.response.MessageResponse;
 import com.gsp26se114.chatbot_rag_be.payload.response.UserProfileResponse;
 import com.gsp26se114.chatbot_rag_be.repository.DepartmentRepository;
 import com.gsp26se114.chatbot_rag_be.repository.RoleRepository;
+import com.gsp26se114.chatbot_rag_be.repository.TenantRepository;
 import com.gsp26se114.chatbot_rag_be.security.service.UserPrincipal;
 import com.gsp26se114.chatbot_rag_be.service.ProfileService;
 import io.swagger.v3.oas.annotations.Operation;
@@ -31,6 +33,7 @@ public class ProfileController {
     private final ProfileService profileService;
     private final RoleRepository roleRepository;
     private final DepartmentRepository departmentRepository;
+    private final TenantRepository tenantRepository;
     
     /**
      * Lấy thông tin profile hiện tại
@@ -77,18 +80,25 @@ public class ProfileController {
         Department department = user.getDepartmentId() != null ? 
             departmentRepository.findById(user.getDepartmentId()).orElse(null) : null;
         
+        // Get tenant name
+        String tenantName = null;
+        if (user.getTenantId() != null) {
+            tenantName = tenantRepository.findById(user.getTenantId())
+                    .map(Tenant::getName)
+                    .orElse(null);
+        }
+        
         return new UserProfileResponse(
             user.getId(),
             user.getEmail(),
             user.getContactEmail(),
             user.getFullName(),
             user.getPhoneNumber(),
-            user.getEmployeeCode(),
             user.getDateOfBirth(),
             user.getAddress(),
             role != null ? role.getName() : null,
             department != null ? department.getName() : null,
-            user.getTenantId(),
+            tenantName,
             user.getCreatedAt(),
             user.getUpdatedAt(),
             user.getLastLoginAt()

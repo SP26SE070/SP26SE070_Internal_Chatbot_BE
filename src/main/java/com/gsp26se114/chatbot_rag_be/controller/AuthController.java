@@ -4,7 +4,6 @@ import com.gsp26se114.chatbot_rag_be.payload.request.*;
 import com.gsp26se114.chatbot_rag_be.payload.response.*;
 // import com.gsp26se114.chatbot_rag_be.service.AdminService; // DISABLED
 import com.gsp26se114.chatbot_rag_be.service.AuthService;
-import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.Parameter;
 import io.swagger.v3.oas.annotations.tags.Tag;
 import jakarta.validation.Valid;
