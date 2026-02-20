@@ -42,7 +42,18 @@ The Backend is designed to meet strict enterprise security and scalability requi
 ---
 
 ## 💳 Payment
-*(This section is currently blank according to the group's development roadmap)*
+Để hỗ trợ mô hình kinh doanh **SaaS** và tự động hóa quy trình gia hạn gói dịch vụ cho doanh nghiệp, hệ thống tích hợp giải pháp thanh toán tự động:
 
+* **Payment Gateway:** **SePay** (Giải pháp tự động hóa ngân hàng qua API/Webhook).
+* **Cơ chế hoạt động (Mechanism):**
+    * **VietQR Dynamic:** Backend gọi API SePay để tạo mã QR động chứa số tiền và nội dung chuyển khoản định danh cho từng giao dịch/tenant.
+    * **Webhook Integration:** SePay gửi tín hiệu (Webhook) thời gian thực về Backend ngay khi nhận được biến động số dư ngân hàng.
+    * **Automatic Provisioning:** Hệ thống tự động kiểm tra nội dung chuyển khoản, đối soát với đơn hàng trong Database và cập nhật trạng thái gói dịch vụ (Subscription) ngay lập tức mà không cần nhân viên phê duyệt.
+* **Quy trình nghiệp vụ:**
+    1.  Doanh nghiệp (Tenant) chọn gói dịch vụ (Basic/Premium/Enterprise).
+    2.  Hệ thống hiển thị mã QR thanh toán từ SePay.
+    3.  Người dùng quét mã và thanh toán qua App Ngân hàng.
+    4.  SePay gọi Webhook tới Endpoint của Backend `SP26SE070`.
+    5.  Backend xác thực chữ ký (Signature), cập nhật hạn sử dụng và kích hoạt quyền truy cập cho doanh nghiệp.
 ---
 © 2026 **Group GSP26SE114** - FPT Education.
