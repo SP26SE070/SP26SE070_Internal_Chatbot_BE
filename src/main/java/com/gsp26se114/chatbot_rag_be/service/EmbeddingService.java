@@ -20,7 +20,6 @@ import java.util.List;
 @Service
 @RequiredArgsConstructor
 @Slf4j
-@ConditionalOnProperty(name = "spring.ai.google.genai.api-key")
 public class EmbeddingService {
 
     @Value("${spring.ai.google.genai.api-key}")

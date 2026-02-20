@@ -1,20 +1,20 @@
 # SePay Configuration
 sepay:
   # API Token từ SePay Dashboard (Menu: Cài đặt → API Token)
-  api-token: ${SEPAY_API_TOKEN:PUURCPKXRQXZM66D8GGCGBHBODS7TRMYLLDF5JBMZZB5QP3JQIVSWU7RKTCVIAWL}
+  api-token: PUURCPKXRQXZM66D8GGCGBHBODS7TRMYLLDF5JBMZZB5QP3JQIVSWU7RKTCVIAWL
   
   # Webhook Secret từ SePay Dashboard (SePay dùng API Token để xác thực)
-  webhook-secret: ${SEPAY_WEBHOOK_SECRET:PUURCPKXRQXZM66D8GGCGBHBODS7TRMYLLDF5JBMZZB5QP3JQIVSWU7RKTCVIAWL}
+  webhook-secret: PUURCPKXRQXZM66D8GGCGBHBODS7TRMYLLDF5JBMZZB5QP3JQIVSWU7RKTCVIAWL
   
   # API Base URL (Production)
   base-url: https://my.sepay.vn/userapi
   
   # Bank Account Info (Tài khoản ngân hàng nhận tiền của bạn)
   bank:
-    account-number: ${SEPAY_BANK_ACCOUNT:02317500402}
-    account-name: ${SEPAY_BANK_NAME:PHAM HONG QUAN}
-    bank-code: ${SEPAY_BANK_CODE:TPB}
-    bank-name: ${SEPAY_BANK_DISPLAY_NAME:TPBANK}
+    account-number: "02317500402"
+    account-name: PHAM HONG QUAN
+    bank-code: TPB
+    bank-name: TPBANK
   
   # Transaction Settings
   transaction:
