@@ -28,17 +28,17 @@
             <p>Tài Khoản Của Bạn Đã Được Tạo</p>
         </div>
         <div class="content">
-            <p class="greeting">Xin chào <strong>${employeeName}</strong>,</p>
-            <p>Tài khoản của bạn tại <strong>${tenantName}</strong> đã được tạo thành công! 🎊</p>
+            <p class="greeting">Xin chào <strong th:text="${employeeName}">Employee Name</strong>,</p>
+            <p>Tài khoản của bạn tại <strong th:text="${tenantName}">Tenant Name</strong> đã được tạo thành công! 🎊</p>
             
             <div class="credentials">
                 <p style="margin: 0 0 15px; font-size: 18px; color: #0066cc;"><strong>🔐 THÔNG TIN ĐĂNG NHẬP</strong></p>
-                <div class="item"><strong>📧 Email đăng nhập:</strong> <code style="background: #fff; padding: 4px 8px; border-radius: 3px; color: #d63384;">${loginEmail}</code></div>
-                <div class="item"><strong>🔑 Mật khẩu tạm thời:</strong> <code style="background: #fff; padding: 4px 8px; border-radius: 3px; color: #d63384;">${temporaryPassword}</code></div>
-                <div class="item"><strong>👤 Vai trò:</strong> <span style="color: #28a745; font-weight: bold;">${role}</span></div>
-                <div class="item"><strong>🏢 Phòng ban:</strong> <span>${department}</span></div>
-                <div class="item"><strong>🏛️ Tổ chức:</strong> <span>${tenantName}</span></div>
-                <div class="item"><strong>📮 Email nhận thông báo:</strong> <span>${contactEmail}</span></div>
+                <div class="item"><strong>📧 Email đăng nhập:</strong> <code style="background: #fff; padding: 4px 8px; border-radius: 3px; color: #d63384;" th:text="${loginEmail}">login@email.com</code></div>
+                <div class="item"><strong>🔑 Mật khẩu tạm thời:</strong> <code style="background: #fff; padding: 4px 8px; border-radius: 3px; color: #d63384;" th:text="${temporaryPassword}">password123</code></div>
+                <div class="item"><strong>👤 Vai trò:</strong> <span style="color: #28a745; font-weight: bold;" th:text="${role}">Role</span></div>
+                <div class="item"><strong>🏢 Phòng ban:</strong> <span th:text="${department}">Department</span></div>
+                <div class="item"><strong>🏛️ Tổ chức:</strong> <span th:text="${tenantName}">Tenant Name</span></div>
+                <div class="item"><strong>📮 Email nhận thông báo:</strong> <span th:text="${contactEmail}">contact@email.com</span></div>
             </div>
             
             <div class="danger">
@@ -54,8 +54,8 @@
             <div class="info-box">
                 <p style="margin: 0;"><strong>📌 LƯU Ý QUAN TRỌNG:</strong></p>
                 <ul style="margin: 10px 0 0; padding-left: 20px;">
-                    <li><strong>Email đăng nhập:</strong> ${loginEmail} là email ảo chỉ dùng để đăng nhập hệ thống</li>
-                    <li><strong>Email thông báo:</strong> ${contactEmail} là email thật của bạn, mọi thông báo sẽ gửi đến đây</li>
+                    <li><strong>Email đăng nhập:</strong> <span th:text="${loginEmail}">login@email.com</span> là email ảo chỉ dùng để đăng nhập hệ thống</li>
+                    <li><strong>Email thông báo:</strong> <span th:text="${contactEmail}">contact@email.com</span> là email thật của bạn, mọi thông báo sẽ gửi đến đây</li>
                     <li>Đăng nhập lần đầu, hệ thống sẽ yêu cầu bạn đổi mật khẩu</li>
                     <li>Mật khẩu mới phải có ít nhất 8 ký tự, bao gồm chữ hoa, chữ thường, số và ký tự đặc biệt</li>
                 </ul>
