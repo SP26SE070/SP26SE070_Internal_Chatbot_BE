@@ -65,6 +65,9 @@ CREATE TABLE tenants (
 );
 
 -- Tạo bảng Roles
+-- NOTE: permissions column is DEPRECATED and not used
+-- Basic role permissions are defined in RolePermissionConstants.java
+-- Additional user permissions are stored in user_permissions table
 CREATE TABLE roles (
     id SERIAL PRIMARY KEY,
     code VARCHAR(50) NOT NULL,
@@ -73,7 +76,7 @@ CREATE TABLE roles (
     tenant_id UUID REFERENCES tenants(id) ON DELETE CASCADE,
     role_type VARCHAR(20) NOT NULL DEFAULT 'FIXED',
     is_active BOOLEAN DEFAULT TRUE NOT NULL,
-    permissions JSONB DEFAULT '[]'::jsonb,
+    permissions JSONB DEFAULT '[]'::jsonb, -- DEPRECATED: Not used anymore
     created_by UUID,
     created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP NOT NULL,
     updated_at TIMESTAMP
@@ -92,7 +95,6 @@ CREATE TABLE departments (
     code VARCHAR(50) NOT NULL,
     name VARCHAR(255) NOT NULL,
     description TEXT,
-    parent_department_id INTEGER REFERENCES departments(id),
     is_active BOOLEAN DEFAULT TRUE NOT NULL,
     created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP NOT NULL,
     updated_at TIMESTAMP,
@@ -113,6 +115,7 @@ CREATE TABLE users (
     role_id INTEGER NOT NULL REFERENCES roles(id),
     department_id INTEGER REFERENCES departments(id),
     tenant_id UUID REFERENCES tenants(id) ON DELETE CASCADE,
+    permissions JSONB DEFAULT '[]'::jsonb, -- Permissions bổ sung được TENANT_ADMIN cấp
     reset_password_token VARCHAR(255),
     token_expiry TIMESTAMP,
     must_change_password BOOLEAN DEFAULT FALSE NOT NULL,
@@ -400,21 +403,22 @@ INSERT INTO tenants (
 
 -------------------------------------------------------
 -- 3. SEED DATA: ROLES
+-- NOTE: permissions field is not used anymore (deprecated)
+-- Basic permissions are defined in RolePermissionConstants.java (hard-coded)
+-- User-specific permissions are stored in user_permissions table
 -------------------------------------------------------
 -- System Roles (tenant_id = NULL, role_type = 'SYSTEM')
-INSERT INTO roles (code, name, description, tenant_id, role_type, permissions) VALUES
-('SUPER_ADMIN', 'Super Administrator', 'System administrator with full access to platform', NULL, 'SYSTEM', '["ALL"]'::jsonb),
-('STAFF', 'Platform Staff', 'Staff member who approves tenant registrations', NULL, 'SYSTEM', '["TENANT_APPROVE"]'::jsonb);
+INSERT INTO roles (code, name, description, tenant_id, role_type) VALUES
+('SUPER_ADMIN', 'Super Administrator', 'System administrator with full access to platform', NULL, 'SYSTEM'),
+('STAFF', 'Platform Staff', 'Staff member who approves tenant registrations', NULL, 'SYSTEM');
 
 -- Tenant Fixed Roles (tenant_id = NULL, role_type = 'FIXED')
--- Note: TENANT_ADMIN has DOCUMENT_ALL → Can manage Knowledge Dashboard
---       EMPLOYEE can use chatbot (free for all authenticated users)
---       Custom roles with DOCUMENT_WRITE/DOCUMENT_ALL → Can upload documents
-INSERT INTO roles (code, name, description, tenant_id, role_type, permissions) VALUES
-('TENANT_ADMIN', 'Tenant Administrator', 'Organization administrator with full tenant access', NULL, 'FIXED', 
- '["USER_ALL", "DEPT_ALL", "ROLE_ALL", "SUBSCRIPTION_MANAGE", "ANALYTICS_VIEW", "DOCUMENT_ALL", "PROFILE_MANAGE"]'::jsonb),
-('EMPLOYEE', 'Employee', 'Regular employee with basic access', NULL, 'FIXED', 
- '["PROFILE_MANAGE"]'::jsonb);
+-- Note: TENANT_ADMIN can manage all organization features including documents
+--       EMPLOYEE has basic access and can use chatbot
+--       TENANT_ADMIN can grant additional permissions to specific users via user_permissions table
+INSERT INTO roles (code, name, description, tenant_id, role_type) VALUES
+('TENANT_ADMIN', 'Tenant Administrator', 'Organization administrator with full tenant access', NULL, 'FIXED'),
+('EMPLOYEE', 'Employee', 'Regular employee with basic access', NULL, 'FIXED');
 
 -------------------------------------------------------
 -- 4. SEED DATA: DEPARTMENTS (FPT University)
