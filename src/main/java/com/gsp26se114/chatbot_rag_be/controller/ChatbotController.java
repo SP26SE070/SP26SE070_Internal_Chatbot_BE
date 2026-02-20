@@ -30,7 +30,7 @@ import java.util.stream.Collectors;
 @RequestMapping("/api/v1/chatbot")
 @RequiredArgsConstructor
 @Slf4j
-@Tag(name = "18. 🤖 Chatbot", description = "RAG-powered chatbot APIs")
+@Tag(name = "19. 🤖 Chatbot", description = "RAG-powered chatbot APIs")
 public class ChatbotController {
 
     private final EmbeddingService embeddingService;

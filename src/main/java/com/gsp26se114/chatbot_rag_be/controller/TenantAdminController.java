@@ -1,6 +1,7 @@
 package com.gsp26se114.chatbot_rag_be.controller;
 
 import com.gsp26se114.chatbot_rag_be.payload.request.CreateUserRequest;
+import com.gsp26se114.chatbot_rag_be.payload.request.UpdateUserPermissionsRequest;
 import com.gsp26se114.chatbot_rag_be.payload.request.UpdateUserRequest;
 import com.gsp26se114.chatbot_rag_be.payload.response.MessageResponse;
 import com.gsp26se114.chatbot_rag_be.payload.response.TenantAnalyticsResponse;
@@ -24,7 +25,7 @@ import java.util.UUID;
 @RestController
 @RequestMapping("/api/v1/tenant-admin")
 @RequiredArgsConstructor
-@Tag(name = "11. 👥 Tenant User Management", description = "Quản lý users trong tenant (TENANT_ADMIN)")
+@Tag(name = "11. 👥 Tenant Admin - User Management", description = "Quản lý users trong tenant (TENANT_ADMIN)")
 @SecurityRequirement(name = "bearerAuth")
 @PreAuthorize("hasRole('TENANT_ADMIN')")
 public class TenantAdminController {
@@ -92,6 +93,21 @@ public class TenantAdminController {
             @PathVariable UUID userId,
             @Valid @RequestBody UpdateUserRequest request) {
         UserResponse user = tenantAdminService.updateUser(userDetails.getUsername(), userId, request);
+        return ResponseEntity.ok(user);
+    }
+    
+    /**
+     * Update user permissions (TENANT_ADMIN cấp quyền bổ sung cho user cụ thể)
+     */
+    @PutMapping("/users/{userId}/permissions")
+    @Operation(summary = "Cập nhật quyền của user", 
+               description = "TENANT_ADMIN cấp quyền bổ sung cho user (ví dụ: DOCUMENT_READ, DOCUMENT_WRITE, ANALYTICS_VIEW)")
+    public ResponseEntity<UserResponse> updateUserPermissions(
+            @AuthenticationPrincipal UserDetails userDetails,
+            @PathVariable UUID userId,
+            @Valid @RequestBody UpdateUserPermissionsRequest request) {
+        UserResponse user = tenantAdminService.updateUserPermissions(
+                userDetails.getUsername(), userId, request.getPermissions());
         return ResponseEntity.ok(user);
     }
     

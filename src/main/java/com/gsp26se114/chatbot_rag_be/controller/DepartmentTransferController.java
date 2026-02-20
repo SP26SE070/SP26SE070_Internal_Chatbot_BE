@@ -25,7 +25,7 @@ import java.util.stream.Collectors;
 @RestController
 @RequestMapping("/api/v1/department-transfer")
 @RequiredArgsConstructor
-@Tag(name = "16. 🔄 Department Transfer", description = "Quản lý yêu cầu chuyển phòng ban (TENANT_ADMIN)")
+@Tag(name = "16. 🔄 Tenant Admin - Department Transfer", description = "Quản lý yêu cầu chuyển phòng ban (TENANT_ADMIN)")
 public class DepartmentTransferController {
     
     private final DepartmentTransferService transferService;

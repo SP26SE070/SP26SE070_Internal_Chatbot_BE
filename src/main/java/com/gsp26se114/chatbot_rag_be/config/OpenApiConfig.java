@@ -66,31 +66,34 @@ public class OpenApiConfig {
                     new Tag().name("09. 📊 Staff - Tenant Analytics")
                             .description("Thống kê về tenants, subscriptions (STAFF)"),
                     
-                    new Tag().name("10. 💳 Tenant Subscription")
+                    new Tag().name("10. 💳 Tenant Admin - Subscription")
                             .description("Xem và quản lý subscription (TENANT_ADMIN)"),
                     
-                    new Tag().name("11. 👥 Tenant User Management")
+                    new Tag().name("11. 👥 Tenant Admin - User Management")
                             .description("Quản lý users trong tenant (TENANT_ADMIN)"),
                     
-                    new Tag().name("12. 📊 Tenant Dashboard & Analytics")
-                            .description("Dashboard và thống kê cho TENANT_ADMIN, bao gồm LLM usage tracking"),
+                    new Tag().name("12. 🏢 Tenant Admin - Department Management")
+                            .description("Quản lý phòng ban trong tenant (TENANT_ADMIN)"),
                     
-                    new Tag().name("13. 🎭 Tenant Role Management")
+                    new Tag().name("13. 🎭 Tenant Admin - Role Management")
                             .description("Quản lý roles trong tenant (TENANT_ADMIN)"),
                     
-                    new Tag().name("14. 📦 Subscription Plans")
+                    new Tag().name("14. 📊 Tenant Admin - Dashboard & Analytics")
+                            .description("Dashboard và thống kê cho TENANT_ADMIN, bao gồm LLM usage tracking"),
+                    
+                    new Tag().name("15. 💳 Tenant Admin - Subscription Plans")
                             .description("Xem các gói subscription khả dụng (TENANT_ADMIN)"),
                     
-                    new Tag().name("15. 💳 Payment Management")
-                            .description("Quản lý thanh toán và giao dịch"),
-                    
-                    new Tag().name("16. 🔄 Department Transfer")
+                    new Tag().name("16. 🔄 Tenant Admin - Department Transfer")
                             .description("Quản lý yêu cầu chuyển phòng ban (TENANT_ADMIN)"),
                     
-                    new Tag().name("17. 📚 Knowledge Base")
+                    new Tag().name("17. 💳 Payment Management")
+                            .description("Quản lý thanh toán và giao dịch"),
+                    
+                    new Tag().name("18. 📚 Knowledge Base")
                             .description("Document upload and management APIs"),
                     
-                    new Tag().name("18. 🤖 Chatbot")
+                    new Tag().name("19. 🤖 Chatbot")
                             .description("RAG-powered chatbot APIs"),
                     
                     new Tag().name("99. 🔧 Admin - Document Management")

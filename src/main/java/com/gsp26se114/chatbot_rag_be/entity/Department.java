@@ -28,9 +28,6 @@ public class Department {
 
     private String description;
 
-    @Column(name = "parent_department_id")
-    private Integer parentDepartmentId; // For hierarchy
-
     @Column(nullable = false)
     private Boolean isActive = true;
 

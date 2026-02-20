@@ -29,7 +29,7 @@ import java.util.UUID;
 @RequestMapping("/api/v1/knowledge/documents")
 @RequiredArgsConstructor
 @Slf4j
-@Tag(name = "17. 📚 Knowledge Base", description = "Document upload and management APIs")
+@Tag(name = "18. 📚 Knowledge Base", description = "Document upload and management APIs")
 public class DocumentController {
 
     private final MinioService minioService;
