@@ -32,7 +32,8 @@ build/
 ### VS Code ###
 .vscode/
 
-### Sensitive Configuration Files - REMOVED ###
-# Note: API keys are now hardcoded in application-*.yaml files
-# This is ONLY safe because repo is PRIVATE
-# DO NOT make this repository public!
+### Sensitive Configuration Files ###
+# Environment variables - DO NOT COMMIT
+.env
+.env.local
+.env.*.local
