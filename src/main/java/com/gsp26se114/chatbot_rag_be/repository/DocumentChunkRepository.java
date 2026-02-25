@@ -19,33 +19,41 @@ public interface DocumentChunkRepository extends JpaRepository<DocumentChunkEnti
     /**
      * Find top K most similar chunks to the query embedding with access control.
      * Uses pgvector's <-> operator for cosine distance.
+     * Owner (uploaded_by) always has access regardless of visibility.
      * 
      * @param tenantId          Tenant isolation
+     * @param userId            User ID for owner check
      * @param queryEmbedding    Query vector in format '[0.1,0.2,0.3,...]'
      * @param userDepartmentId  User's department for access control
      * @param userRoleId        User's role for access control
+     * @param maxDistance       Maximum cosine distance (0.35 = 65% similarity)
      * @param limit             Number of chunks to return
      * @return List of similar chunks ordered by relevance
      */
     @Query(value = """
-        SELECT *
-        FROM document_chunks
-        WHERE tenant_id = :tenantId
+        SELECT c.*
+        FROM document_chunks c
+        JOIN documents d ON c.document_id = d.id
+        WHERE c.tenant_id = :tenantId
+          AND (c.embedding <=> CAST(:queryEmbedding AS vector)) < :maxDistance
           AND (
-              visibility = 'COMPANY_WIDE'
-              OR (visibility = 'SPECIFIC_DEPARTMENTS' 
-                  AND jsonb_exists(accessible_departments, CAST(:userDepartmentId AS text)))
-              OR (visibility = 'SPECIFIC_ROLES' 
-                  AND jsonb_exists(accessible_roles, CAST(:userRoleId AS text)))
+              d.uploaded_by = CAST(:userId AS uuid)
+              OR c.visibility = 'COMPANY_WIDE'
+              OR (c.visibility = 'SPECIFIC_DEPARTMENTS' 
+                  AND c.accessible_departments @> CAST(CONCAT('[', :userDepartmentId, ']') AS jsonb))
+              OR (c.visibility = 'SPECIFIC_ROLES' 
+                  AND c.accessible_roles @> CAST(CONCAT('[', :userRoleId, ']') AS jsonb))
           )
-        ORDER BY embedding <=> CAST(:queryEmbedding AS vector)
+        ORDER BY c.embedding <=> CAST(:queryEmbedding AS vector)
         LIMIT :limit
         """, nativeQuery = true)
     List<DocumentChunkEntity> findSimilarChunksWithAccessControl(
             @Param("tenantId") UUID tenantId,
+            @Param("userId") UUID userId,
             @Param("queryEmbedding") String queryEmbedding,
             @Param("userDepartmentId") Integer userDepartmentId,
             @Param("userRoleId") Integer userRoleId,
+            @Param("maxDistance") double maxDistance,
             @Param("limit") int limit
     );
 
@@ -63,6 +71,24 @@ public interface DocumentChunkRepository extends JpaRepository<DocumentChunkEnti
      * Count total chunks for a document.
      */
     long countByDocumentId(UUID documentId);
+    
+    /**
+     * Update access control for all chunks of a document
+     */
+    @Modifying
+    @Query(value = """
+        UPDATE document_chunks
+        SET visibility = CAST(:visibility AS visibility_enum),
+            accessible_departments = CAST(:accessibleDepartments AS jsonb),
+            accessible_roles = CAST(:accessibleRoles AS jsonb)
+        WHERE document_id = :documentId
+        """, nativeQuery = true)
+    void updateChunkAccessControl(
+            @Param("documentId") UUID documentId,
+            @Param("visibility") String visibility,
+            @Param("accessibleDepartments") String accessibleDepartments,
+            @Param("accessibleRoles") String accessibleRoles
+    );
     
     /**
      * Insert chunk with explicit vector casting for PostgreSQL

@@ -56,46 +56,92 @@ public class ChatbotController {
             log.debug("Query embedding created: {} dimensions", queryEmbedding.length);
 
             // Step 2: Find similar chunks with access control
-            int topK = request.getTopK() != null ? request.getTopK() : 5;
+            int topK = request.getTopK() != null ? request.getTopK() : 3;
+            double maxDistance = 0.35; // Only retrieve chunks with cosine distance < 0.35 (similarity > 65%)
+            
             List<DocumentChunkEntity> similarChunks = chunkRepository.findSimilarChunksWithAccessControl(
                     userDetails.getTenantId(),
+                    userDetails.getId(),
                     vectorString,
                     userDetails.getDepartmentId(),
                     userDetails.getRoleId(),
+                    maxDistance,
                     topK
             );
 
-            log.info("Found {} similar chunks", similarChunks.size());
+            log.info("Found {} similar chunks (similarity threshold: > 65%)", similarChunks.size());
 
             // Step 3: Build context from chunks (if any)
             String context;
             List<ChatResponse.SourceDocument> sources;
             
             if (similarChunks.isEmpty()) {
+                // Check if there are documents in tenant but user has no access
+                long totalDocsInTenant = documentRepository.countByTenantIdAndIsActive(
+                    userDetails.getTenantId(), true
+                );
+                
+                if (totalDocsInTenant > 0) {
+                    // Documents exist but user cannot access them
+                    log.warn("User {} tried to access documents outside their permission scope", userDetails.getEmail());
+                    
+                    ChatResponse restrictedResponse = ChatResponse.builder()
+                            .answer("Xin lỗi, bạn không có quyền truy cập các tài liệu liên quan đến câu hỏi này. " +
+                                   "Tài liệu này có thể chỉ dành cho các phòng ban hoặc vai trò cụ thể khác. " +
+                                   "Vui lòng liên hệ quản trị viên nếu bạn cần quyền truy cập.")
+                            .conversationId(request.getConversationId() != null ? request.getConversationId() : UUID.randomUUID().toString())
+                            .sources(List.of())
+                            .responseTimeMs(System.currentTimeMillis() - startTime)
+                            .build();
+                    
+                    return ResponseEntity.ok(restrictedResponse);
+                }
+                
                 // No documents uploaded - chatbot can still answer using general knowledge
                 context = "";
                 sources = List.of();
                 log.info("No relevant documents found - answering with general knowledge");
             } else {
-                // Build context from relevant chunks
+                // Build context from relevant chunks (deduplicate by content to avoid repetition)
                 context = similarChunks.stream()
                         .map(DocumentChunkEntity::getContent)
+                        .distinct() // Remove duplicate content
                         .collect(Collectors.joining("\n\n---\n\n"));
-                log.debug("Context built: {} characters", context.length());
+                log.info("Context built: {} characters from {} unique chunks - Content preview: {}", 
+                         context.length(),
+                         similarChunks.stream().map(DocumentChunkEntity::getContent).distinct().count(),
+                         context.substring(0, Math.min(300, context.length())) + "...");
                 
                 // Build source references from relevant chunks
                 sources = similarChunks.stream()
                         .map(chunk -> {
                             DocumentEntity doc = documentRepository.findById(chunk.getDocumentId()).orElse(null);
+                            // Calculate cosine distance and convert to similarity score
+                            float[] chunkEmbedding = embeddingService.parseVector(chunk.getEmbedding());
+                            double distance = embeddingService.cosineDistance(queryEmbedding, chunkEmbedding);
+                            double similarity = Math.round((1.0 - distance) * 100.0) / 100.0; // Round to 2 decimals
+                            
                             return ChatResponse.SourceDocument.builder()
                                     .documentId(chunk.getDocumentId().toString())
                                     .fileName(doc != null ? doc.getOriginalFileName() : "Unknown")
                                     .chunkContent(chunk.getContent().substring(0, Math.min(200, chunk.getContent().length())) + "...")
                                     .chunkIndex(chunk.getChunkIndex())
-                                    .relevanceScore(null) // Could calculate from cosine distance
+                                    .relevanceScore(similarity)
                                     .build();
                         })
+                        .filter(source -> source.getRelevanceScore() >= 0.80) // Only keep highly relevant sources (≥80% similarity)
+                        .collect(Collectors.toMap(
+                                ChatResponse.SourceDocument::getChunkContent, // Key: chunk content
+                                source -> source,                              // Value: source itself
+                                (existing, replacement) -> existing.getRelevanceScore() >= replacement.getRelevanceScore() 
+                                        ? existing : replacement               // Keep higher score if duplicate
+                        ))
+                        .values()
+                        .stream()
+                        .sorted((s1, s2) -> Double.compare(s2.getRelevanceScore(), s1.getRelevanceScore())) // Sort by score descending
                         .toList();
+                
+                log.info("Filtered to {} unique highly relevant sources (≥80% similarity)", sources.size());
             }
 
             // Step 4: Generate answer with Gemini (works with or without context)

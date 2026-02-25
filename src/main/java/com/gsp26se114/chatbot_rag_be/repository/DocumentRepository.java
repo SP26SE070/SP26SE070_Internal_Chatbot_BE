@@ -42,16 +42,18 @@ public interface DocumentRepository extends JpaRepository<DocumentEntity, UUID> 
         WHERE tenant_id = :tenantId 
         AND is_active = true
         AND (
-            visibility = 'COMPANY_WIDE'
+            uploaded_by = CAST(:userId AS uuid)
+            OR visibility = 'COMPANY_WIDE'
             OR (visibility = 'SPECIFIC_DEPARTMENTS' 
-                AND jsonb_exists(accessible_departments::jsonb, CAST(:userDepartmentId AS TEXT)))
+                AND accessible_departments @> CAST(CONCAT('[', :userDepartmentId, ']') AS jsonb))
             OR (visibility = 'SPECIFIC_ROLES' 
-                AND jsonb_exists(accessible_roles::jsonb, CAST(:userRoleId AS TEXT)))
+                AND accessible_roles @> CAST(CONCAT('[', :userRoleId, ']') AS jsonb))
         )
         ORDER BY uploaded_at DESC
         """, nativeQuery = true)
     List<DocumentEntity> findAccessibleDocuments(
         @Param("tenantId") UUID tenantId,
+        @Param("userId") UUID userId,
         @Param("userDepartmentId") Integer userDepartmentId,
         @Param("userRoleId") Integer userRoleId
     );

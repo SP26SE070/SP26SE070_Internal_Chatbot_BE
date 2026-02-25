@@ -7,7 +7,6 @@ import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import okhttp3.*;
 import org.springframework.beans.factory.annotation.Value;
-import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;
 import org.springframework.stereotype.Service;
 
 import java.io.IOException;
@@ -189,5 +188,60 @@ public class EmbeddingService {
         }
         sb.append("]");
         return sb.toString();
+    }
+    
+    /**
+     * Parse PostgreSQL vector string to float array
+     * Example: "[0.1,0.2,0.3]" → [0.1, 0.2, 0.3]
+     */
+    public float[] parseVector(String vectorString) {
+        if (vectorString == null || vectorString.isEmpty()) {
+            return new float[0];
+        }
+        
+        // Remove brackets
+        String cleaned = vectorString.replace("[", "").replace("]", "");
+        String[] parts = cleaned.split(",");
+        
+        float[] vector = new float[parts.length];
+        for (int i = 0; i < parts.length; i++) {
+            vector[i] = Float.parseFloat(parts[i].trim());
+        }
+        return vector;
+    }
+    
+    /**
+     * Calculate cosine distance between two vectors
+     * Returns value between 0 (identical) and 2 (opposite)
+     * For normalized vectors: 0 (identical) to 2 (opposite)
+     */
+    public double cosineDistance(float[] v1, float[] v2) {
+        if (v1.length != v2.length) {
+            throw new IllegalArgumentException("Vectors must have same dimensions");
+        }
+        
+        double dotProduct = 0.0;
+        double normA = 0.0;
+        double normB = 0.0;
+        
+        for (int i = 0; i < v1.length; i++) {
+            dotProduct += v1[i] * v2[i];
+            normA += v1[i] * v1[i];
+            normB += v2[i] * v2[i];
+        }
+        
+        normA = Math.sqrt(normA);
+        normB = Math.sqrt(normB);
+        
+        if (normA == 0.0 || normB == 0.0) {
+            return 2.0; // Maximum distance
+        }
+        
+        double cosineSimilarity = dotProduct / (normA * normB);
+        // Clamp to [-1, 1] to handle floating point errors
+        cosineSimilarity = Math.max(-1.0, Math.min(1.0, cosineSimilarity));
+        
+        // Distance = 1 - similarity
+        return 1.0 - cosineSimilarity;
     }
 }

@@ -77,21 +77,22 @@ public class GeminiChatService {
         // With context from documents - answer based on RAG
         return """
                 Bạn là trợ lý AI thông minh của hệ thống chatbot doanh nghiệp.
-                Hãy sử dụng ngữ cảnh từ tài liệu công ty bên dưới để trả lời câu hỏi.
+                Nhiệm vụ của bạn là trả lời câu hỏi DỰA TRÊN THÔNG TIN có trong tài liệu bên dưới.
                 
-                QUY TẮC:
+                QUY TẮC BẮT BUỘC:
                 - Luôn trả lời bằng TIẾNG VIỆT, trừ khi người dùng hỏi bằng tiếng Anh.
-                - Trả lời chính xác dựa trên ngữ cảnh, không bịa đặt thông tin.
-                - Nếu không tìm thấy câu trả lời trong ngữ cảnh, hãy nói: "Tôi không tìm thấy thông tin liên quan trong tài liệu hiện có. Bạn có thể hỏi câu hỏi khác hoặc tải thêm tài liệu."
-                - Trả lời ngắn gọn, rõ ràng, dễ hiểu.
-                - Nếu ngữ cảnh chứa bảng biểu hoặc danh sách, hãy trình bày lại gọn gàng.
+                - ƯU TIÊN trích xuất và sử dụng CHÍNH XÁC thông tin từ ngữ cảnh bên dưới.
+                - Nếu ngữ cảnh có con số, tên riêng, hoặc dữ liệu cụ thể → Hãy TRÍCH DẪN TRỰC TIẾP.
+                - CHỈ nói "không tìm thấy" KHI thông tin THỰC SỰ không có trong ngữ cảnh.
+                - Trả lời ngắn gọn, rõ ràng, trực tiếp vào vấn đề.
+                - Nếu có bảng biểu hoặc danh sách, hãy trình bày gọn gàng.
                 
-                NGỮ CẢNH TỪ TÀI LIỆU:
+                THÔNG TIN TỪ TÀI LIỆU CÔNG TY:
                 %s
                 
-                CÂU HỎI: %s
+                CÂU HỎI CỦA NGƯỜI DÙNG: %s
                 
-                TRẢ LỜI:
+                HÃY TRẢ LỜI DỰA TRÊN THÔNG TIN TRÊN (nếu có):
                 """.formatted(context, question);
     }
 
