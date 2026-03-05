@@ -5,6 +5,8 @@ CREATE EXTENSION IF NOT EXISTS "uuid-ossp";
 CREATE EXTENSION IF NOT EXISTS "vector";  -- pgvector for embeddings
 
 -- Xóa bảng cũ nếu đã tồn tại để reset dữ liệu
+DROP TABLE IF EXISTS payment_transactions CASCADE;
+DROP TABLE IF EXISTS subscriptions CASCADE;
 DROP TABLE IF EXISTS department_transfer_requests CASCADE;
 DROP TABLE IF EXISTS subscription_plans CASCADE;
 DROP TABLE IF EXISTS chat_messages CASCADE;
@@ -29,7 +31,7 @@ CREATE SEQUENCE blacklisted_tokens_seq START WITH 1 INCREMENT BY 50;
 
 -- Tạo bảng Tenants (Organizations)
 CREATE TABLE tenants (
-    id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
+    tenant_id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
     
     -- Company Information
     name VARCHAR(255) NOT NULL,
@@ -54,10 +56,8 @@ CREATE TABLE tenants (
     reviewed_at TIMESTAMP,
     rejection_reason VARCHAR(500),
     
-    -- Subscription Information
-    subscription_tier VARCHAR(50) DEFAULT 'TRIAL',
-    subscription_start_date TIMESTAMP,
-    subscription_end_date TIMESTAMP,
+    -- Subscription Information (FK resolved via ALTER TABLE after subscriptions is created)
+    subscription_id UUID, -- References subscriptions(subscription_id), added as FK constraint below
     
     -- Audit Fields
     created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP NOT NULL,
@@ -69,11 +69,11 @@ CREATE TABLE tenants (
 -- Basic role permissions are defined in RolePermissionConstants.java
 -- Additional user permissions are stored in user_permissions table
 CREATE TABLE roles (
-    id SERIAL PRIMARY KEY,
+    role_id SERIAL PRIMARY KEY,
     code VARCHAR(50) NOT NULL,
     name VARCHAR(100) NOT NULL,
     description VARCHAR(500),
-    tenant_id UUID REFERENCES tenants(id) ON DELETE CASCADE,
+    tenant_id UUID REFERENCES tenants(tenant_id) ON DELETE CASCADE,
     role_type VARCHAR(20) NOT NULL DEFAULT 'FIXED',
     is_active BOOLEAN DEFAULT TRUE NOT NULL,
     permissions JSONB DEFAULT '[]'::jsonb, -- DEPRECATED: Not used anymore
@@ -90,8 +90,8 @@ CREATE UNIQUE INDEX idx_roles_code_tenant ON roles(code, tenant_id) WHERE tenant
 
 -- Tạo bảng Departments
 CREATE TABLE departments (
-    id SERIAL PRIMARY KEY,
-    tenant_id UUID NOT NULL REFERENCES tenants(id) ON DELETE CASCADE,
+    department_id SERIAL PRIMARY KEY,
+    tenant_id UUID NOT NULL REFERENCES tenants(tenant_id) ON DELETE CASCADE,
     code VARCHAR(50) NOT NULL,
     name VARCHAR(255) NOT NULL,
     description TEXT,
@@ -103,18 +103,17 @@ CREATE TABLE departments (
 
 -- Tạo bảng Users
 CREATE TABLE users (
-    id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
+    user_id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
     email VARCHAR(255) UNIQUE NOT NULL, -- Email đăng nhập - UNIQUE GLOBALLY
     contact_email VARCHAR(255) UNIQUE, -- Email thật để nhận thông báo (đã verify khi lưu vào DB)
     password VARCHAR(255) NOT NULL,
     full_name VARCHAR(255), -- Họ tên đầy đủ
     phone_number VARCHAR(20), -- Số điện thoại
-    employee_code VARCHAR(50) UNIQUE, -- Mã nhân viên
     date_of_birth DATE, -- Ngày sinh
     address VARCHAR(500), -- Địa chỉ
-    role_id INTEGER NOT NULL REFERENCES roles(id),
-    department_id INTEGER REFERENCES departments(id),
-    tenant_id UUID REFERENCES tenants(id) ON DELETE CASCADE,
+    role_id INTEGER NOT NULL REFERENCES roles(role_id),
+    department_id INTEGER REFERENCES departments(department_id),
+    tenant_id UUID REFERENCES tenants(tenant_id) ON DELETE CASCADE,
     permissions JSONB DEFAULT '[]'::jsonb, -- Permissions bổ sung được TENANT_ADMIN cấp
     reset_password_token VARCHAR(255),
     token_expiry TIMESTAMP,
@@ -126,29 +125,29 @@ CREATE TABLE users (
 
 -- Tạo bảng Refresh Tokens
 CREATE TABLE refresh_tokens (
-    id SERIAL PRIMARY KEY,
+    refresh_token_id SERIAL PRIMARY KEY,
     token VARCHAR(255) UNIQUE NOT NULL,
-    user_id UUID REFERENCES users(id) ON DELETE CASCADE,
+    user_id UUID REFERENCES users(user_id) ON DELETE CASCADE,
     expiry_date TIMESTAMP NOT NULL
 );
 
 -- Tạo bảng Blacklist (Cho Logout)
 CREATE TABLE blacklisted_tokens (
-    id SERIAL PRIMARY KEY,
+    blacklisted_token_id SERIAL PRIMARY KEY,
     token VARCHAR(255) UNIQUE NOT NULL,
     expiry_date TIMESTAMP NOT NULL
 );
 
 -- Tạo bảng Department Transfer Requests
 CREATE TABLE department_transfer_requests (
-    id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
-    user_id UUID NOT NULL REFERENCES users(id) ON DELETE CASCADE,
-    tenant_id UUID NOT NULL REFERENCES tenants(id) ON DELETE CASCADE,
+    department_transfer_request_id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
+    user_id UUID NOT NULL REFERENCES users(user_id) ON DELETE CASCADE,
+    tenant_id UUID NOT NULL REFERENCES tenants(tenant_id) ON DELETE CASCADE,
     current_department_id VARCHAR(100),
     requested_department_id VARCHAR(100) NOT NULL,
     reason TEXT NOT NULL,
     status VARCHAR(50) NOT NULL DEFAULT 'PENDING',
-    reviewed_by UUID REFERENCES users(id),
+    reviewed_by UUID REFERENCES users(user_id),
     reviewed_at TIMESTAMP,
     review_note TEXT,
     created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP NOT NULL,
@@ -157,7 +156,7 @@ CREATE TABLE department_transfer_requests (
 
 -- Tạo bảng Documents (Knowledge Base)
 CREATE TABLE IF NOT EXISTS documents (
-    id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
+    document_id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
     
     -- Basic Info
     file_name VARCHAR(255) NOT NULL,
@@ -167,25 +166,25 @@ CREATE TABLE IF NOT EXISTS documents (
     storage_path VARCHAR(500) NOT NULL,
     
     -- Tenant & Category
-    tenant_id UUID NOT NULL REFERENCES tenants(id) ON DELETE CASCADE,
+    tenant_id UUID NOT NULL REFERENCES tenants(tenant_id) ON DELETE CASCADE,
     category VARCHAR(100),
     description VARCHAR(1000),
     
     -- Access Control
     visibility VARCHAR(30) NOT NULL DEFAULT 'COMPANY_WIDE',
-    owner_department_id INTEGER REFERENCES departments(id),
+    owner_department_id INTEGER REFERENCES departments(department_id),
     accessible_departments JSONB,
     accessible_roles JSONB,
     
     -- Upload History (Audit Trail)
-    uploaded_by UUID NOT NULL REFERENCES users(id),
+    uploaded_by UUID NOT NULL REFERENCES users(user_id),
     uploaded_by_name VARCHAR(200) NOT NULL,
     uploaded_by_email VARCHAR(255) NOT NULL,
     uploaded_by_role VARCHAR(100),
     uploaded_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
     
     -- Update History
-    updated_by UUID REFERENCES users(id),
+    updated_by UUID REFERENCES users(user_id),
     updated_at TIMESTAMP,
     version INTEGER NOT NULL DEFAULT 1,
     
@@ -198,7 +197,7 @@ CREATE TABLE IF NOT EXISTS documents (
     
     -- Status
     is_active BOOLEAN NOT NULL DEFAULT TRUE,
-    deleted_by UUID REFERENCES users(id),
+    deleted_by UUID REFERENCES users(user_id),
     deleted_at TIMESTAMP,
     
     -- Usage Stats
@@ -213,9 +212,9 @@ CREATE INDEX IF NOT EXISTS idx_documents_embedding_status ON documents(embedding
 
 -- Tạo bảng Document Chunks với Vector Embeddings (pgvector)
 CREATE TABLE IF NOT EXISTS document_chunks (
-    id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
-    document_id UUID NOT NULL REFERENCES documents(id) ON DELETE CASCADE,
-    tenant_id UUID NOT NULL REFERENCES tenants(id),
+    document_chunk_id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
+    document_id UUID NOT NULL REFERENCES documents(document_id) ON DELETE CASCADE,
+    tenant_id UUID NOT NULL REFERENCES tenants(tenant_id),
     
     -- Chunk Info
     chunk_index INTEGER NOT NULL,
@@ -252,7 +251,7 @@ USING hnsw (embedding vector_cosine_ops);
 
 -- Tạo bảng Subscription Plans (Super Admin manages plan templates)
 CREATE TABLE subscription_plans (
-    id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
+    subscription_plan_id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
     code VARCHAR(50) UNIQUE NOT NULL,
     name VARCHAR(100) NOT NULL,
     description VARCHAR(500),
@@ -295,12 +294,132 @@ CREATE TABLE subscription_plans (
     updated_by UUID
 );
 
+-- Tạo bảng Subscriptions (Actual tenant subscriptions, linked to a plan)
+CREATE TABLE subscriptions (
+    subscription_id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
+
+    -- Relationships
+    tenant_id UUID NOT NULL REFERENCES tenants(tenant_id) ON DELETE CASCADE,
+    plan_id UUID REFERENCES subscription_plans(subscription_plan_id) ON DELETE SET NULL, -- snapshot reference to plan
+
+    -- Subscription Details (may differ from plan if overridden by admin)
+    tier VARCHAR(50) NOT NULL,            -- TRIAL, STARTER, STANDARD, ENTERPRISE
+    status VARCHAR(50) NOT NULL,          -- ACTIVE, EXPIRED, CANCELLED, SUSPENDED
+
+    -- Billing Information
+    start_date TIMESTAMP NOT NULL,
+    end_date TIMESTAMP NOT NULL,
+    price DECIMAL(10, 2),                 -- Actual price charged (VND or USD)
+    currency VARCHAR(10),
+    billing_cycle VARCHAR(20),            -- MONTHLY, QUARTERLY, YEARLY
+    next_billing_date TIMESTAMP,
+    auto_renew BOOLEAN NOT NULL DEFAULT TRUE,
+
+    -- Trial Information
+    is_trial BOOLEAN NOT NULL DEFAULT FALSE,
+    trial_end_date TIMESTAMP,
+
+    -- Usage Limits (snapshot from plan, may be overridden)
+    max_users INTEGER,
+    max_documents INTEGER,
+    max_storage_gb INTEGER,
+    max_api_calls INTEGER,
+    max_chatbot_requests INTEGER,
+    max_rag_documents INTEGER,
+    max_ai_tokens BIGINT,
+    context_window_tokens VARCHAR(50),
+    rag_chunk_size INTEGER,
+
+    -- AI Model Configuration (snapshot from plan)
+    ai_model VARCHAR(100),
+    embedding_model VARCHAR(50),
+    enable_rag BOOLEAN DEFAULT TRUE,
+
+    -- Auto Renewal & Cancellation
+    cancelled_at TIMESTAMP,
+    cancelled_by UUID,
+    cancellation_reason VARCHAR(500),
+
+    -- Payment Tracking
+    transaction_code VARCHAR(200),
+    payment_method VARCHAR(50),
+    last_payment_id VARCHAR(200),
+    last_payment_date TIMESTAMP,
+    payment_gateway VARCHAR(100),
+
+    -- Audit Fields
+    created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    created_by UUID,
+    updated_at TIMESTAMP,
+    updated_by UUID,
+
+    -- Notes
+    notes VARCHAR(1000)
+);
+
+CREATE INDEX IF NOT EXISTS idx_subscriptions_tenant ON subscriptions(tenant_id);
+CREATE INDEX IF NOT EXISTS idx_subscriptions_status ON subscriptions(status);
+CREATE INDEX IF NOT EXISTS idx_subscriptions_plan ON subscriptions(plan_id);
+
+-- Add FK constraint on tenants.subscription_id AFTER subscriptions table is created
+ALTER TABLE tenants
+    ADD CONSTRAINT fk_tenant_subscription
+    FOREIGN KEY (subscription_id) REFERENCES subscriptions(subscription_id) ON DELETE SET NULL;
+
+-- Tạo bảng Payment Transactions
+CREATE TABLE payment_transactions (
+    payment_transaction_id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
+
+    -- Relationships
+    subscription_id UUID NOT NULL REFERENCES subscriptions(subscription_id),
+    tenant_id UUID NOT NULL REFERENCES tenants(tenant_id),
+
+    -- Payment Details
+    amount DECIMAL(15, 2) NOT NULL,
+    currency VARCHAR(10) NOT NULL DEFAULT 'VND',
+    transaction_code VARCHAR(200) NOT NULL UNIQUE,
+    tier VARCHAR(50) NOT NULL,
+
+    -- Payment Gateway
+    gateway VARCHAR(50) NOT NULL DEFAULT 'SEPAY',
+    gateway_transaction_id VARCHAR(200),
+    gateway_response JSONB,
+
+    -- Status
+    status VARCHAR(50) NOT NULL DEFAULT 'PENDING',
+    error_message VARCHAR(1000),
+
+    -- QR Code
+    qr_content VARCHAR(500),
+    qr_image_url VARCHAR(500),
+    expires_at TIMESTAMP,
+
+    -- Timestamps
+    created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    paid_at TIMESTAMP,
+    updated_at TIMESTAMP,
+
+    -- Audit
+    created_by UUID,
+    notes VARCHAR(1000),
+
+    -- Auto-renewal
+    is_auto_renewal BOOLEAN NOT NULL DEFAULT FALSE,
+    webhook_retry_count INTEGER NOT NULL DEFAULT 0,
+    last_webhook_at TIMESTAMP
+);
+
+CREATE INDEX IF NOT EXISTS idx_pt_transaction_code ON payment_transactions(transaction_code);
+CREATE INDEX IF NOT EXISTS idx_pt_subscription ON payment_transactions(subscription_id);
+CREATE INDEX IF NOT EXISTS idx_pt_tenant ON payment_transactions(tenant_id);
+CREATE INDEX IF NOT EXISTS idx_pt_status ON payment_transactions(status);
+
 -------------------------------------------------------
 -- 2. NẠP DỮ LIỆU MẪU (Password: 123456)
--------------------------------------------------------
+---------------------------------------------------------
 -- Thêm Doanh nghiệp mẫu (ACTIVE - Đã được duyệt)
 INSERT INTO tenants (
-    id, 
+    tenant_id, 
     name, 
     address,
     website,
@@ -315,9 +434,6 @@ INSERT INTO tenants (
     status,
     reviewed_by,
     reviewed_at,
-    subscription_tier,
-    subscription_start_date,
-    subscription_end_date,
     created_at
 ) VALUES (
     '550e8400-e29b-41d4-a716-446655440000', 
@@ -335,15 +451,12 @@ INSERT INTO tenants (
     'ACTIVE',
     NULL, -- Will be set to actual SUPER_ADMIN UUID after creation
     CURRENT_TIMESTAMP - interval '5 days',
-    'ENTERPRISE',
-    CURRENT_TIMESTAMP - interval '5 days',
-    CURRENT_TIMESTAMP + interval '355 days',
     CURRENT_TIMESTAMP - interval '7 days'
 );
 
 -- Thêm Tenant đang chờ duyệt (PENDING)
 INSERT INTO tenants (
-    id,
+    tenant_id,
     name,
     address,
     website,
@@ -356,7 +469,6 @@ INSERT INTO tenants (
     request_message,
     requested_at,
     status,
-    subscription_tier,
     created_at
 ) VALUES (
     '660e8400-e29b-41d4-a716-446655440001',
@@ -372,13 +484,12 @@ INSERT INTO tenants (
     'VinGroup cần chatbot để quản lý kiến thức nội bộ cho 50,000+ nhân viên',
     CURRENT_TIMESTAMP - interval '2 days',
     'PENDING',
-    'TRIAL',
     CURRENT_TIMESTAMP - interval '2 days'
 );
 
 -- Thêm Tenant bị từ chối (REJECTED)
 INSERT INTO tenants (
-    id,
+    tenant_id,
     name,
     contact_email,
     representative_name,
@@ -461,7 +572,7 @@ VALUES ('forgot_user@fpt.com', 'forgot.user.real@gmail.com', '$2a$10$cCA6u7Es2II
 -------------------------------------------------------
 -- TRIAL Plan (Free 14 days)
 INSERT INTO subscription_plans (
-    id, code, name, description,
+    subscription_plan_id, code, name, description,
     monthly_price, quarterly_price, yearly_price, currency,
     max_users, max_documents, max_storage_gb, max_api_calls,
     max_chatbot_requests, max_rag_documents, max_ai_tokens,
@@ -470,7 +581,7 @@ INSERT INTO subscription_plans (
     is_trial, trial_days, is_active, display_order,
     features, created_at, updated_at
 ) VALUES (
-    uuid_generate_v4(), 'TRIAL', 'Gói Dùng Thử', 'Gói dùng thử miễn phí 14 ngày để trải nghiệm hệ thống',
+    'a0000000-0000-0000-0000-000000000001', 'TRIAL', 'Gói Dùng Thử', 'Gói dùng thử miễn phí 14 ngày để trải nghiệm hệ thống',
     0, 0, 0, 'VND',
     5, 100, 5, 1000,
     500, 50, 10000,
@@ -483,7 +594,7 @@ INSERT INTO subscription_plans (
 
 -- STARTER Plan
 INSERT INTO subscription_plans (
-    id, code, name, description,
+    subscription_plan_id, code, name, description,
     monthly_price, quarterly_price, yearly_price, currency,
     max_users, max_documents, max_storage_gb, max_api_calls,
     max_chatbot_requests, max_rag_documents, max_ai_tokens,
@@ -492,7 +603,7 @@ INSERT INTO subscription_plans (
     is_trial, trial_days, is_active, display_order,
     features, created_at, updated_at
 ) VALUES (
-    uuid_generate_v4(), 'STARTER', 'Gói Khởi Đầu', 'Phù hợp cho doanh nghiệp nhỏ và startup',
+    'a0000000-0000-0000-0000-000000000002', 'STARTER', 'Gói Khởi Đầu', 'Phù hợp cho doanh nghiệp nhỏ và startup',
     5000, 13500, 48000, 'VND',
     10, 500, 10, 5000,
     2000, 200, 50000,
@@ -505,7 +616,7 @@ INSERT INTO subscription_plans (
 
 -- STANDARD Plan
 INSERT INTO subscription_plans (
-    id, code, name, description,
+    subscription_plan_id, code, name, description,
     monthly_price, quarterly_price, yearly_price, currency,
     max_users, max_documents, max_storage_gb, max_api_calls,
     max_chatbot_requests, max_rag_documents, max_ai_tokens,
@@ -514,7 +625,7 @@ INSERT INTO subscription_plans (
     is_trial, trial_days, is_active, display_order,
     features, created_at, updated_at
 ) VALUES (
-    uuid_generate_v4(), 'STANDARD', 'Gói Tiêu Chuẩn', 'Phù hợp cho doanh nghiệp vừa',
+    'a0000000-0000-0000-0000-000000000003', 'STANDARD', 'Gói Tiêu Chuẩn', 'Phù hợp cho doanh nghiệp vừa',
     10000, 27000, 96000, 'VND',
     50, 2000, 50, 20000,
     10000, 1000, 200000,
@@ -527,7 +638,7 @@ INSERT INTO subscription_plans (
 
 -- ENTERPRISE Plan
 INSERT INTO subscription_plans (
-    id, code, name, description,
+    subscription_plan_id, code, name, description,
     monthly_price, quarterly_price, yearly_price, currency,
     max_users, max_documents, max_storage_gb, max_api_calls,
     max_chatbot_requests, max_rag_documents, max_ai_tokens,
@@ -536,7 +647,7 @@ INSERT INTO subscription_plans (
     is_trial, trial_days, is_active, display_order,
     features, created_at, updated_at
 ) VALUES (
-    uuid_generate_v4(), 'ENTERPRISE', 'Gói Doanh Nghiệp', 'Giải pháp toàn diện cho doanh nghiệp lớn',
+    'a0000000-0000-0000-0000-000000000004', 'ENTERPRISE', 'Gói Doanh Nghiệp', 'Giải pháp toàn diện cho doanh nghiệp lớn',
     20000, 54000, 192000, 'VND',
     999, 999999, 500, 999999,
     999999, 999999, 999999,
@@ -546,3 +657,63 @@ INSERT INTO subscription_plans (
     '✅ Unlimited users, ✅ Unlimited documents, ✅ 500GB storage, ✅ Unlimited API calls, ✅ GPT-4 model, ✅ Advanced RAG, ✅ Dedicated support, ✅ Custom integration',
     CURRENT_TIMESTAMP, CURRENT_TIMESTAMP
 );
+
+-------------------------------------------------------
+-- 7. SEED DATA: SUBSCRIPTIONS
+-- Tạo subscription thực tế cho các tenant ACTIVE
+-------------------------------------------------------
+-- Subscription cho FPT Software (ENTERPRISE, ACTIVE)
+INSERT INTO subscriptions (
+    subscription_id,
+    tenant_id,
+    plan_id,
+    tier,
+    status,
+    start_date,
+    end_date,
+    price,
+    currency,
+    billing_cycle,
+    next_billing_date,
+    auto_renew,
+    is_trial,
+    max_users,
+    max_documents,
+    max_storage_gb,
+    max_api_calls,
+    max_chatbot_requests,
+    max_rag_documents,
+    max_ai_tokens,
+    context_window_tokens,
+    rag_chunk_size,
+    ai_model,
+    embedding_model,
+    enable_rag,
+    payment_gateway,
+    created_at
+) VALUES (
+    'b0000000-0000-0000-0000-000000000001',
+    '550e8400-e29b-41d4-a716-446655440000',
+    'a0000000-0000-0000-0000-000000000004', -- ENTERPRISE plan
+    'ENTERPRISE',
+    'ACTIVE',
+    CURRENT_TIMESTAMP - interval '5 days',
+    CURRENT_TIMESTAMP + interval '360 days',
+    192000.00,
+    'VND',
+    'YEARLY',
+    CURRENT_TIMESTAMP + interval '360 days',
+    TRUE,
+    FALSE,
+    999, 999999, 500, 999999,
+    999999, 999999, 999999,
+    '32768', 2048,
+    'gpt-4', 'text-embedding-ada-002', TRUE,
+    'SEPAY',
+    CURRENT_TIMESTAMP - interval '5 days'
+);
+
+-- Gán subscription_id cho FPT tenant
+UPDATE tenants
+SET subscription_id = 'b0000000-0000-0000-0000-000000000001'
+WHERE id = '550e8400-e29b-41d4-a716-446655440000';

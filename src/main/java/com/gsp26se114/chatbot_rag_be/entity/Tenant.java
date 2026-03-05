@@ -16,6 +16,7 @@ import java.util.UUID;
 public class Tenant {
     @Id
     @GeneratedValue(strategy = GenerationType.UUID)
+    @Column(name = "tenant_id")
     private UUID id;
     
     // ========== COMPANY INFORMATION ==========
@@ -67,6 +68,10 @@ public class Tenant {
     @Column(length = 500)
     private String rejectionReason; // Lý do reject (nếu có)
     
+    // ========== SUBSCRIPTION ==========
+    @Column(name = "subscription_id")
+    private UUID subscriptionId; // FK to the current active Subscription
+
     // ========== AUDIT FIELDS ==========
     @Column(nullable = false, updatable = false)
     private LocalDateTime createdAt = LocalDateTime.now();

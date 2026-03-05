@@ -4,13 +4,15 @@ import jakarta.persistence.*;
 import lombok.*;
 import java.time.Instant;
 
-@Entity(name = "blacklisted_tokens")
+@Entity
+@Table(name = "blacklisted_tokens")
 @Data
 @NoArgsConstructor
 @AllArgsConstructor
 public class BlacklistedToken {
     @Id
     @GeneratedValue(strategy = GenerationType.IDENTITY)
+    @Column(name = "blacklisted_token_id")
     private Long id;
 
     @Column(unique = true, nullable = false, length = 64)

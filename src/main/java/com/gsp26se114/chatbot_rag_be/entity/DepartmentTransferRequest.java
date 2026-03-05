@@ -19,6 +19,7 @@ public class DepartmentTransferRequest {
     
     @Id
     @GeneratedValue(strategy = GenerationType.UUID)
+    @Column(name = "department_transfer_request_id")
     private UUID id;
     
     /**

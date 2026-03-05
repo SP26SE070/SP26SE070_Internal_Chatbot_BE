@@ -24,6 +24,7 @@ public class SubscriptionPlan {
     
     @Id
     @GeneratedValue(strategy = GenerationType.UUID)
+    @Column(name = "subscription_plan_id")
     private UUID id;
     
     @Column(nullable = false, unique = true, length = 50)

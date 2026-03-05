@@ -4,17 +4,19 @@ import jakarta.persistence.*;
 import lombok.*;
 import java.time.Instant;
 
-@Entity(name = "refresh_tokens")
+@Entity
+@Table(name = "refresh_tokens")
 @Data
 @NoArgsConstructor
 @AllArgsConstructor
 public class RefreshToken {
     @Id
     @GeneratedValue(strategy = GenerationType.AUTO)
+    @Column(name = "refresh_token_id")
     private Long id;
 
     @OneToOne
-    @JoinColumn(name = "user_id", referencedColumnName = "id")
+    @JoinColumn(name = "user_id", referencedColumnName = "user_id")
     private User user;
 
     @Column(nullable = false, unique = true)

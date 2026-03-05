@@ -25,6 +25,7 @@ public class DocumentEntity {
     
     @Id
     @GeneratedValue(strategy = GenerationType.UUID)
+    @Column(name = "document_id")
     private UUID id;
     
     // ========== BASIC INFO ==========

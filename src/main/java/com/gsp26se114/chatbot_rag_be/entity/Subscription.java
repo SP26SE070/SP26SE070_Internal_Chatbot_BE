@@ -17,11 +17,15 @@ import java.util.UUID;
 public class Subscription {
     @Id
     @GeneratedValue(strategy = GenerationType.UUID)
+    @Column(name = "subscription_id")
     private UUID id;
     
     // ========== RELATIONSHIP ==========
     @Column(name = "tenant_id", nullable = false)
     private UUID tenantId; // FK to Tenant
+
+    @Column(name = "plan_id")
+    private UUID planId; // FK to SubscriptionPlan (snapshot reference; nullable if plan is deleted)
     
     // ========== SUBSCRIPTION DETAILS ==========
     @Enumerated(EnumType.STRING)

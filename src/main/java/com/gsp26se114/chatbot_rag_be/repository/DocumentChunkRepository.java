@@ -33,7 +33,7 @@ public interface DocumentChunkRepository extends JpaRepository<DocumentChunkEnti
     @Query(value = """
         SELECT c.*
         FROM document_chunks c
-        JOIN documents d ON c.document_id = d.id
+        JOIN documents d ON c.document_id = d.document_id
         WHERE c.tenant_id = :tenantId
           AND (c.embedding <=> CAST(:queryEmbedding AS vector)) < :maxDistance
           AND (
@@ -97,7 +97,7 @@ public interface DocumentChunkRepository extends JpaRepository<DocumentChunkEnti
     @Modifying
     @Query(value = """
         INSERT INTO document_chunks (
-            id, document_id, tenant_id, chunk_index, content, 
+            document_chunk_id, document_id, tenant_id, chunk_index, content, 
             embedding, embedding_model, token_count, 
             visibility, accessible_departments, accessible_roles, owner_department_id,
             created_at
@@ -128,7 +128,7 @@ public interface DocumentChunkRepository extends JpaRepository<DocumentChunkEnti
      * Count total chunks by tenant ID (through document relationship)
      */
     @Query(value = "SELECT COUNT(*) FROM document_chunks c " +
-                   "INNER JOIN documents d ON c.document_id = d.id " +
+                   "INNER JOIN documents d ON c.document_id = d.document_id " +
                    "WHERE d.tenant_id = :tenantId", 
            nativeQuery = true)
     long countByTenantId(@Param("tenantId") UUID tenantId);

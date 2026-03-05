@@ -15,6 +15,7 @@ import java.util.UUID;
 public class Department {
     @Id
     @GeneratedValue(strategy = GenerationType.IDENTITY)
+    @Column(name = "department_id")
     private Integer id;
 
     @Column(name = "tenant_id", nullable = false)

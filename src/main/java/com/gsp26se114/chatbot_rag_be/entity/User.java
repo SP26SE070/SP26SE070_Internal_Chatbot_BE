@@ -19,6 +19,7 @@ import java.util.UUID;
 public class User {
     @Id
     @GeneratedValue(strategy = GenerationType.UUID)
+    @Column(name = "user_id")
     private UUID id;
 
     @Column(unique = true, nullable = false)
@@ -33,9 +34,6 @@ public class User {
     private String fullName; // Họ tên đầy đủ
     
     private String phoneNumber; // Số điện thoại
-    
-    @Column(unique = true)
-    private String employeeCode; // Mã nhân viên (unique trong toàn hệ thống)
     
     private LocalDate dateOfBirth; // Ngày sinh
     

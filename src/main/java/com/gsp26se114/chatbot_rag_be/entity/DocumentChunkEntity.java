@@ -26,6 +26,7 @@ public class DocumentChunkEntity {
 
     @Id
     @GeneratedValue(strategy = GenerationType.UUID)
+    @Column(name = "document_chunk_id")
     private UUID id;
 
     @Column(name = "document_id", nullable = false)

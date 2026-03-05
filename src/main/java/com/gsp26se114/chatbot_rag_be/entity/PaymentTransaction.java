@@ -33,6 +33,7 @@ public class PaymentTransaction {
 
     @Id
     @GeneratedValue(strategy = GenerationType.UUID)
+    @Column(name = "payment_transaction_id")
     private UUID id;
 
     // ========== RELATIONSHIP ==========
