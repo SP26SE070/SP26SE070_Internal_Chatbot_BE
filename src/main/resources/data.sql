@@ -9,8 +9,6 @@ DROP TABLE IF EXISTS payment_transactions CASCADE;
 DROP TABLE IF EXISTS subscriptions CASCADE;
 DROP TABLE IF EXISTS department_transfer_requests CASCADE;
 DROP TABLE IF EXISTS subscription_plans CASCADE;
-DROP TABLE IF EXISTS chat_messages CASCADE;
-DROP TABLE IF EXISTS chat_sessions CASCADE;
 DROP TABLE IF EXISTS documents CASCADE;
 DROP TABLE IF EXISTS refresh_tokens CASCADE;
 DROP TABLE IF EXISTS blacklisted_tokens CASCADE;
@@ -20,14 +18,10 @@ DROP TABLE IF EXISTS roles CASCADE;
 DROP TABLE IF EXISTS tenants CASCADE;
 
 -- Xóa sequences (không CASCADE vì sẽ tạo lại ngay sau đó)
-DROP SEQUENCE IF EXISTS refresh_tokens_seq;
-DROP SEQUENCE IF EXISTS blacklisted_tokens_seq;
 DROP SEQUENCE IF EXISTS roles_id_seq;
 DROP SEQUENCE IF EXISTS departments_id_seq;
 
--- Tạo lại sequences với INCREMENT BY 50 (Hibernate default allocationSize)
-CREATE SEQUENCE refresh_tokens_seq START WITH 1 INCREMENT BY 50;
-CREATE SEQUENCE blacklisted_tokens_seq START WITH 1 INCREMENT BY 50;
+-- Không cần sequence thủ công cho refresh_tokens và blacklisted_tokens vì dùng SERIAL
 
 -- Tạo bảng Tenants (Organizations)
 CREATE TABLE tenants (
@@ -76,7 +70,7 @@ CREATE TABLE roles (
     tenant_id UUID REFERENCES tenants(tenant_id) ON DELETE CASCADE,
     role_type VARCHAR(20) NOT NULL DEFAULT 'FIXED',
     is_active BOOLEAN DEFAULT TRUE NOT NULL,
-    permissions JSONB DEFAULT '[]'::jsonb, -- DEPRECATED: Not used anymore
+    permissions JSONB DEFAULT '[]'::jsonb,
     created_by UUID,
     created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP NOT NULL,
     updated_at TIMESTAMP
@@ -118,6 +112,7 @@ CREATE TABLE users (
     reset_password_token VARCHAR(255),
     token_expiry TIMESTAMP,
     must_change_password BOOLEAN DEFAULT FALSE NOT NULL,
+    is_active BOOLEAN DEFAULT TRUE NOT NULL,
     created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP NOT NULL,
     updated_at TIMESTAMP,
     last_login_at TIMESTAMP
@@ -143,8 +138,8 @@ CREATE TABLE department_transfer_requests (
     department_transfer_request_id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
     user_id UUID NOT NULL REFERENCES users(user_id) ON DELETE CASCADE,
     tenant_id UUID NOT NULL REFERENCES tenants(tenant_id) ON DELETE CASCADE,
-    current_department_id VARCHAR(100),
-    requested_department_id VARCHAR(100) NOT NULL,
+    current_department_id INTEGER REFERENCES departments(department_id),
+    requested_department_id INTEGER NOT NULL REFERENCES departments(department_id),
     reason TEXT NOT NULL,
     status VARCHAR(50) NOT NULL DEFAULT 'PENDING',
     reviewed_by UUID REFERENCES users(user_id),
@@ -229,7 +224,7 @@ CREATE TABLE IF NOT EXISTS document_chunks (
     visibility VARCHAR(30),
     accessible_departments JSONB,
     accessible_roles JSONB,
-    owner_department_id INTEGER,
+    owner_department_id INTEGER REFERENCES departments(department_id),
     
     created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
     

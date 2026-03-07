@@ -8,6 +8,7 @@ import lombok.RequiredArgsConstructor;
 import org.springframework.security.core.userdetails.UserDetails;
 import org.springframework.security.core.userdetails.UserDetailsService;
 import org.springframework.security.core.userdetails.UsernameNotFoundException;
+import org.springframework.security.authentication.DisabledException;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -25,7 +26,12 @@ public class UserDetailsServiceImpl implements UserDetailsService {
         User user = userRepository.findByEmail(email)
                 .orElseThrow(() -> new UsernameNotFoundException("User Not Found with email: " + email));
 
-        // 2. Load role information
+        // 2. Kiểm tra user có bị ban không
+        if (Boolean.FALSE.equals(user.getIsActive())) {
+            throw new DisabledException("Account has been disabled: " + email);
+        }
+
+        // 3. Load role information
         RoleEntity role = roleRepository.findById(user.getRoleId())
                 .orElseThrow(() -> new RuntimeException("Role not found with id: " + user.getRoleId()));
 

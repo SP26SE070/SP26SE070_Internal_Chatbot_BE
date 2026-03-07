@@ -61,6 +61,9 @@ public class User {
     @Column(nullable = false)
     private Boolean mustChangePassword = false; // Bắt buộc đổi mật khẩu lần đầu login
 
+    @Column(nullable = false)
+    private Boolean isActive = true; // FALSE = user bị ban, không thể đăng nhập
+
     @Column(nullable = false, updatable = false)
     private LocalDateTime createdAt = LocalDateTime.now();
     
