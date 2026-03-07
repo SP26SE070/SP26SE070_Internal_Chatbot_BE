@@ -711,4 +711,4 @@ INSERT INTO subscriptions (
 -- Gán subscription_id cho FPT tenant
 UPDATE tenants
 SET subscription_id = 'b0000000-0000-0000-0000-000000000001'
-WHERE id = '550e8400-e29b-41d4-a716-446655440000';
+WHERE tenant_id = '550e8400-e29b-41d4-a716-446655440000';
