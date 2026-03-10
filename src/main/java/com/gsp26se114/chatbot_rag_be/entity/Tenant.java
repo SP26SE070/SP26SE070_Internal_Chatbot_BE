@@ -28,9 +28,6 @@ public class Tenant {
     
     private String website; // Website công ty
     
-    @Column(length = 100)
-    private String industry; // Lĩnh vực kinh doanh (IT, Finance, Healthcare, etc.)
-    
     @Column(length = 50)
     private String companySize; // Quy mô: "1-50", "51-200", "201-500", "500+"
     

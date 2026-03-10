@@ -5,14 +5,12 @@ import com.gsp26se114.chatbot_rag_be.constants.RolePermissionConstants;
 import com.gsp26se114.chatbot_rag_be.entity.Department;
 import com.gsp26se114.chatbot_rag_be.entity.RoleEntity;
 import com.gsp26se114.chatbot_rag_be.entity.Tenant;
-import com.gsp26se114.chatbot_rag_be.entity.TransferRequestStatus;
 import com.gsp26se114.chatbot_rag_be.entity.User;
 import com.gsp26se114.chatbot_rag_be.payload.request.CreateUserRequest;
 import com.gsp26se114.chatbot_rag_be.payload.request.UpdateUserRequest;
 import com.gsp26se114.chatbot_rag_be.payload.response.TenantAnalyticsResponse;
 import com.gsp26se114.chatbot_rag_be.payload.response.UserResponse;
 import com.gsp26se114.chatbot_rag_be.repository.DepartmentRepository;
-import com.gsp26se114.chatbot_rag_be.repository.DepartmentTransferRequestRepository;
 import com.gsp26se114.chatbot_rag_be.repository.RoleRepository;
 import com.gsp26se114.chatbot_rag_be.repository.TenantRepository;
 import com.gsp26se114.chatbot_rag_be.repository.UserRepository;
@@ -39,7 +37,6 @@ public class TenantAdminService {
     private final TenantRepository tenantRepository;
     private final RoleRepository roleRepository;
     private final DepartmentRepository departmentRepository;
-    private final DepartmentTransferRequestRepository transferRequestRepository;
     private final PasswordEncoder passwordEncoder;
     private final EmailService emailService;
     
@@ -110,25 +107,6 @@ public class TenantAdminService {
             }
         }
         
-        // ========== DEPARTMENT TRANSFER STATISTICS ==========
-        int pendingTransferRequests = transferRequestRepository
-                .countByTenantIdAndStatus(tenantId, TransferRequestStatus.PENDING);
-        
-        long approvedTransferRequestsThisMonth = transferRequestRepository
-                .findByTenantIdAndStatusOrderByCreatedAtDesc(tenantId, TransferRequestStatus.APPROVED)
-                .stream()
-                .filter(req -> req.getReviewedAt() != null && req.getReviewedAt().isAfter(startOfMonth))
-                .count();
-        
-        long rejectedTransferRequestsThisMonth = transferRequestRepository
-                .findByTenantIdAndStatusOrderByCreatedAtDesc(tenantId, TransferRequestStatus.REJECTED)
-                .stream()
-                .filter(req -> req.getReviewedAt() != null && req.getReviewedAt().isAfter(startOfMonth))
-                .count();
-        
-        int totalTransferRequests = transferRequestRepository
-                .findByTenantIdOrderByCreatedAtDesc(tenantId).size();
-        
         // ========== BUILD RESPONSE ==========
         return TenantAnalyticsResponse.builder()
                 .totalUsers(totalUsers)
@@ -136,10 +114,6 @@ public class TenantAdminService {
                 .newUsersThisMonth((int) newUsersThisMonth)
                 .usersByRole(usersByRole)
                 .usersByDepartment(usersByDepartment)
-                .pendingTransferRequests(pendingTransferRequests)
-                .approvedTransferRequestsThisMonth((int) approvedTransferRequestsThisMonth)
-                .rejectedTransferRequestsThisMonth((int) rejectedTransferRequestsThisMonth)
-                .totalTransferRequests(totalTransferRequests)
                 .usersCreatedLast7Days((int) usersCreatedLast7Days)
                 .usersCreatedLast30Days((int) usersCreatedLast30Days)
                 .build();

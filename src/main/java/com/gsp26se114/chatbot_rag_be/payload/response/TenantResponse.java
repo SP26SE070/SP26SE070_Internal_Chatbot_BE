@@ -23,7 +23,6 @@ public class TenantResponse {
     private String name;
     private String address;
     private String website;
-    private String industry;
     private String companySize;
     
     // Representative Information

@@ -27,12 +27,6 @@ public class TenantAnalyticsResponse {
     // ========== USERS BY DEPARTMENT ==========
     private Map<String, Long> usersByDepartment; // {"IT": 10, "HR": 5, "SALES": 8}
     
-    // ========== DEPARTMENT TRANSFER STATISTICS ==========
-    private Integer pendingTransferRequests;
-    private Integer approvedTransferRequestsThisMonth;
-    private Integer rejectedTransferRequestsThisMonth;
-    private Integer totalTransferRequests;
-    
     // ========== RECENT ACTIVITY ==========
     private Integer usersCreatedLast7Days;
     private Integer usersCreatedLast30Days;

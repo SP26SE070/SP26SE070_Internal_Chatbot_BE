@@ -2,11 +2,14 @@ package com.gsp26se114.chatbot_rag_be.controller;
 
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.gsp26se114.chatbot_rag_be.entity.DocumentEntity;
+import com.gsp26se114.chatbot_rag_be.entity.DocumentVersion;
 import com.gsp26se114.chatbot_rag_be.entity.DocumentVisibility;
 import com.gsp26se114.chatbot_rag_be.payload.request.UpdateDocumentAccessRequest;
 import com.gsp26se114.chatbot_rag_be.payload.response.DocumentResponse;
+import com.gsp26se114.chatbot_rag_be.payload.response.DocumentVersionResponse;
 import com.gsp26se114.chatbot_rag_be.repository.DocumentChunkRepository;
 import com.gsp26se114.chatbot_rag_be.repository.DocumentRepository;
+import com.gsp26se114.chatbot_rag_be.repository.DocumentVersionRepository;
 import com.gsp26se114.chatbot_rag_be.security.service.UserPrincipal;
 import com.gsp26se114.chatbot_rag_be.service.DocumentProcessingService;
 import com.gsp26se114.chatbot_rag_be.service.MinioService;
@@ -34,12 +37,13 @@ import java.util.UUID;
 @RequestMapping("/api/v1/knowledge/documents")
 @RequiredArgsConstructor
 @Slf4j
-@Tag(name = "18. 📚 Knowledge Base", description = "Document upload and management APIs")
+@Tag(name = "17. 📚 Knowledge Base", description = "Document upload and management APIs")
 public class DocumentController {
 
     private final MinioService minioService;
     private final DocumentRepository documentRepository;
     private final DocumentChunkRepository documentChunkRepository;
+    private final DocumentVersionRepository documentVersionRepository;
     private final DocumentProcessingService documentProcessingService;
     private final ObjectMapper objectMapper;
 
@@ -54,6 +58,29 @@ public class DocumentController {
     );
 
     private static final long MAX_FILE_SIZE = 50 * 1024 * 1024; // 50MB
+
+    /** Convert DocumentEntity → DocumentResponse (full fields). */
+    private DocumentResponse toResponse(DocumentEntity doc) {
+        return DocumentResponse.builder()
+                .id(doc.getId())
+                .originalFileName(doc.getOriginalFileName())
+                .fileType(doc.getFileType())
+                .fileSize(doc.getFileSize())
+                .category(doc.getCategory())
+                .categoryId(doc.getCategoryId())
+                .description(doc.getDescription())
+                .visibility(doc.getVisibility())
+                .accessibleDepartments(doc.getAccessibleDepartments())
+                .accessibleRoles(doc.getAccessibleRoles())
+                .embeddingStatus(doc.getEmbeddingStatus())
+                .chunkCount(doc.getChunkCount())
+                .uploadedByName(doc.getUploadedByName())
+                .uploadedAt(doc.getUploadedAt())
+                .documentTitle(doc.getDocumentTitle())
+                .versionNumber(doc.getVersionNumber())
+                .versionNote(doc.getVersionNote())
+                .build();
+    }
 
     @PostMapping(value = "/upload", consumes = org.springframework.http.MediaType.MULTIPART_FORM_DATA_VALUE)
     @PreAuthorize("hasAnyRole('TENANT_ADMIN', 'TENANT_USER')")
@@ -163,23 +190,7 @@ public class DocumentController {
             log.info("Document processing triggered: {}", document.getId());
 
             // Build response
-            DocumentResponse response = DocumentResponse.builder()
-                    .id(document.getId())
-                    .originalFileName(document.getOriginalFileName())
-                    .fileType(document.getFileType())
-                    .fileSize(document.getFileSize())
-                    .category(document.getCategory())
-                    .description(document.getDescription())
-                    .visibility(document.getVisibility())
-                    .accessibleDepartments(document.getAccessibleDepartments())
-                    .accessibleRoles(document.getAccessibleRoles())
-                    .embeddingStatus(document.getEmbeddingStatus())
-                    .chunkCount(0)
-                    .uploadedByName(document.getUploadedByName())
-                    .uploadedAt(document.getUploadedAt())
-                    .build();
-
-            return ResponseEntity.ok(response);
+            return ResponseEntity.ok(toResponse(document));
 
         } catch (Exception e) {
             log.error("Failed to upload document", e);
@@ -210,22 +221,7 @@ public class DocumentController {
                     return false;
                 })
                 .map(doc -> {
-                    DocumentResponse response = DocumentResponse.builder()
-                            .id(doc.getId())
-                            .originalFileName(doc.getOriginalFileName())
-                            .fileType(doc.getFileType())
-                            .fileSize(doc.getFileSize())
-                            .category(doc.getCategory())
-                            .description(doc.getDescription())
-                            .visibility(doc.getVisibility())
-                            .accessibleDepartments(doc.getAccessibleDepartments())
-                            .accessibleRoles(doc.getAccessibleRoles())
-                            .embeddingStatus(doc.getEmbeddingStatus())
-                            .chunkCount(doc.getChunkCount())
-                            .uploadedByName(doc.getUploadedByName())
-                            .uploadedAt(doc.getUploadedAt())
-                            .build();
-                    return ResponseEntity.ok(response);
+                    return ResponseEntity.ok(toResponse(doc));
                 })
                 .orElse(ResponseEntity.notFound().build());
     }
@@ -245,21 +241,7 @@ public class DocumentController {
         );
 
         List<DocumentResponse> responses = documents.stream()
-                .map(doc -> DocumentResponse.builder()
-                        .id(doc.getId())
-                        .originalFileName(doc.getOriginalFileName())
-                        .fileType(doc.getFileType())
-                        .fileSize(doc.getFileSize())
-                        .category(doc.getCategory())
-                        .description(doc.getDescription())
-                        .visibility(doc.getVisibility())
-                        .accessibleDepartments(doc.getAccessibleDepartments())
-                        .accessibleRoles(doc.getAccessibleRoles())
-                        .embeddingStatus(doc.getEmbeddingStatus())
-                        .chunkCount(doc.getChunkCount())
-                        .uploadedByName(doc.getUploadedByName())
-                        .uploadedAt(doc.getUploadedAt())
-                        .build())
+                .map(this::toResponse)
                 .toList();
 
         return ResponseEntity.ok(responses);
@@ -362,22 +344,144 @@ public class DocumentController {
         }
 
         // Return updated document
-        DocumentResponse response = DocumentResponse.builder()
-                .id(document.getId())
-                .originalFileName(document.getOriginalFileName())
-                .fileType(document.getFileType())
-                .fileSize(document.getFileSize())
-                .category(document.getCategory())
-                .description(document.getDescription())
-                .visibility(document.getVisibility())
-                .accessibleDepartments(document.getAccessibleDepartments())
-                .accessibleRoles(document.getAccessibleRoles())
-                .embeddingStatus(document.getEmbeddingStatus())
-                .chunkCount(document.getChunkCount())
-                .uploadedByName(document.getUploadedByName())
-                .uploadedAt(document.getUploadedAt())
-                .build();
+        return ResponseEntity.ok(toResponse(document));
+    }
 
-        return ResponseEntity.ok(response);
+    // =========================================================
+    // POST /{id}/versions  — Upload phiên bản mới cho tài liệu
+    // =========================================================
+
+    /**
+     * Upload file mới để tạo phên bản kế tiếp của tài liệu.
+     *
+     * Quy trình:
+     *  1. Lưu snapshot của bản hiện tại vào document_versions.
+     *  2. Upload file mới lên MinIO.
+     *  3. Cập nhật bản ghi documents với file mới + tăng version_number.
+     *  4. Kích hoạt process lại embedding.
+     */
+    @PostMapping(value = "/{id}/versions", consumes = org.springframework.http.MediaType.MULTIPART_FORM_DATA_VALUE)
+    @PreAuthorize("hasPermission('MANAGE_KNOWLEDGE_BASE')")
+    @Transactional
+    @Operation(
+        summary = "Upload phiên bản mới cho tài liệu",
+        description = "Lưu bản hiện tại vào lịch sử, sau đó thay thế bằng file mới và re-embed."
+    )
+    public ResponseEntity<?> uploadNewVersion(
+            @PathVariable UUID id,
+            @RequestPart("file") MultipartFile file,
+            @RequestParam(value = "versionNote", required = false) String versionNote,
+            @RequestParam(value = "documentTitle", required = false) String documentTitle,
+            @AuthenticationPrincipal UserPrincipal userDetails
+    ) {
+        try {
+            // --- 1. Lấy tài liệu gốc ---
+            DocumentEntity doc = documentRepository.findById(id)
+                    .orElseThrow(() -> new RuntimeException("Không tìm thấy tài liệu: " + id));
+
+            if (!doc.getTenantId().equals(userDetails.getTenantId())) {
+                return ResponseEntity.status(403).body("Bạn không có quyền cập nhật tài liệu này");
+            }
+
+            if (file.isEmpty()) return ResponseEntity.badRequest().body("File rỗng");
+            if (file.getSize() > MAX_FILE_SIZE) return ResponseEntity.badRequest().body("File vượt quá 50MB");
+            if (!ALLOWED_CONTENT_TYPES.contains(file.getContentType())) {
+                return ResponseEntity.badRequest().body("Loại file không được hỗ trợ");
+            }
+
+            // --- 2. Snapshot bản hiện tại vào document_versions ---
+            DocumentVersion snapshot = DocumentVersion.builder()
+                    .documentId(doc.getId())
+                    .tenantId(doc.getTenantId())
+                    .versionNumber(doc.getVersionNumber() != null ? doc.getVersionNumber() : 1)
+                    .originalFileName(doc.getOriginalFileName())
+                    .fileName(doc.getFileName())
+                    .fileType(doc.getFileType())
+                    .fileSize(doc.getFileSize())
+                    .storagePath(doc.getStoragePath())
+                    .versionNote(doc.getVersionNote())
+                    .createdBy(userDetails.getId())
+                    .createdByName(userDetails.getEmail())
+                    .createdByEmail(userDetails.getEmail())
+                    .createdAt(LocalDateTime.now())
+                    .build();
+            documentVersionRepository.save(snapshot);
+
+            // --- 3. Upload file mới lên MinIO ---
+            String folder = "tenant-" + userDetails.getTenantId() + "/documents";
+            String newStoragePath = minioService.uploadDocument(file, folder);
+            String newFileName = newStoragePath.substring(newStoragePath.lastIndexOf('/') + 1);
+
+            // --- 4. Cập nhật bản ghi documents ---
+            int newVersionNumber = (doc.getVersionNumber() != null ? doc.getVersionNumber() : 1) + 1;
+            doc.setFileName(newFileName);
+            doc.setOriginalFileName(file.getOriginalFilename());
+            doc.setFileType(file.getContentType());
+            doc.setFileSize(file.getSize());
+            doc.setStoragePath(newStoragePath);
+            doc.setVersionNumber(newVersionNumber);
+            doc.setVersionNote(versionNote);
+            if (documentTitle != null && !documentTitle.isBlank()) doc.setDocumentTitle(documentTitle);
+            doc.setUpdatedBy(userDetails.getId());
+            doc.setUpdatedAt(LocalDateTime.now());
+            doc.setEmbeddingStatus("PENDING");
+            doc.setEmbeddingError(null);
+            doc.setChunkCount(null);
+
+            documentRepository.save(doc);
+
+            // --- 5. Xóa chunks cũ, re-embed ---
+            documentChunkRepository.deleteByDocumentId(id);
+            documentProcessingService.processDocumentAsync(id);
+
+            log.info("New version {} uploaded for document {} by {}",
+                    newVersionNumber, id, userDetails.getEmail());
+
+            return ResponseEntity.ok(toResponse(doc));
+
+        } catch (Exception e) {
+            log.error("Failed to upload new version for document {}", id, e);
+            return ResponseEntity.internalServerError().body("Upload phiên bản thất bại: " + e.getMessage());
+        }
+    }
+
+    // =========================================================
+    // GET /{id}/versions  — Lịch sử các phiên bản cũ
+    // =========================================================
+
+    @GetMapping("/{id}/versions")
+    @PreAuthorize("hasAnyRole('TENANT_ADMIN', 'TENANT_USER')")
+    @Operation(
+        summary = "Lịch sử phiên bản của tài liệu",
+        description = "Trả về danh sách các phiên bản cũ (không bao gồm bản hiện tại). Mới nhất trên đầu."
+    )
+    public ResponseEntity<?> getVersionHistory(
+            @PathVariable UUID id,
+            @AuthenticationPrincipal UserPrincipal userDetails
+    ) {
+        // Kiểm tra quyền tenant
+        boolean belongs = documentRepository.findById(id)
+                .map(d -> d.getTenantId().equals(userDetails.getTenantId()))
+                .orElse(false);
+        if (!belongs) return ResponseEntity.notFound().build();
+
+        List<DocumentVersionResponse> history = documentVersionRepository
+                .findByDocumentIdOrderByVersionNumberDesc(id)
+                .stream()
+                .map(v -> DocumentVersionResponse.builder()
+                        .versionId(v.getId())
+                        .documentId(v.getDocumentId())
+                        .versionNumber(v.getVersionNumber())
+                        .originalFileName(v.getOriginalFileName())
+                        .fileType(v.getFileType())
+                        .fileSize(v.getFileSize())
+                        .versionNote(v.getVersionNote())
+                        .createdByName(v.getCreatedByName())
+                        .createdByEmail(v.getCreatedByEmail())
+                        .createdAt(v.getCreatedAt())
+                        .build())
+                .toList();
+
+        return ResponseEntity.ok(history);
     }
 }

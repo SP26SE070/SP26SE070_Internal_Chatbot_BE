@@ -24,6 +24,7 @@ public class DocumentResponse {
     private String fileType;
     private Long fileSize;
     private String category;
+    private UUID categoryId;
     private String description;
     private DocumentVisibility visibility;
     private List<Integer> accessibleDepartments;
@@ -32,4 +33,9 @@ public class DocumentResponse {
     private Integer chunkCount;
     private String uploadedByName;
     private LocalDateTime uploadedAt;
+
+    // Versioning fields
+    private String documentTitle;
+    private Integer versionNumber;
+    private String versionNote;
 }
