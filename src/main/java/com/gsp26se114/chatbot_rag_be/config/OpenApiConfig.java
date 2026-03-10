@@ -84,14 +84,14 @@ public class OpenApiConfig {
                     new Tag().name("15. 💳 Tenant Admin - Subscription Plans")
                             .description("Xem các gói subscription khả dụng (TENANT_ADMIN)"),
                     
-                    new Tag().name("16. 🔄 Tenant Admin - Department Transfer")
-                            .description("Quản lý yêu cầu chuyển phòng ban (TENANT_ADMIN)"),
-                    
-                    new Tag().name("17. 💳 Payment Management")
+                    new Tag().name("16. 💳 Payment Management")
                             .description("Quản lý thanh toán và giao dịch"),
                     
-                    new Tag().name("18. 📚 Knowledge Base")
+                    new Tag().name("17. 📚 Knowledge Base")
                             .description("Document upload and management APIs"),
+                    
+                    new Tag().name("18. 🗂️ Document Categories")
+                            .description("Quản lý phân loại tài liệu theo cấu trúc cây"),
                     
                     new Tag().name("19. 🤖 Chatbot")
                             .description("RAG-powered chatbot APIs"),

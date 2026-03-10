@@ -25,9 +25,6 @@ public class TenantRegistrationRequest {
     @Size(max = 255, message = "Website không được quá 255 ký tự")
     private String website;
     
-    @Size(max = 100, message = "Lĩnh vực không được quá 100 ký tự")
-    private String industry; // IT, Finance, Healthcare, Education, etc.
-    
     @Size(max = 50, message = "Quy mô không hợp lệ")
     private String companySize; // "1-50", "51-200", "201-500", "500+"
     
