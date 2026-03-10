@@ -75,6 +75,15 @@ public class DocumentChunkEntity {
     @Column(name = "owner_department_id")
     private Integer ownerDepartmentId;
 
+    /** Category của document cha (denormalized để filter nhanh) */
+    @Column(name = "category_id")
+    private UUID categoryId;
+
+    /** Từ khóa trích xuất từ chunk để pre-filter: ["onboarding", "HR", "checklist"] */
+    @JdbcTypeCode(SqlTypes.JSON)
+    @Column(name = "keywords", columnDefinition = "jsonb")
+    private java.util.List<String> keywords;
+
     @PrePersist
     protected void onCreate() {
         createdAt = LocalDateTime.now();

@@ -5,9 +5,11 @@ CREATE EXTENSION IF NOT EXISTS "uuid-ossp";
 CREATE EXTENSION IF NOT EXISTS "vector";  -- pgvector for embeddings
 
 -- Xóa bảng cũ nếu đã tồn tại để reset dữ liệu
+-- Xóa bảng con trước để tránh conflict khi DROP bảng cha
+DROP TABLE IF EXISTS document_versions CASCADE;
+DROP TABLE IF EXISTS document_chunks CASCADE;
 DROP TABLE IF EXISTS payment_transactions CASCADE;
 DROP TABLE IF EXISTS subscriptions CASCADE;
-DROP TABLE IF EXISTS department_transfer_requests CASCADE;
 DROP TABLE IF EXISTS subscription_plans CASCADE;
 DROP TABLE IF EXISTS documents CASCADE;
 DROP TABLE IF EXISTS refresh_tokens CASCADE;
@@ -16,6 +18,16 @@ DROP TABLE IF EXISTS users CASCADE;
 DROP TABLE IF EXISTS departments CASCADE;
 DROP TABLE IF EXISTS roles CASCADE;
 DROP TABLE IF EXISTS tenants CASCADE;
+DROP TABLE IF EXISTS document_categories CASCADE;
+DROP TABLE IF EXISTS document_summaries CASCADE;
+DROP TABLE IF EXISTS chat_sessions CASCADE;
+DROP TABLE IF EXISTS chat_messages CASCADE;
+DROP TABLE IF EXISTS renewal_reminders CASCADE;
+DROP TABLE IF EXISTS notifications CASCADE;
+DROP TABLE IF EXISTS audit_logs CASCADE;
+DROP TABLE IF EXISTS chatbot_configs CASCADE;
+DROP TABLE IF EXISTS user_permission_grants CASCADE;
+DROP TABLE IF EXISTS invoices CASCADE;
 
 -- Xóa sequences (không CASCADE vì sẽ tạo lại ngay sau đó)
 DROP SEQUENCE IF EXISTS roles_id_seq;
@@ -31,7 +43,6 @@ CREATE TABLE tenants (
     name VARCHAR(255) NOT NULL,
     address VARCHAR(500),
     website VARCHAR(255),
-    industry VARCHAR(100),
     company_size VARCHAR(50),
     
     -- Representative Information
@@ -133,22 +144,6 @@ CREATE TABLE blacklisted_tokens (
     expiry_date TIMESTAMP NOT NULL
 );
 
--- Tạo bảng Department Transfer Requests
-CREATE TABLE department_transfer_requests (
-    department_transfer_request_id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
-    user_id UUID NOT NULL REFERENCES users(user_id) ON DELETE CASCADE,
-    tenant_id UUID NOT NULL REFERENCES tenants(tenant_id) ON DELETE CASCADE,
-    current_department_id INTEGER REFERENCES departments(department_id),
-    requested_department_id INTEGER NOT NULL REFERENCES departments(department_id),
-    reason TEXT NOT NULL,
-    status VARCHAR(50) NOT NULL DEFAULT 'PENDING',
-    reviewed_by UUID REFERENCES users(user_id),
-    reviewed_at TIMESTAMP,
-    review_note TEXT,
-    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP NOT NULL,
-    updated_at TIMESTAMP
-);
-
 -- Tạo bảng Documents (Knowledge Base)
 CREATE TABLE IF NOT EXISTS documents (
     document_id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
@@ -181,7 +176,6 @@ CREATE TABLE IF NOT EXISTS documents (
     -- Update History
     updated_by UUID REFERENCES users(user_id),
     updated_at TIMESTAMP,
-    version INTEGER NOT NULL DEFAULT 1,
     
     -- Vector DB Info
     vector_db_id VARCHAR(200),
@@ -409,6 +403,266 @@ CREATE INDEX IF NOT EXISTS idx_pt_subscription ON payment_transactions(subscript
 CREATE INDEX IF NOT EXISTS idx_pt_tenant ON payment_transactions(tenant_id);
 CREATE INDEX IF NOT EXISTS idx_pt_status ON payment_transactions(status);
 
+-- =====================================================
+-- CÁC BẢNG MỚI BỔ SUNG
+-- =====================================================
+
+-- Tạo bảng Invoices (Hóa đơn chính thức tách riêng khỏi payment_transactions)
+CREATE TABLE invoices (
+    invoice_id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
+    invoice_number VARCHAR(50) NOT NULL UNIQUE,      -- INV-2026-000001
+    tenant_id UUID NOT NULL REFERENCES tenants(tenant_id) ON DELETE CASCADE,
+    subscription_id UUID REFERENCES subscriptions(subscription_id),
+    payment_transaction_id UUID REFERENCES payment_transactions(payment_transaction_id),
+
+    -- Thông tin hóa đơn
+    amount DECIMAL(15, 2) NOT NULL,
+    tax_amount DECIMAL(15, 2) DEFAULT 0,
+    total_amount DECIMAL(15, 2) NOT NULL,
+    currency VARCHAR(10) DEFAULT 'VND',
+    billing_period_start TIMESTAMP,
+    billing_period_end TIMESTAMP,
+    description VARCHAR(1000),
+
+    -- Trạng thái
+    status VARCHAR(30) NOT NULL DEFAULT 'ISSUED',    -- ISSUED, PAID, CANCELLED, OVERDUE
+
+    -- Audit
+    issued_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP NOT NULL,
+    paid_at TIMESTAMP,
+    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP NOT NULL,
+    updated_at TIMESTAMP
+);
+CREATE INDEX IF NOT EXISTS idx_invoices_tenant ON invoices(tenant_id);
+CREATE INDEX IF NOT EXISTS idx_invoices_status ON invoices(status);
+
+-- Tạo bảng Renewal Reminders (Track email nhắc gia hạn subscription)
+CREATE TABLE renewal_reminders (
+    renewal_reminder_id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
+    subscription_id UUID NOT NULL REFERENCES subscriptions(subscription_id) ON DELETE CASCADE,
+    tenant_id UUID NOT NULL REFERENCES tenants(tenant_id) ON DELETE CASCADE,
+
+    remind_day INTEGER NOT NULL,               -- 7, 3, 0 (số ngày trước hết hạn)
+    sent_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    email_to VARCHAR(255) NOT NULL,
+    status VARCHAR(30) DEFAULT 'SENT',         -- SENT, FAILED, OPENED
+    qr_content TEXT,                           -- QR code content đã gửi
+    error_message VARCHAR(500),
+
+    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP NOT NULL,
+    UNIQUE(subscription_id, remind_day)        -- Chỉ gửi 1 lần mỗi mốc
+);
+CREATE INDEX IF NOT EXISTS idx_renewal_reminders_subscription ON renewal_reminders(subscription_id);
+
+-- Tạo bảng Document Categories (Phân loại tài liệu dạng cây, per-tenant)
+CREATE TABLE document_categories (
+    category_id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
+    tenant_id UUID NOT NULL REFERENCES tenants(tenant_id) ON DELETE CASCADE,
+    parent_id UUID REFERENCES document_categories(category_id) ON DELETE SET NULL,  -- Cây phân cấp
+    name VARCHAR(255) NOT NULL,
+    code VARCHAR(100) NOT NULL,
+    description TEXT,
+    is_active BOOLEAN DEFAULT TRUE NOT NULL,
+    created_by UUID REFERENCES users(user_id),
+    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP NOT NULL,
+    updated_at TIMESTAMP,
+    UNIQUE(tenant_id, code)
+);
+CREATE INDEX IF NOT EXISTS idx_doc_categories_tenant ON document_categories(tenant_id);
+CREATE INDEX IF NOT EXISTS idx_doc_categories_parent ON document_categories(parent_id);
+
+-- Thêm FK category_id vào documents
+ALTER TABLE documents
+    ADD COLUMN IF NOT EXISTS category_id UUID REFERENCES document_categories(category_id) ON DELETE SET NULL,
+    ADD COLUMN IF NOT EXISTS document_title VARCHAR(500),        -- Tên hiển thị để nhóm các version (vd: "Policy nội quy 2026")
+    ADD COLUMN IF NOT EXISTS version_number INTEGER DEFAULT 1,   -- Version hiện tại của tài liệu
+    ADD COLUMN IF NOT EXISTS version_note VARCHAR(500);          -- Ghi chú thay đổi mới nhất
+
+-- Tạo bảng Document Versions (lịch sử các phiên bản tài liệu)
+CREATE TABLE IF NOT EXISTS document_versions (
+    version_id        UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
+    document_id       UUID NOT NULL REFERENCES documents(document_id) ON DELETE CASCADE,
+    tenant_id         UUID NOT NULL REFERENCES tenants(tenant_id) ON DELETE CASCADE,
+
+    -- Snapshot thông tin file tại thời điểm version này
+    version_number    INTEGER NOT NULL,                         -- Số phiên bản (1, 2, 3...)
+    original_file_name VARCHAR(255) NOT NULL,
+    file_name         VARCHAR(255) NOT NULL,
+    file_type         VARCHAR(100) NOT NULL,
+    file_size         BIGINT NOT NULL,
+    storage_path      VARCHAR(500) NOT NULL,                    -- Path file cũ trên MinIO
+
+    version_note      VARCHAR(500),                             -- Ghi chú thay đổi: "Cập nhật điều khoản nghỉ phép"
+
+    -- Audit
+    created_by        UUID NOT NULL REFERENCES users(user_id),
+    created_by_name   VARCHAR(200) NOT NULL,
+    created_by_email  VARCHAR(255) NOT NULL,
+    created_at        TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP
+);
+
+CREATE INDEX IF NOT EXISTS idx_doc_versions_document  ON document_versions(document_id);
+CREATE INDEX IF NOT EXISTS idx_doc_versions_tenant    ON document_versions(tenant_id);
+CREATE INDEX IF NOT EXISTS idx_doc_versions_created   ON document_versions(document_id, version_number);
+
+-- Thêm cột keywords vào document_chunks
+ALTER TABLE document_chunks
+    ADD COLUMN IF NOT EXISTS category_id UUID REFERENCES document_categories(category_id) ON DELETE SET NULL,
+    ADD COLUMN IF NOT EXISTS keywords JSONB DEFAULT '[]'::jsonb;
+
+CREATE INDEX IF NOT EXISTS idx_document_chunks_category ON document_chunks(category_id);
+
+-- Tạo bảng Document Summaries (Tóm tắt AI-generated 1-1 với document)
+CREATE TABLE document_summaries (
+    summary_id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
+    document_id UUID NOT NULL UNIQUE REFERENCES documents(document_id) ON DELETE CASCADE,
+    tenant_id UUID NOT NULL REFERENCES tenants(tenant_id) ON DELETE CASCADE,
+
+    summary_text TEXT,                         -- Tóm tắt ngắn (1-2 đoạn)
+    key_topics JSONB DEFAULT '[]'::jsonb,      -- ["Onboarding", "HR Policy", "Benefits"]
+    language VARCHAR(10) DEFAULT 'vi',
+
+    -- Trạng thái generate
+    status VARCHAR(30) DEFAULT 'PENDING',      -- PENDING, PROCESSING, DONE, FAILED
+    model_used VARCHAR(100),                   -- gemini-1.5-flash
+    error_message VARCHAR(500),
+    token_used INTEGER,
+
+    generated_at TIMESTAMP,
+    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP NOT NULL,
+    updated_at TIMESTAMP
+);
+CREATE INDEX IF NOT EXISTS idx_doc_summaries_tenant ON document_summaries(tenant_id);
+
+-- Tạo bảng Chatbot Configs (Cấu hình chatbot per-tenant)
+CREATE TABLE chatbot_configs (
+    config_id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
+    tenant_id UUID NOT NULL UNIQUE REFERENCES tenants(tenant_id) ON DELETE CASCADE,  -- 1-1 với tenant
+
+    -- UI / UX
+    bot_name VARCHAR(100) DEFAULT 'AI Assistant',
+    welcome_message TEXT DEFAULT 'Xin chào! Tôi có thể giúp gì cho bạn?',
+    fallback_message TEXT DEFAULT 'Xin lỗi, tôi không tìm thấy thông tin phù hợp trong tài liệu nội bộ.',
+    language VARCHAR(10) DEFAULT 'vi',
+
+    -- Giới hạn hoạt động (trong ngưỡng plan)
+    max_messages_per_day INTEGER DEFAULT 100,         -- Mỗi user/ngày
+    max_message_length INTEGER DEFAULT 500,           -- Max ký tự per message
+    session_timeout_minutes INTEGER DEFAULT 30,       -- Auto end session sau bao lâu
+
+    is_active BOOLEAN DEFAULT TRUE NOT NULL,
+    updated_by UUID REFERENCES users(user_id),
+    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP NOT NULL,
+    updated_at TIMESTAMP
+);
+
+-- Tạo bảng Chat Sessions (Phiên hội thoại)
+CREATE TABLE chat_sessions (
+    session_id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
+    tenant_id UUID NOT NULL REFERENCES tenants(tenant_id) ON DELETE CASCADE,
+    user_id UUID NOT NULL REFERENCES users(user_id) ON DELETE CASCADE,
+
+    title VARCHAR(500),                        -- Auto-generated từ tin nhắn đầu
+    status VARCHAR(30) DEFAULT 'ACTIVE',       -- ACTIVE, ENDED, ARCHIVED
+    started_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP NOT NULL,
+    ended_at TIMESTAMP,
+    last_message_at TIMESTAMP,
+    total_messages INTEGER DEFAULT 0,
+    total_tokens_used INTEGER DEFAULT 0,
+
+    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP NOT NULL,
+    updated_at TIMESTAMP
+);
+CREATE INDEX IF NOT EXISTS idx_chat_sessions_tenant ON chat_sessions(tenant_id);
+CREATE INDEX IF NOT EXISTS idx_chat_sessions_user ON chat_sessions(user_id);
+CREATE INDEX IF NOT EXISTS idx_chat_sessions_status ON chat_sessions(status);
+
+-- Tạo bảng Chat Messages (Tin nhắn trong session)
+CREATE TABLE chat_messages (
+    message_id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
+    session_id UUID NOT NULL REFERENCES chat_sessions(session_id) ON DELETE CASCADE,
+    tenant_id UUID NOT NULL REFERENCES tenants(tenant_id) ON DELETE CASCADE,
+    user_id UUID REFERENCES users(user_id) ON DELETE SET NULL,
+
+    role VARCHAR(20) NOT NULL,                 -- 'USER' hoặc 'ASSISTANT'
+    content TEXT NOT NULL,                     -- Nội dung tin nhắn
+    source_chunks JSONB DEFAULT '[]'::jsonb,   -- Chunks tài liệu được dùng để trả lời
+    tokens_used INTEGER DEFAULT 0,
+
+    -- Đánh giá câu trả lời (chỉ áp dụng với role = ASSISTANT)
+    rating SMALLINT CHECK (rating BETWEEN 1 AND 5),  -- 1-5 sao
+    feedback_text VARCHAR(1000),
+    rated_at TIMESTAMP,
+
+    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP NOT NULL
+);
+CREATE INDEX IF NOT EXISTS idx_chat_messages_session ON chat_messages(session_id);
+CREATE INDEX IF NOT EXISTS idx_chat_messages_tenant ON chat_messages(tenant_id);
+CREATE INDEX IF NOT EXISTS idx_chat_messages_role ON chat_messages(role);
+
+-- Tạo bảng Notifications (Thông báo in-app)
+CREATE TABLE notifications (
+    notification_id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
+    recipient_user_id UUID REFERENCES users(user_id) ON DELETE CASCADE,    -- NULL = broadcast
+    tenant_id UUID REFERENCES tenants(tenant_id) ON DELETE CASCADE,
+
+    type VARCHAR(50) NOT NULL,                 -- TENANT_APPROVED, SUBSCRIPTION_EXPIRING, DOCUMENT_PROCESSED, etc.
+    title VARCHAR(255) NOT NULL,
+    message TEXT NOT NULL,
+    action_url VARCHAR(500),                   -- Link redirect khi click
+    metadata JSONB DEFAULT '{}'::jsonb,        -- Extra data tuỳ type
+
+    is_read BOOLEAN DEFAULT FALSE NOT NULL,
+    read_at TIMESTAMP,
+    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP NOT NULL
+);
+CREATE INDEX IF NOT EXISTS idx_notifications_recipient ON notifications(recipient_user_id);
+CREATE INDEX IF NOT EXISTS idx_notifications_tenant ON notifications(tenant_id);
+CREATE INDEX IF NOT EXISTS idx_notifications_unread ON notifications(recipient_user_id, is_read) WHERE is_read = FALSE;
+
+-- Tạo bảng Audit Logs (Log hành động quan trọng - security & compliance)
+CREATE TABLE audit_logs (
+    audit_log_id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
+    tenant_id UUID REFERENCES tenants(tenant_id) ON DELETE SET NULL,
+    user_id UUID REFERENCES users(user_id) ON DELETE SET NULL,
+    user_email VARCHAR(255),                   -- Denormalized để log vẫn giữ sau khi xóa user
+    user_role VARCHAR(100),                    -- Denormalized
+
+    action VARCHAR(100) NOT NULL,              -- USER_LOGIN, DOCUMENT_UPLOAD, ROLE_GRANTED, etc.
+    entity_type VARCHAR(100),                  -- 'User', 'Document', 'Subscription'
+    entity_id VARCHAR(255),                    -- UUID của entity bị tác động
+    old_value JSONB,                           -- Giá trị trước khi thay đổi
+    new_value JSONB,                           -- Giá trị sau khi thay đổi
+    description VARCHAR(1000),
+
+    ip_address VARCHAR(50),
+    user_agent VARCHAR(500),
+    status VARCHAR(20) DEFAULT 'SUCCESS',      -- SUCCESS, FAILED
+    error_message VARCHAR(500),
+
+    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP NOT NULL
+);
+CREATE INDEX IF NOT EXISTS idx_audit_logs_tenant ON audit_logs(tenant_id);
+CREATE INDEX IF NOT EXISTS idx_audit_logs_user ON audit_logs(user_id);
+CREATE INDEX IF NOT EXISTS idx_audit_logs_action ON audit_logs(action);
+CREATE INDEX IF NOT EXISTS idx_audit_logs_created ON audit_logs(created_at DESC);
+
+-- Tạo bảng User Permission Grants (Normalize permissions JSONB thành bảng proper)
+CREATE TABLE user_permission_grants (
+    grant_id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
+    user_id UUID NOT NULL REFERENCES users(user_id) ON DELETE CASCADE,
+    tenant_id UUID NOT NULL REFERENCES tenants(tenant_id) ON DELETE CASCADE,
+    permission VARCHAR(100) NOT NULL,          -- DOCUMENT_READ, DOCUMENT_WRITE, ANALYTICS_VIEW
+    granted_by UUID REFERENCES users(user_id) ON DELETE SET NULL,
+    granted_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP NOT NULL,
+    revoked_at TIMESTAMP,
+    is_active BOOLEAN DEFAULT TRUE NOT NULL,
+    note VARCHAR(500),
+    UNIQUE(user_id, permission)
+);
+CREATE INDEX IF NOT EXISTS idx_permission_grants_user ON user_permission_grants(user_id);
+CREATE INDEX IF NOT EXISTS idx_permission_grants_tenant ON user_permission_grants(tenant_id);
+
 -------------------------------------------------------
 -- 2. NẠP DỮ LIỆU MẪU (Password: 123456)
 ---------------------------------------------------------
@@ -418,7 +672,6 @@ INSERT INTO tenants (
     name, 
     address,
     website,
-    industry,
     company_size,
     contact_email, 
     representative_name,
@@ -435,8 +688,8 @@ INSERT INTO tenants (
     'FPT Software', 
     'Tòa nhà FPT, Phố Duy Tân, Cầu Giấy, Hà Nội',
     'https://fpt.com.vn',
-    'Information Technology',
     '500+',
+
     'contact@fpt.com.vn',
     'Nguyễn Văn A',
     'CEO',
@@ -455,7 +708,6 @@ INSERT INTO tenants (
     name,
     address,
     website,
-    industry,
     company_size,
     contact_email,
     representative_name,
@@ -470,7 +722,6 @@ INSERT INTO tenants (
     'VinGroup Corporation',
     '458 Minh Khai, Hai Bà Trưng, Hà Nội',
     'https://vingroup.net',
-    'Conglomerate',
     '500+',
     'it.admin@vingroup.net',
     'Trần Thị B',

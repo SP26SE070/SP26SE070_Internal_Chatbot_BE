@@ -47,9 +47,13 @@ public class DocumentEntity {
     // ========== TENANT & CATEGORY ==========
     @Column(name = "tenant_id", nullable = false)
     private UUID tenantId;             // Thuộc tenant nào
-    
+
+    /** FK tới document_categories */
+    @Column(name = "category_id")
+    private UUID categoryId;
+
     @Column(length = 100)
-    private String category;           // "HR", "IT", "Finance", "Onboarding"
+    private String category;           // "HR", "IT", "Finance", "Onboarding" (legacy, dùng categoryId thay thế)
     
     @Column(length = 1000)
     private String description;        // Mô tả tài liệu
@@ -92,10 +96,23 @@ public class DocumentEntity {
     
     @Column(name = "updated_at")
     private LocalDateTime updatedAt;   // Thời gian update cuối
-    
-    @Column(nullable = false)
-    private Integer version = 1;       // Version của document
-    
+
+    // ========== VERSIONING ==========
+    /**
+     * Tên hiển thị để nhóm các version, ví dụ: "Policy nội quy 2026".
+     * Lịch sử các version cũ được lưu trong bảng document_versions.
+     */
+    @Column(name = "document_title", length = 500)
+    private String documentTitle;
+
+    /** Version hiện tại: 1, 2, 3... (tăng mỗi khi upload version mới) */
+    @Column(name = "version_number")
+    private Integer versionNumber = 1;
+
+    /** Ghi chú thay đổi của version hiện tại, ví dụ: "Cập nhật điều khoản nghỉ phép" */
+    @Column(name = "version_note", length = 500)
+    private String versionNote;
+
     // ========== VECTOR DB INFO ==========
     @Column(name = "vector_db_id", length = 200)
     private String vectorDbId;         // ID trong Vector DB (Pinecone, Weaviate, etc.)
