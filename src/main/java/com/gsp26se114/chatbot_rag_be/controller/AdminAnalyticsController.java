@@ -11,6 +11,7 @@ import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RestController;
 
+import java.time.LocalDateTime;
 import java.util.HashMap;
 import java.util.Map;
 
@@ -28,6 +29,7 @@ public class AdminAnalyticsController {
     private final SubscriptionRepository subscriptionRepository;
     private final DocumentRepository documentRepository;
     private final DocumentChunkRepository documentChunkRepository;
+    private final ChatMessageRepository chatMessageRepository;
 
     @GetMapping("/dashboard")
     @Operation(summary = "Lấy thống kê dashboard", description = "Lấy tổng quan toàn bộ hệ thống")
@@ -68,13 +70,19 @@ public class AdminAnalyticsController {
         documentStats.put("averageChunksPerDocument", totalDocuments > 0 ? (totalChunks / totalDocuments) : 0);
         stats.put("documents", documentStats);
         
-        // LLM Usage statistics (TODO: Implement tracking table)
+        // LLM usage từ chat_messages
+        LocalDateTime startOfMonth = LocalDateTime.now().withDayOfMonth(1).withHour(0).withMinute(0).withSecond(0).withNano(0);
+        long totalTokens   = chatMessageRepository.sumAllTokens();
+        long totalRequests = chatMessageRepository.countAllRequests();
+        long tokensMonth   = chatMessageRepository.sumAllTokensSince(startOfMonth);
+        long requestsMonth = chatMessageRepository.countAllRequestsSince(startOfMonth);
+
         Map<String, Object> llmStats = new HashMap<>();
-        llmStats.put("totalTokensUsed", 0); // TODO: Sum from llm_usage_tracking table
-        llmStats.put("totalRequests", 0);    // TODO: Count from llm_usage_tracking table
-        llmStats.put("tokensThisMonth", 0);
-        llmStats.put("requestsThisMonth", 0);
-        llmStats.put("note", "Token tracking chưa implement. Cần tạo bảng llm_usage_tracking.");
+        llmStats.put("totalTokensUsed", totalTokens);
+        llmStats.put("totalRequests", totalRequests);
+        llmStats.put("tokensThisMonth", tokensMonth);
+        llmStats.put("requestsThisMonth", requestsMonth);
+        llmStats.put("averageTokensPerRequest", totalRequests > 0 ? totalTokens / totalRequests : 0);
         stats.put("llmUsage", llmStats);
         
         return ResponseEntity.ok(stats);
@@ -86,16 +94,24 @@ public class AdminAnalyticsController {
     public ResponseEntity<Map<String, Object>> getLLMUsageStats() {
         Map<String, Object> stats = new HashMap<>();
         
-        // TODO: Query from llm_usage_tracking table
-        stats.put("totalTokensAllTime", 0);
-        stats.put("totalRequestsAllTime", 0);
-        stats.put("tokensThisMonth", 0);
-        stats.put("requestsThisMonth", 0);
-        stats.put("tokensToday", 0);
-        stats.put("requestsToday", 0);
-        stats.put("averageTokensPerRequest", 0);
-        stats.put("note", "Cần implement bảng llm_usage_tracking với các trường: tenant_id, user_id, tokens_used, request_date, model_name, request_type");
-        
+        LocalDateTime startOfMonth = LocalDateTime.now().withDayOfMonth(1).withHour(0).withMinute(0).withSecond(0).withNano(0);
+        LocalDateTime startOfToday  = LocalDateTime.now().toLocalDate().atStartOfDay();
+
+        long totalTokens   = chatMessageRepository.sumAllTokens();
+        long totalRequests = chatMessageRepository.countAllRequests();
+        long tokensMonth   = chatMessageRepository.sumAllTokensSince(startOfMonth);
+        long requestsMonth = chatMessageRepository.countAllRequestsSince(startOfMonth);
+        long tokensToday   = chatMessageRepository.sumAllTokensSince(startOfToday);
+        long requestsToday = chatMessageRepository.countAllRequestsSince(startOfToday);
+
+        stats.put("totalTokensAllTime", totalTokens);
+        stats.put("totalRequestsAllTime", totalRequests);
+        stats.put("tokensThisMonth", tokensMonth);
+        stats.put("requestsThisMonth", requestsMonth);
+        stats.put("tokensToday", tokensToday);
+        stats.put("requestsToday", requestsToday);
+        stats.put("averageTokensPerRequest", totalRequests > 0 ? totalTokens / totalRequests : 0);
+
         return ResponseEntity.ok(stats);
     }
 
