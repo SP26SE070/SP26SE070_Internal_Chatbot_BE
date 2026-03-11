@@ -7,6 +7,7 @@ import com.gsp26se114.chatbot_rag_be.entity.DocumentVisibility;
 import com.gsp26se114.chatbot_rag_be.payload.request.UpdateDocumentAccessRequest;
 import com.gsp26se114.chatbot_rag_be.payload.response.DocumentResponse;
 import com.gsp26se114.chatbot_rag_be.payload.response.DocumentVersionResponse;
+import com.gsp26se114.chatbot_rag_be.repository.DocumentCategoryRepository;
 import com.gsp26se114.chatbot_rag_be.repository.DocumentChunkRepository;
 import com.gsp26se114.chatbot_rag_be.repository.DocumentRepository;
 import com.gsp26se114.chatbot_rag_be.repository.DocumentVersionRepository;
@@ -14,6 +15,12 @@ import com.gsp26se114.chatbot_rag_be.security.service.UserPrincipal;
 import com.gsp26se114.chatbot_rag_be.service.DocumentProcessingService;
 import com.gsp26se114.chatbot_rag_be.service.MinioService;
 import io.swagger.v3.oas.annotations.Operation;
+import io.swagger.v3.oas.annotations.Parameter;
+import io.swagger.v3.oas.annotations.media.Content;
+import io.swagger.v3.oas.annotations.media.Schema;
+import io.swagger.v3.oas.annotations.responses.ApiResponse;
+import io.swagger.v3.oas.annotations.responses.ApiResponses;
+import io.swagger.v3.oas.annotations.security.SecurityRequirement;
 import io.swagger.v3.oas.annotations.tags.Tag;
 import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
@@ -42,6 +49,7 @@ public class DocumentController {
 
     private final MinioService minioService;
     private final DocumentRepository documentRepository;
+    private final DocumentCategoryRepository documentCategoryRepository;
     private final DocumentChunkRepository documentChunkRepository;
     private final DocumentVersionRepository documentVersionRepository;
     private final DocumentProcessingService documentProcessingService;
@@ -84,13 +92,39 @@ public class DocumentController {
 
     @PostMapping(value = "/upload", consumes = org.springframework.http.MediaType.MULTIPART_FORM_DATA_VALUE)
     @PreAuthorize("hasAnyRole('TENANT_ADMIN', 'TENANT_USER')")
-    @Operation(summary = "Upload document to Knowledge Base")
+    @SecurityRequirement(name = "bearerAuth")
+    @Operation(
+        summary = "Upload tài liệu vào Knowledge Base",
+        description = """
+            Upload file lên MinIO và kích hoạt embedding tự động (async).
+
+            **File hỗ trợ:** PDF, DOCX, XLSX, PPTX, TXT, MD, CSV (tối đa 50MB)
+
+            **visibility:**
+            - `COMPANY_WIDE` — tất cả nhân viên trong tenant đều xài được (không cần accessibleDepartments / accessibleRoles)
+            - `SPECIFIC_DEPARTMENTS` — chỉ phòng ban trong `accessibleDepartments` mới thấy
+            - `SPECIFIC_ROLES` — chỉ role trong `accessibleRoles` mới thấy
+
+            **embeddingStatus** sau upload: `PENDING` → hệ thống tự chuyển sang `COMPLETED` khi xưử lý xong.
+            """
+    )
+    @ApiResponses({
+        @ApiResponse(responseCode = "200", description = "Upload thành công, trả về DocumentResponse"),
+        @ApiResponse(responseCode = "400", description = "File rỗng / vượt 50MB / loại file không hỗ trợ / visibility không hợp lệ"),
+        @ApiResponse(responseCode = "500", description = "Lỗi server khi upload")
+    })
     public ResponseEntity<?> uploadDocument(
+            @Parameter(description = "File cần upload (PDF/DOCX/XLSX/PPTX/TXT/MD/CSV, tối đa 50MB)", required = true)
             @RequestPart("file") MultipartFile file,
-            @RequestParam(value = "category", required = false) String category,
+            @Parameter(description = "UUID của document category (tùy chọn, lấy từ API /categories)")
+            @RequestParam(value = "categoryId", required = false) UUID categoryId,
+            @Parameter(description = "Mô tả ngắn về tài liệu")
             @RequestParam(value = "description", required = false) String description,
+            @Parameter(description = "Phạm vi hiển thị: COMPANY_WIDE | SPECIFIC_DEPARTMENTS | SPECIFIC_ROLES")
             @RequestParam(value = "visibility", defaultValue = "COMPANY_WIDE") DocumentVisibility visibility,
+            @Parameter(description = "Danh sách department ID được xem (bắt buộc khi visibility = SPECIFIC_DEPARTMENTS)")
             @RequestParam(value = "accessibleDepartments", required = false) List<Integer> accessibleDepartments,
+            @Parameter(description = "Danh sách role ID được xem (bắt buộc khi visibility = SPECIFIC_ROLES)")
             @RequestParam(value = "accessibleRoles", required = false) List<Integer> accessibleRoles,
             @AuthenticationPrincipal UserPrincipal userDetails
     ) {
@@ -156,7 +190,15 @@ public class DocumentController {
             document.setFileSize(file.getSize());
             document.setStoragePath(storagePath);
             document.setTenantId(userDetails.getTenantId());
-            document.setCategory(category);
+            if (categoryId != null) {
+                boolean categoryExists = documentCategoryRepository.findById(categoryId)
+                        .map(c -> c.getTenantId().equals(userDetails.getTenantId()) && c.getIsActive())
+                        .orElse(false);
+                if (!categoryExists) {
+                    return ResponseEntity.badRequest().body("Category không tồn tại hoặc không thuộc tenant này");
+                }
+                document.setCategoryId(categoryId);
+            }
             document.setDescription(description);
             document.setVisibility(visibility);
             
@@ -198,11 +240,23 @@ public class DocumentController {
         }
     }
 
-    @GetMapping("/{id}")
+    @GetMapping("/detail/{id}")
     @PreAuthorize("hasAnyRole('TENANT_ADMIN', 'TENANT_USER')")
-    @Operation(summary = "Get document by ID (with access control)")
+    @SecurityRequirement(name = "bearerAuth")
+    @Operation(summary = "Xem chi tiết tài liệu theo ID",
+        description = """
+            Trả về thông tin đầy đủ của tài liệu. Kiểm tra quyền truy cập theo `visibility`:
+            - `COMPANY_WIDE`: tất cả user trong tenant đều xem được
+            - `SPECIFIC_DEPARTMENTS`: chỉ user thuộc đúng department mới xem được
+            - `SPECIFIC_ROLES`: chỉ user có role tương ứng mới xem được
+            """
+    )
+    @ApiResponses({
+        @ApiResponse(responseCode = "200", description = "Trả về DocumentResponse"),
+        @ApiResponse(responseCode = "404", description = "Không tìm thấy hoặc không có quyền truy cập")
+    })
     public ResponseEntity<?> getDocument(
-            @PathVariable UUID id,
+            @Parameter(description = "ID của tài liệu", required = true) @PathVariable UUID id,
             @AuthenticationPrincipal UserPrincipal userDetails
     ) {
         return documentRepository.findById(id)
@@ -228,7 +282,18 @@ public class DocumentController {
 
     @GetMapping
     @PreAuthorize("hasAnyRole('TENANT_ADMIN', 'TENANT_USER')")
-    @Operation(summary = "List all documents for tenant (with access control)")
+    @SecurityRequirement(name = "bearerAuth")
+    @Operation(
+        summary = "Danh sách tài liệu của tenant",
+        description = """
+            Trả về tất cả tài liệu mà user hiện tại có quyền xem, bao gồm:
+            - Tài liệu `COMPANY_WIDE`
+            - Tài liệu `SPECIFIC_DEPARTMENTS` thuộc department của user
+            - Tài liệu `SPECIFIC_ROLES` thuộc role của user
+
+            Kết quả bao gồm cả tài liệu đang `PENDING` embedding.
+            """
+    )
     public ResponseEntity<List<DocumentResponse>> listDocuments(
             @AuthenticationPrincipal UserPrincipal userDetails
     ) {
@@ -250,12 +315,36 @@ public class DocumentController {
     /**
      * Update document access control settings
      */
-    @PutMapping("/{id}/access")
-    @Operation(summary = "Update document access control")
+    @PutMapping("/update-access/{id}")
     @PreAuthorize("hasPermission('MANAGE_KNOWLEDGE_BASE')")
+    @SecurityRequirement(name = "bearerAuth")
     @Transactional
+    @Operation(
+        summary = "Cập nhật quyền truy cập tài liệu",
+        description = """
+            Thay đổi `visibility` và danh sách được phép truy cập của tài liệu.
+            Thay đổi được áp dụng cho cả tất cả `document_chunks` liên quan.
+
+            **Request body:**
+            ```json
+            {
+              "visibility": "SPECIFIC_DEPARTMENTS",
+              "accessibleDepartments": [1, 2],
+              "accessibleRoles": null
+            }
+            ```
+
+            **Lưu ý:** Chỉ TENANT_ADMIN hoặc user có quyền `MANAGE_KNOWLEDGE_BASE` mới gọi được API này.
+            """
+    )
+    @ApiResponses({
+        @ApiResponse(responseCode = "200", description = "Cập nhật thành công, trả về DocumentResponse mới"),
+        @ApiResponse(responseCode = "400", description = "Visibility không hợp lệ hoặc thiếu thông tin bắt buộc"),
+        @ApiResponse(responseCode = "403", description = "Không có quyền sửa tài liệu này"),
+        @ApiResponse(responseCode = "404", description = "Không tìm thấy tài liệu")
+    })
     public ResponseEntity<?> updateDocumentAccess(
-            @PathVariable UUID id,
+            @Parameter(description = "ID của tài liệu cần cập nhật", required = true) @PathVariable UUID id,
             @Valid @RequestBody UpdateDocumentAccessRequest request,
             @AuthenticationPrincipal UserPrincipal userDetails) {
         
@@ -360,17 +449,38 @@ public class DocumentController {
      *  3. Cập nhật bản ghi documents với file mới + tăng version_number.
      *  4. Kích hoạt process lại embedding.
      */
-    @PostMapping(value = "/{id}/versions", consumes = org.springframework.http.MediaType.MULTIPART_FORM_DATA_VALUE)
+    @PostMapping(value = "/update/{id}", consumes = org.springframework.http.MediaType.MULTIPART_FORM_DATA_VALUE)
     @PreAuthorize("hasPermission('MANAGE_KNOWLEDGE_BASE')")
+    @SecurityRequirement(name = "bearerAuth")
     @Transactional
     @Operation(
         summary = "Upload phiên bản mới cho tài liệu",
-        description = "Lưu bản hiện tại vào lịch sử, sau đó thay thế bằng file mới và re-embed."
+        description = """
+            Tạo phiên bản mới cho tài liệu đã tồn tại.
+
+            **Quy trình:**
+            1. Snapshot bản hiện tại vào bảng `document_versions`
+            2. Upload file mới lên MinIO
+            3. Cập nhật `version_number` (+1), thay thế file mới
+            4. Xóa chunks cũ, kích hoạt re-embedding (async)
+
+            **Lưu nhớ:** Sau khi upload, `embeddingStatus` chuyển về `PENDING` cho đến khi embedding hoàn tất.
+            """
     )
+    @ApiResponses({
+        @ApiResponse(responseCode = "200", description = "Upload phiên bản mới thành công, trả về DocumentResponse với version_number mới"),
+        @ApiResponse(responseCode = "400", description = "File rỗng / vượt 50MB / loại file không hỗ trợ"),
+        @ApiResponse(responseCode = "403", description = "Tài liệu thuộc tenant khác"),
+        @ApiResponse(responseCode = "404", description = "Không tìm thấy tài liệu")
+    })
     public ResponseEntity<?> uploadNewVersion(
+            @Parameter(description = "ID của tài liệu cần cập nhật phiên bản", required = true)
             @PathVariable UUID id,
+            @Parameter(description = "File mới (cùng định dạng cho phép: PDF/DOCX/XLSX/PPTX/TXT/MD/CSV)", required = true)
             @RequestPart("file") MultipartFile file,
+            @Parameter(description = "Ghi chú về nội dung thay đổi trong phiên bản này")
             @RequestParam(value = "versionNote", required = false) String versionNote,
+            @Parameter(description = "Tiêu đề mới cho tài liệu (nếu muốn đổi tỪn)")
             @RequestParam(value = "documentTitle", required = false) String documentTitle,
             @AuthenticationPrincipal UserPrincipal userDetails
     ) {
@@ -449,14 +559,26 @@ public class DocumentController {
     // GET /{id}/versions  — Lịch sử các phiên bản cũ
     // =========================================================
 
-    @GetMapping("/{id}/versions")
+    @GetMapping("/versions/{id}")
     @PreAuthorize("hasAnyRole('TENANT_ADMIN', 'TENANT_USER')")
+    @SecurityRequirement(name = "bearerAuth")
     @Operation(
         summary = "Lịch sử phiên bản của tài liệu",
-        description = "Trả về danh sách các phiên bản cũ (không bao gồm bản hiện tại). Mới nhất trên đầu."
+        description = """
+            Trả về danh sách các phiên bản cũ đã được lưu trong `document_versions`.
+            **Không bao gồm bản hiện tại** — để xem bản hiện tại dùng `GET /api/v1/knowledge/documents/{id}`.
+
+            Kết quả sắp xếp giảm dần theo `version_number` (phiên bản mới nhất lên trước).
+
+            Mỗi phần tử trả về: `versionId`, `versionNumber`, `originalFileName`, `fileType`, `fileSize`, `versionNote`, `createdByName`, `createdAt`.
+            """
     )
+    @ApiResponses({
+        @ApiResponse(responseCode = "200", description = "Danh sách các phiên bản cũ"),
+        @ApiResponse(responseCode = "404", description = "Không tìm thấy tài liệu hoặc tài liệu thuộc tenant khác")
+    })
     public ResponseEntity<?> getVersionHistory(
-            @PathVariable UUID id,
+            @Parameter(description = "ID của tài liệu", required = true) @PathVariable UUID id,
             @AuthenticationPrincipal UserPrincipal userDetails
     ) {
         // Kiểm tra quyền tenant

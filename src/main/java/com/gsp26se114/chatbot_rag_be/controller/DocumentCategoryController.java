@@ -7,6 +7,10 @@ import com.gsp26se114.chatbot_rag_be.payload.response.DocumentCategoryResponse;
 import com.gsp26se114.chatbot_rag_be.repository.DocumentCategoryRepository;
 import com.gsp26se114.chatbot_rag_be.security.service.UserPrincipal;
 import io.swagger.v3.oas.annotations.Operation;
+import io.swagger.v3.oas.annotations.Parameter;
+import io.swagger.v3.oas.annotations.responses.ApiResponse;
+import io.swagger.v3.oas.annotations.responses.ApiResponses;
+import io.swagger.v3.oas.annotations.security.SecurityRequirement;
 import io.swagger.v3.oas.annotations.tags.Tag;
 import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
@@ -64,9 +68,27 @@ public class DocumentCategoryController {
     // =========================================================
     @GetMapping("/tree")
     @PreAuthorize("hasAnyRole('TENANT_ADMIN', 'TENANT_USER')")
+    @SecurityRequirement(name = "bearerAuth")
     @Operation(
-        summary = "Lấy cây phân loại tài liệu",
-        description = "Trả về danh sách root-category, mỗi node có `children` lồng vào nhau."
+        summary = "Cây phân loại tài liệu",
+        description = """
+            Trả về tất cả categories đang active của tenant dưới dạng **cây lồng nhau**.
+
+            Mỗi node có `children` chứa các sub-category trực tiếp.
+
+            Ví dụ kết quả:
+            ```json
+            [
+              {
+                "id": "...", "name": "HR", "code": "HR",
+                "children": [
+                  { "id": "...", "name": "Onboarding", "code": "HR_ONBOARDING", "children": [] },
+                  { "id": "...", "name": "Policies", "code": "HR_POLICY", "children": [] }
+                ]
+              }
+            ]
+            ```
+            """
     )
     public ResponseEntity<List<DocumentCategoryResponse>> getTree(
             @AuthenticationPrincipal UserPrincipal user) {
@@ -97,7 +119,16 @@ public class DocumentCategoryController {
     // =========================================================
     @GetMapping
     @PreAuthorize("hasAnyRole('TENANT_ADMIN', 'TENANT_USER')")
-    @Operation(summary = "Flat list tất cả categories của tenant")
+    @SecurityRequirement(name = "bearerAuth")
+    @Operation(
+        summary = "Flat list tất cả categories của tenant",
+        description = """
+            Trả về danh sách phẳng (không lồng cây) tất cả categories đang active, sắp xếp theo tên A→Z.
+            Bao gồm cả root và sub-categories, mỗi phần tử có `parentId` để biết vị trí trong cây.
+
+            Dùng cho dropdown chọn category khi upload tài liệu.
+            """
+    )
     public ResponseEntity<List<DocumentCategoryResponse>> listFlat(
             @AuthenticationPrincipal UserPrincipal user) {
 
@@ -112,11 +143,19 @@ public class DocumentCategoryController {
     // =========================================================
     // GET /{id}  — Chi tiết một category
     // =========================================================
-    @GetMapping("/{id}")
+    @GetMapping("/detail/{id}")
     @PreAuthorize("hasAnyRole('TENANT_ADMIN', 'TENANT_USER')")
-    @Operation(summary = "Lấy chi tiết một category")
+    @SecurityRequirement(name = "bearerAuth")
+    @Operation(
+        summary = "Xem chi tiết một category",
+        description = "Trả về thông tin đầy đủ của category bao gồm `id`, `name`, `code`, `description`, `parentId`, `isActive`, `createdAt`."
+    )
+    @ApiResponses({
+        @ApiResponse(responseCode = "200", description = "Thông tin category"),
+        @ApiResponse(responseCode = "404", description = "Không tìm thấy hoặc thuộc tenant khác")
+    })
     public ResponseEntity<?> getOne(
-            @PathVariable UUID id,
+            @Parameter(description = "ID của category", required = true) @PathVariable UUID id,
             @AuthenticationPrincipal UserPrincipal user) {
 
         return categoryRepository.findById(id)
@@ -128,11 +167,20 @@ public class DocumentCategoryController {
     // =========================================================
     // GET /{id}/children  — Sub-categories trực tiếp
     // =========================================================
-    @GetMapping("/{id}/children")
+    @GetMapping("/children/{id}")
     @PreAuthorize("hasAnyRole('TENANT_ADMIN', 'TENANT_USER')")
-    @Operation(summary = "Lấy danh sách sub-category trực tiếp của một category")
+    @SecurityRequirement(name = "bearerAuth")
+    @Operation(
+        summary = "Sub-categories trực tiếp của một category",
+        description = """
+            Trả về danh sách các category con trực tiếp (chỉ độ sâu 1) của category chỉ định.
+            Khác với `/tree`: API này **không lồng tiếp**, chỉ lấy con trực tiếp có `parentId = {id}`.
+
+            Dùng cho lazy-loading từng nứt cây trên UI.
+            """
+    )
     public ResponseEntity<List<DocumentCategoryResponse>> getChildren(
-            @PathVariable UUID id,
+            @Parameter(description = "ID của category cha", required = true) @PathVariable UUID id,
             @AuthenticationPrincipal UserPrincipal user) {
 
         List<DocumentCategoryResponse> result = categoryRepository
@@ -146,12 +194,33 @@ public class DocumentCategoryController {
     // =========================================================
     // POST /  — Tạo category mới
     // =========================================================
-    @PostMapping
+    @PostMapping("/create")
     @PreAuthorize("hasPermission('MANAGE_KNOWLEDGE_BASE')")
+    @SecurityRequirement(name = "bearerAuth")
     @Operation(
         summary = "Tạo category mới",
-        description = "parentId = null → category cấp root. Code phải unique trong phạm vi tenant."
+        description = """
+            Tạo một document category mới trong tenant.
+
+            **Request body:**
+            ```json
+            {
+              "name": "Nhân sự",
+              "code": "HR",
+              "description": "Tài liệu liên quan nhân sự",
+              "parentId": null
+            }
+            ```
+
+            - `parentId = null` → category cấp root
+            - `parentId = <uuid>` → sub-category của category đó
+            - `code` phải unique trong phạm vi tenant (không phân biệt hoa thường, tự động uppercase)
+            """
     )
+    @ApiResponses({
+        @ApiResponse(responseCode = "200", description = "Tạo thành công, trả về DocumentCategoryResponse"),
+        @ApiResponse(responseCode = "400", description = "Code đã tồn tại hoặc parent không hợp lệ")
+    })
     public ResponseEntity<?> create(
             @Valid @RequestBody CreateDocumentCategoryRequest req,
             @AuthenticationPrincipal UserPrincipal user) {
@@ -192,11 +261,28 @@ public class DocumentCategoryController {
     // =========================================================
     // PUT /{id}  — Cập nhật category
     // =========================================================
-    @PutMapping("/{id}")
+    @PutMapping("/update/{id}")
     @PreAuthorize("hasPermission('MANAGE_KNOWLEDGE_BASE')")
-    @Operation(summary = "Cập nhật thông tin category")
+    @SecurityRequirement(name = "bearerAuth")
+    @Operation(
+        summary = "Cập nhật thông tin category",
+        description = """
+            Cập nhật `name`, `code`, `description`, `parentId`, `isActive` của category.
+
+            **Validation:**
+            - Không được set `parentId` thành chính ID của category **đó** (tự tham chiếu)
+            - `code` mới phải unique trong tenant (ngoại trừ chính nó)
+            - Nếu đổi `isActive = false`, cần xóa hết sub-category con trước (dùng DELETE từng cái)
+            """
+    )
+    @ApiResponses({
+        @ApiResponse(responseCode = "200", description = "Cập nhật thành công"),
+        @ApiResponse(responseCode = "400", description = "Code trùng / self-parent / parent không hợp lệ"),
+        @ApiResponse(responseCode = "403", description = "Không có quyền sửa category này"),
+        @ApiResponse(responseCode = "404", description = "Không tìm thấy category")
+    })
     public ResponseEntity<?> update(
-            @PathVariable UUID id,
+            @Parameter(description = "ID của category cần cập nhật", required = true) @PathVariable UUID id,
             @Valid @RequestBody UpdateDocumentCategoryRequest req,
             @AuthenticationPrincipal UserPrincipal user) {
 
@@ -244,14 +330,28 @@ public class DocumentCategoryController {
     // =========================================================
     // DELETE /{id}  — Soft-delete (deactivate)
     // =========================================================
-    @DeleteMapping("/{id}")
+    @DeleteMapping("/delete/{id}")
     @PreAuthorize("hasPermission('MANAGE_KNOWLEDGE_BASE')")
+    @SecurityRequirement(name = "bearerAuth")
     @Operation(
         summary = "Vô hiệu hóa category (soft delete)",
-        description = "Không xóa vật lý. Trả lỗi nếu category còn sub-category đang active."
+        description = """
+            Đánh dấu `isActive = false`. **Không xóa vật lý** khỏi database.
+
+            **Biểu kiện:** Category phải không còn sub-category nào đang active.
+            Nếu còn, API sẽ trả `400` với hướng dẫn xóa sub-category trước.
+
+            Tài liệu đang gắn với category này vẫn tồn tại nhưng category sẽ không xuất hiện trong cây nữa.
+            """
     )
+    @ApiResponses({
+        @ApiResponse(responseCode = "200", description = "Vô hiệu hóa thành công"),
+        @ApiResponse(responseCode = "400", description = "Còn sub-category đang active"),
+        @ApiResponse(responseCode = "403", description = "Không có quyền xóa category này"),
+        @ApiResponse(responseCode = "404", description = "Không tìm thấy category")
+    })
     public ResponseEntity<?> delete(
-            @PathVariable UUID id,
+            @Parameter(description = "ID của category cần vô hiệu hóa", required = true) @PathVariable UUID id,
             @AuthenticationPrincipal UserPrincipal user) {
 
         DocumentCategory cat = categoryRepository.findById(id)

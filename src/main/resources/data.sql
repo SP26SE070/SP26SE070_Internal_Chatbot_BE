@@ -963,3 +963,191 @@ INSERT INTO subscriptions (
 UPDATE tenants
 SET subscription_id = 'b0000000-0000-0000-0000-000000000001'
 WHERE tenant_id = '550e8400-e29b-41d4-a716-446655440000';
+
+-------------------------------------------------------
+-- 8. SEED DATA: DOCUMENT CATEGORIES (FPT Software)
+-- Tenant: 550e8400-e29b-41d4-a716-446655440000
+-- Created by: admin@fpt.com
+-------------------------------------------------------
+INSERT INTO document_categories (category_id, tenant_id, parent_id, name, code, description, is_active, created_by, created_at) VALUES
+
+-- Root categories
+('c1000000-0000-0000-0000-000000000001',
+ '550e8400-e29b-41d4-a716-446655440000',
+ NULL,
+ 'Chính sách & Quy định',
+ 'POLICY',
+ 'Tài liệu về chính sách nội bộ, quy định công ty, nội quy lao động',
+ TRUE,
+ (SELECT user_id FROM users WHERE email = 'admin@fpt.com'),
+ CURRENT_TIMESTAMP - interval '10 days'),
+
+('c2000000-0000-0000-0000-000000000002',
+ '550e8400-e29b-41d4-a716-446655440000',
+ NULL,
+ 'Kỹ thuật & Công nghệ',
+ 'TECH',
+ 'Tài liệu kỹ thuật, kiến trúc hệ thống, hướng dẫn phát triển',
+ TRUE,
+ (SELECT user_id FROM users WHERE email = 'admin@fpt.com'),
+ CURRENT_TIMESTAMP - interval '10 days'),
+
+('c3000000-0000-0000-0000-000000000003',
+ '550e8400-e29b-41d4-a716-446655440000',
+ NULL,
+ 'Nhân sự & Đào tạo',
+ 'HR',
+ 'Tài liệu liên quan đến nhân sự, tuyển dụng, onboarding, đào tạo nội bộ',
+ TRUE,
+ (SELECT user_id FROM users WHERE email = 'admin@fpt.com'),
+ CURRENT_TIMESTAMP - interval '10 days'),
+
+('c4000000-0000-0000-0000-000000000004',
+ '550e8400-e29b-41d4-a716-446655440000',
+ NULL,
+ 'Tài chính & Kế toán',
+ 'FINANCE',
+ 'Báo cáo tài chính, hướng dẫn thanh toán, chính sách chi phí',
+ TRUE,
+ (SELECT user_id FROM users WHERE email = 'admin@fpt.com'),
+ CURRENT_TIMESTAMP - interval '10 days'),
+
+-- Sub-categories of POLICY
+('c1100000-0000-0000-0000-000000000011',
+ '550e8400-e29b-41d4-a716-446655440000',
+ 'c1000000-0000-0000-0000-000000000001',
+ 'Chính sách nhân sự',
+ 'POLICY_HR',
+ 'Nghỉ phép, phúc lợi, lương thưởng, đánh giá hiệu suất',
+ TRUE,
+ (SELECT user_id FROM users WHERE email = 'admin@fpt.com'),
+ CURRENT_TIMESTAMP - interval '9 days'),
+
+('c1200000-0000-0000-0000-000000000012',
+ '550e8400-e29b-41d4-a716-446655440000',
+ 'c1000000-0000-0000-0000-000000000001',
+ 'Quy định hành chính',
+ 'POLICY_ADMIN',
+ 'Quy định về giờ làm, trang phục, sử dụng tài sản công ty',
+ TRUE,
+ (SELECT user_id FROM users WHERE email = 'admin@fpt.com'),
+ CURRENT_TIMESTAMP - interval '9 days'),
+
+-- Sub-categories of TECH
+('c2100000-0000-0000-0000-000000000021',
+ '550e8400-e29b-41d4-a716-446655440000',
+ 'c2000000-0000-0000-0000-000000000002',
+ 'Kiến trúc hệ thống',
+ 'TECH_ARCH',
+ 'System design, architecture diagrams, ADR documents',
+ TRUE,
+ (SELECT user_id FROM users WHERE email = 'admin@fpt.com'),
+ CURRENT_TIMESTAMP - interval '8 days'),
+
+('c2200000-0000-0000-0000-000000000022',
+ '550e8400-e29b-41d4-a716-446655440000',
+ 'c2000000-0000-0000-0000-000000000002',
+ 'Hướng dẫn phát triển',
+ 'TECH_DEV',
+ 'Coding standards, git workflow, code review guidelines, CI/CD',
+ TRUE,
+ (SELECT user_id FROM users WHERE email = 'admin@fpt.com'),
+ CURRENT_TIMESTAMP - interval '8 days'),
+
+-- Sub-category of HR
+('c3100000-0000-0000-0000-000000000031',
+ '550e8400-e29b-41d4-a716-446655440000',
+ 'c3000000-0000-0000-0000-000000000003',
+ 'Onboarding',
+ 'HR_ONBOARDING',
+ 'Tài liệu dành cho nhân viên mới: quy trình nhận việc, giới thiệu công ty',
+ TRUE,
+ (SELECT user_id FROM users WHERE email = 'admin@fpt.com'),
+ CURRENT_TIMESTAMP - interval '7 days');
+
+-------------------------------------------------------
+-- 9. SEED DATA: DOCUMENTS (FPT Software)
+-- Tenant: 550e8400-e29b-41d4-a716-446655440000
+-- Uploaded by: admin@fpt.com
+-- Note: storage_path points to MinIO path (files không thực sự tồn tại, chỉ để test API)
+-------------------------------------------------------
+INSERT INTO documents (
+    document_id, file_name, original_file_name, file_type, file_size,
+    storage_path, tenant_id, description, visibility,
+    owner_department_id, accessible_departments, accessible_roles,
+    uploaded_by, uploaded_by_name, uploaded_by_email, uploaded_by_role,
+    uploaded_at, embedding_status, is_active,
+    category_id, document_title, version_number
+) VALUES
+
+-- 1. Nội quy công ty - COMPANY_WIDE
+('d1000000-0000-0000-0000-000000000001',
+ 'noi_quy_cong_ty_2026.pdf', 'Nội quy công ty 2026.pdf', 'application/pdf', 204800,
+ 'tenant-550e8400-e29b-41d4-a716-446655440000/documents/noi_quy_cong_ty_2026.pdf',
+ '550e8400-e29b-41d4-a716-446655440000',
+ 'Nội quy lao động, quy định về giờ giấc, ứng xử, trang phục và kỷ luật',
+ 'COMPANY_WIDE',
+ NULL, '[]'::jsonb, '[]'::jsonb,
+ (SELECT user_id FROM users WHERE email = 'admin@fpt.com'),
+ 'FPT Tenant Admin', 'admin@fpt.com', 'TENANT_ADMIN',
+ CURRENT_TIMESTAMP - interval '8 days',
+ 'COMPLETED', TRUE,
+ 'c1200000-0000-0000-0000-000000000012', 'Nội quy công ty 2026', 1),
+
+-- 2. Hướng dẫn onboarding - COMPANY_WIDE
+('d2000000-0000-0000-0000-000000000002',
+ 'huong_dan_onboarding.pdf', 'Hướng dẫn Onboarding nhân viên mới.pdf', 'application/pdf', 512000,
+ 'tenant-550e8400-e29b-41d4-a716-446655440000/documents/huong_dan_onboarding.pdf',
+ '550e8400-e29b-41d4-a716-446655440000',
+ 'Hướng dẫn từng bước cho nhân viên mới: đăng ký hệ thống, làm quen môi trường làm việc, các đầu mối liên hệ',
+ 'COMPANY_WIDE',
+ NULL, '[]'::jsonb, '[]'::jsonb,
+ (SELECT user_id FROM users WHERE email = 'admin@fpt.com'),
+ 'FPT Tenant Admin', 'admin@fpt.com', 'TENANT_ADMIN',
+ CURRENT_TIMESTAMP - interval '7 days',
+ 'COMPLETED', TRUE,
+ 'c3100000-0000-0000-0000-000000000031', 'Hướng dẫn Onboarding nhân viên mới', 1),
+
+-- 3. Chính sách nghỉ phép - COMPANY_WIDE
+('d3000000-0000-0000-0000-000000000003',
+ 'chinh_sach_nghi_phep_2026.pdf', 'Chính sách nghỉ phép 2026.pdf', 'application/pdf', 153600,
+ 'tenant-550e8400-e29b-41d4-a716-446655440000/documents/chinh_sach_nghi_phep_2026.pdf',
+ '550e8400-e29b-41d4-a716-446655440000',
+ 'Quy định ngày phép năm, phép ốm, phép thai sản và các loại phép đặc biệt',
+ 'COMPANY_WIDE',
+ NULL, '[]'::jsonb, '[]'::jsonb,
+ (SELECT user_id FROM users WHERE email = 'admin@fpt.com'),
+ 'FPT Tenant Admin', 'admin@fpt.com', 'TENANT_ADMIN',
+ CURRENT_TIMESTAMP - interval '6 days',
+ 'COMPLETED', TRUE,
+ 'c1100000-0000-0000-0000-000000000011', 'Chính sách nghỉ phép 2026', 1),
+
+-- 4. Kiến trúc hệ thống nội bộ - chỉ DEV department
+('d4000000-0000-0000-0000-000000000004',
+ 'system_architecture_v2.pdf', 'System Architecture v2.0.pdf', 'application/pdf', 1048576,
+ 'tenant-550e8400-e29b-41d4-a716-446655440000/documents/system_architecture_v2.pdf',
+ '550e8400-e29b-41d4-a716-446655440000',
+ 'Tài liệu kiến trúc hệ thống nội bộ phiên bản 2.0: microservices, database schema, API contracts',
+ 'SPECIFIC_DEPARTMENTS',
+ (SELECT department_id FROM departments WHERE tenant_id = '550e8400-e29b-41d4-a716-446655440000' AND code = 'DEV'),
+ (SELECT jsonb_agg(department_id) FROM departments WHERE tenant_id = '550e8400-e29b-41d4-a716-446655440000' AND code = 'DEV'),
+ '[]'::jsonb,
+ (SELECT user_id FROM users WHERE email = 'admin@fpt.com'),
+ 'FPT Tenant Admin', 'admin@fpt.com', 'TENANT_ADMIN',
+ CURRENT_TIMESTAMP - interval '5 days',
+ 'COMPLETED', TRUE,
+ 'c2100000-0000-0000-0000-000000000021', 'System Architecture v2.0', 2),
+
+-- 5. Coding Standards - COMPANY_WIDE
+('d5000000-0000-0000-0000-000000000005',
+ 'coding_standards_java.pdf', 'Coding Standards - Java & Spring Boot.pdf', 'application/pdf', 307200,
+ 'tenant-550e8400-e29b-41d4-a716-446655440000/documents/coding_standards_java.pdf',
+ '550e8400-e29b-41d4-a716-446655440000',
+ 'Tiêu chuẩn code Java và Spring Boot: đặt tên, cấu trúc package, xử lý lỗi, logging',
+ 'COMPANY_WIDE',
+ NULL, '[]'::jsonb, '[]'::jsonb,
+ (SELECT user_id FROM users WHERE email = 'admin@fpt.com'),
+ 'FPT Tenant Admin', 'admin@fpt.com', 'TENANT_ADMIN',
+ CURRENT_TIMESTAMP - interval '4 days',
+ 'PENDING', TRUE,
+ 'c2200000-0000-0000-0000-000000000022', 'Coding Standards - Java & Spring Boot', 1);
