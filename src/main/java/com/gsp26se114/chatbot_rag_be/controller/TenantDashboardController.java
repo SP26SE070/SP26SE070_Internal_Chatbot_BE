@@ -13,8 +13,10 @@ import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RestController;
 
+import java.time.LocalDateTime;
 import java.util.HashMap;
 import java.util.Map;
+import java.util.UUID;
 
 @RestController
 @RequestMapping("/api/v1/tenant-admin/dashboard")
@@ -28,6 +30,7 @@ public class TenantDashboardController {
     private final UserRepository userRepository;
     private final DocumentRepository documentRepository;
     private final DocumentChunkRepository documentChunkRepository;
+    private final ChatMessageRepository chatMessageRepository;
 
     @GetMapping
     @Operation(summary = "Dashboard tổng quan của tenant", 
@@ -49,13 +52,20 @@ public class TenantDashboardController {
         documentStats.put("averageChunksPerDocument", totalDocuments > 0 ? (totalChunks / totalDocuments) : 0);
         dashboard.put("documents", documentStats);
         
-        // TODO: Thêm token và LLM request tracking
-        // Hiện tại chưa có bảng tracking, sẽ implement sau
+        // LLM usage từ chat_messages
+        LocalDateTime startOfMonth = LocalDateTime.now().withDayOfMonth(1).withHour(0).withMinute(0).withSecond(0).withNano(0);
+        UUID tenantId = userPrincipal.getTenantId();
+        long totalTokens   = chatMessageRepository.sumTokensByTenantId(tenantId);
+        long totalRequests = chatMessageRepository.countRequestsByTenantId(tenantId);
+        long tokensMonth   = chatMessageRepository.sumTokensByTenantIdSince(tenantId, startOfMonth);
+        long requestsMonth = chatMessageRepository.countRequestsByTenantIdSince(tenantId, startOfMonth);
+
         Map<String, Object> llmStats = new HashMap<>();
-        llmStats.put("totalTokensUsed", 0); // TODO: Implement token tracking
-        llmStats.put("totalRequests", 0);    // TODO: Implement request tracking
-        llmStats.put("tokensThisMonth", 0);  // TODO: Implement monthly tracking
-        llmStats.put("requestsThisMonth", 0);
+        llmStats.put("totalTokensUsed", totalTokens);
+        llmStats.put("totalRequests", totalRequests);
+        llmStats.put("tokensThisMonth", tokensMonth);
+        llmStats.put("requestsThisMonth", requestsMonth);
+        llmStats.put("averageTokensPerRequest", totalRequests > 0 ? totalTokens / totalRequests : 0);
         dashboard.put("llmUsage", llmStats);
         
         return ResponseEntity.ok(dashboard);
@@ -86,17 +96,25 @@ public class TenantDashboardController {
     public ResponseEntity<Map<String, Object>> getLLMUsageStatistics(@AuthenticationPrincipal UserPrincipal userPrincipal) {
         Map<String, Object> stats = new HashMap<>();
         
-        // TODO: Implement actual tracking
-        // Cần tạo bảng llm_usage_tracking với các trường:
-        // - tenant_id, user_id, tokens_used, request_date, model_name, request_type (chat/embedding)
-        
-        stats.put("totalTokensUsed", 0);
-        stats.put("totalRequests", 0);
-        stats.put("tokensThisMonth", 0);
-        stats.put("requestsThisMonth", 0);
-        stats.put("averageTokensPerRequest", 0);
-        stats.put("note", "Token tracking chưa được implement. Cần thêm bảng llm_usage_tracking.");
-        
+        LocalDateTime startOfMonth = LocalDateTime.now().withDayOfMonth(1).withHour(0).withMinute(0).withSecond(0).withNano(0);
+        LocalDateTime startOfToday  = LocalDateTime.now().toLocalDate().atStartOfDay();
+        UUID tenantId = userPrincipal.getTenantId();
+
+        long totalTokens    = chatMessageRepository.sumTokensByTenantId(tenantId);
+        long totalRequests  = chatMessageRepository.countRequestsByTenantId(tenantId);
+        long tokensMonth    = chatMessageRepository.sumTokensByTenantIdSince(tenantId, startOfMonth);
+        long requestsMonth  = chatMessageRepository.countRequestsByTenantIdSince(tenantId, startOfMonth);
+        long tokensToday    = chatMessageRepository.sumTokensByTenantIdSince(tenantId, startOfToday);
+        long requestsToday  = chatMessageRepository.countRequestsByTenantIdSince(tenantId, startOfToday);
+
+        stats.put("totalTokensUsed", totalTokens);
+        stats.put("totalRequests", totalRequests);
+        stats.put("tokensThisMonth", tokensMonth);
+        stats.put("requestsThisMonth", requestsMonth);
+        stats.put("tokensToday", tokensToday);
+        stats.put("requestsToday", requestsToday);
+        stats.put("averageTokensPerRequest", totalRequests > 0 ? totalTokens / totalRequests : 0);
+
         return ResponseEntity.ok(stats);
     }
 
