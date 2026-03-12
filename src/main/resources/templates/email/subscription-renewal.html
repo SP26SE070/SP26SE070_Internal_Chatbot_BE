@@ -1,0 +1,82 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <style>
+        body { font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; line-height: 1.6; color: #333; margin: 0; padding: 0; background-color: #f4f4f4; }
+        .container { max-width: 600px; margin: 20px auto; background: white; border-radius: 8px; overflow: hidden; box-shadow: 0 2px 10px rgba(0,0,0,0.1); }
+        .header { background: linear-gradient(135deg, #667eea 0%, #764ba2 100%); color: white; padding: 30px 20px; text-align: center; }
+        .header h1 { margin: 0; font-size: 28px; }
+        .header p { margin: 8px 0 0; opacity: 0.9; font-size: 15px; }
+        .content { padding: 30px; }
+        .greeting { font-size: 18px; margin-bottom: 20px; color: #333; }
+        .info-box { background: #f8f9fa; border-left: 4px solid #667eea; padding: 15px; margin: 20px 0; border-radius: 4px; }
+        .info-box p { margin: 6px 0; }
+        .info-box .label { font-weight: bold; color: #667eea; display: inline-block; min-width: 190px; }
+        .warning { background: #fff3cd; border-left: 4px solid #ffc107; padding: 15px; margin: 20px 0; border-radius: 4px; color: #856404; }
+        .qr-section { text-align: center; margin: 25px 0; }
+        .qr-section img { width: 220px; height: 220px; border: 2px solid #dee2e6; border-radius: 8px; }
+        .qr-section p { font-size: 13px; color: #6c757d; margin: 8px 0 0; }
+        .transaction-code { font-family: 'Courier New', monospace; font-size: 14px; background: #e9ecef; padding: 8px 14px; border-radius: 4px; letter-spacing: 1px; display: inline-block; margin-top: 10px; color: #495057; }
+        .button { display: inline-block; padding: 12px 30px; background: linear-gradient(135deg, #667eea 0%, #764ba2 100%); color: white; text-decoration: none; border-radius: 5px; margin: 20px 0; font-weight: bold; }
+        .footer { background: #f8f9fa; padding: 20px; text-align: center; font-size: 13px; color: #6c757d; border-top: 1px solid #dee2e6; }
+        .footer a { color: #667eea; text-decoration: none; }
+        ul { padding-left: 20px; }
+        ul li { margin: 8px 0; }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <div class="header">
+            <h1>🔔 Gia Hạn Subscription</h1>
+            <p>Subscription của bạn sắp hết hạn — vui lòng thanh toán để tiếp tục sử dụng</p>
+        </div>
+        <div class="content">
+            <p class="greeting">Xin chào <strong>${tenantName}</strong>,</p>
+            <p>Subscription của tổ chức bạn sắp hết hạn. Hệ thống đã tạo sẵn mã QR thanh toán cho kỳ gia hạn tiếp theo.</p>
+
+            <div class="info-box">
+                <p><span class="label">🏷️ Gói dịch vụ:</span> <strong>${tier}</strong></p>
+                <p><span class="label">🔄 Chu kỳ thanh toán:</span> ${billingCycle}</p>
+                <p><span class="label">💰 Số tiền cần thanh toán:</span> <strong>${amount} VND</strong></p>
+                <p><span class="label">📅 Hạn gia hạn:</span> ${renewalDueDate}</p>
+                <p><span class="label">⏰ QR hết hạn lúc:</span> ${expiresAt}</p>
+            </div>
+
+            <div class="qr-section">
+                <p style="font-size: 15px; font-weight: bold; color: #333; margin-bottom: 12px;">📲 Quét mã QR để thanh toán</p>
+                <img src="${qrImageUrl}" alt="QR Code thanh toán" />
+                <p>Mã giao dịch chuyển khoản:</p>
+                <span class="transaction-code">${transactionCode}</span>
+                <p style="margin-top: 10px; font-size: 12px; color: #dc3545;">
+                    ⚠️ Vui lòng nhập <strong>đúng nội dung chuyển khoản</strong> ở trên để hệ thống tự động xác nhận.
+                </p>
+            </div>
+
+            <div class="warning">
+                <strong>⚠️ Lưu ý quan trọng:</strong>
+                <ul style="margin: 10px 0 0; padding-left: 20px;">
+                    <li>Sử dụng ứng dụng ngân hàng hỗ trợ VietQR để quét hoặc chuyển khoản thủ công</li>
+                    <li>Nhập <strong>đúng nội dung</strong>: <code>${transactionCode}</code></li>
+                    <li>Sau khi thanh toán, hệ thống sẽ tự động kích hoạt trong vài phút</li>
+                    <li>QR code có hiệu lực đến <strong>${expiresAt}</strong></li>
+                </ul>
+            </div>
+
+            <div style="text-align: center; margin: 30px 0;">
+                <a href="http://localhost:8080/swagger-ui/index.html" class="button">
+                    🚀 Truy Cập Hệ Thống
+                </a>
+            </div>
+
+            <p style="margin-top: 25px;">Nếu bạn cần hỗ trợ, vui lòng liên hệ đội ngũ chúng tôi qua email support@chatbot-rag.com.</p>
+        </div>
+        <div class="footer">
+            <p><strong>Chatbot RAG Team</strong></p>
+            <p>📧 support@chatbot-rag.com | 🌐 <a href="http://localhost:8080">chatbot-rag.com</a></p>
+            <p style="margin-top: 15px; font-size: 11px; color: #999;">Email tự động từ hệ thống. Vui lòng không trả lời email này.</p>
+        </div>
+    </div>
+</body>
+</html>

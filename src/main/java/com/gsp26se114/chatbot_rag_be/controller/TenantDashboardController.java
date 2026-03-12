@@ -83,10 +83,16 @@ public class TenantDashboardController {
         stats.put("totalDocuments", totalDocuments);
         stats.put("totalChunks", totalChunks);
         stats.put("averageChunksPerDocument", totalDocuments > 0 ? (totalChunks * 1.0 / totalDocuments) : 0);
-        
-        // Document status breakdown (if needed)
-        // TODO: Add status-based counting if document has status field
-        
+
+        // Embedding status breakdown
+        UUID tenantId = userPrincipal.getTenantId();
+        Map<String, Long> embeddingBreakdown = new HashMap<>();
+        embeddingBreakdown.put("COMPLETED",  documentRepository.countByTenantIdAndEmbeddingStatusAndIsActive(tenantId, "COMPLETED",  true));
+        embeddingBreakdown.put("PENDING",    documentRepository.countByTenantIdAndEmbeddingStatusAndIsActive(tenantId, "PENDING",    true));
+        embeddingBreakdown.put("PROCESSING", documentRepository.countByTenantIdAndEmbeddingStatusAndIsActive(tenantId, "PROCESSING", true));
+        embeddingBreakdown.put("FAILED",     documentRepository.countByTenantIdAndEmbeddingStatusAndIsActive(tenantId, "FAILED",     true));
+        stats.put("embeddingStatusBreakdown", embeddingBreakdown);
+
         return ResponseEntity.ok(stats);
     }
 

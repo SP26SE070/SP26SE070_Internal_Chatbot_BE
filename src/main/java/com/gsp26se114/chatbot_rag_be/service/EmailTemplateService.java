@@ -100,4 +100,29 @@ public class EmailTemplateService {
                 .replace("${temporaryPassword}", temporaryPassword)
                 .replace("${contactEmail}", contactEmail);
     }
+
+    /**
+     * Template 7: Subscription Auto-Renewal - Notify Tenant with QR Code
+     */
+    public String generateSubscriptionRenewalEmail(
+            String tenantName,
+            String tier,
+            String billingCycle,
+            String amount,
+            String transactionCode,
+            String qrImageUrl,
+            String renewalDueDate,
+            String expiresAt) {
+        String template = loadTemplate("subscription-renewal.html");
+        return template
+                .replace("${tenantName}", tenantName)
+                .replace("${tier}", tier)
+                .replace("${billingCycle}", billingCycle)
+                .replace("${amount}", amount)
+                .replace("${transactionCode}", transactionCode)
+                .replace("${qrImageUrl}", qrImageUrl != null ? qrImageUrl : "")
+                .replace("${renewalDueDate}", renewalDueDate)
+                .replace("${expiresAt}", expiresAt);
+    }
+
 }

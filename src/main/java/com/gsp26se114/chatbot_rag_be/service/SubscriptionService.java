@@ -2,6 +2,7 @@ package com.gsp26se114.chatbot_rag_be.service;
 
 import com.gsp26se114.chatbot_rag_be.entity.*;
 import com.gsp26se114.chatbot_rag_be.repository.SubscriptionRepository;
+import com.gsp26se114.chatbot_rag_be.repository.TenantRepository;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Service;
@@ -20,6 +21,9 @@ public class SubscriptionService {
     
     private final SubscriptionRepository subscriptionRepository;
     private final SePayService sePayService;
+    private final TenantRepository tenantRepository;
+    private final EmailService emailService;
+    private final EmailTemplateService emailTemplateService;
     
     /**
      * Tạo trial subscription mặc định khi tenant được approve
@@ -105,18 +109,23 @@ public class SubscriptionService {
     ) {}
     
     /**
-     * Upgrade subscription sang tier cao hơn
-     * TODO: Implement khi có payment
+     * Upgrade subscription sang tier cao hơn.
+     * Tạo payment để tenant quét QR chuyển khoản, subscription chỉ ACTIVE sau khi webhook xác nhận.
      */
     @Transactional
-    public Subscription upgradeSubscription(UUID tenantId, SubscriptionTier newTier, BillingCycle cycle, UUID upgradedByAdminId) {
+    public com.gsp26se114.chatbot_rag_be.entity.PaymentTransaction upgradeSubscription(
+            UUID tenantId, SubscriptionTier newTier, BillingCycle cycle, UUID upgradedByAdminId) {
         log.info("Upgrading subscription for tenant: {} to tier: {}", tenantId, newTier);
-        
+
+        if (newTier == SubscriptionTier.TRIAL) {
+            throw new IllegalArgumentException("Cannot upgrade to TRIAL tier.");
+        }
+
         // Tìm subscription hiện tại
         Subscription current = subscriptionRepository.findActiveSubscriptionByTenantId(tenantId)
                 .orElseThrow(() -> new RuntimeException("Không tìm thấy subscription active cho tenant"));
-        
-        // Deactivate subscription cũ
+
+        // Cancel subscription cũ
         current.setStatus(SubscriptionStatus.CANCELLED);
         current.setCancelledAt(LocalDateTime.now());
         current.setCancelledBy(upgradedByAdminId);
@@ -124,21 +133,21 @@ public class SubscriptionService {
         current.setUpdatedAt(LocalDateTime.now());
         current.setUpdatedBy(upgradedByAdminId);
         subscriptionRepository.save(current);
-        
-        // Tạo subscription mới
+
+        // Tạo subscription mới ở trạng thái SUSPENDED, chờ thanh toán
         LocalDateTime now = LocalDateTime.now();
         LocalDateTime endDate = switch (cycle) {
             case MONTHLY -> now.plusMonths(1);
             case QUARTERLY -> now.plusMonths(3);
             case YEARLY -> now.plusYears(1);
         };
-        
+
         SubscriptionPricing pricing = getPricingByTier(newTier, cycle);
-        
+
         Subscription newSubscription = new Subscription();
         newSubscription.setTenantId(tenantId);
         newSubscription.setTier(newTier);
-        newSubscription.setStatus(SubscriptionStatus.ACTIVE);
+        newSubscription.setStatus(SubscriptionStatus.SUSPENDED);
         newSubscription.setStartDate(now);
         newSubscription.setEndDate(endDate);
         newSubscription.setIsTrial(false);
@@ -147,21 +156,20 @@ public class SubscriptionService {
         newSubscription.setBillingCycle(cycle);
         newSubscription.setAutoRenew(true);
         newSubscription.setNextBillingDate(endDate);
-        
-        // Set limits
         newSubscription.setMaxUsers(pricing.maxUsers());
         newSubscription.setMaxDocuments(pricing.maxDocuments());
         newSubscription.setMaxStorageGb(pricing.maxStorageGb());
         newSubscription.setMaxApiCalls(pricing.maxApiCalls());
-        
         newSubscription.setCreatedAt(now);
         newSubscription.setCreatedBy(upgradedByAdminId);
-        newSubscription.setNotes("Upgraded from " + current.getTier() + " to " + newTier);
-        
+        newSubscription.setPaymentMethod("BANK_TRANSFER");
+        newSubscription.setNotes("Upgraded from " + current.getTier() + " to " + newTier + " — awaiting payment");
+
         Subscription saved = subscriptionRepository.save(newSubscription);
-        log.info("New subscription created: {} for tenant: {}", saved.getId(), tenantId);
-        
-        return saved;
+        log.info("Created pending upgrade subscription: {} for tenant: {}", saved.getId(), tenantId);
+
+        // Tạo payment + QR code qua SePay
+        return sePayService.createPayment(saved, upgradedByAdminId);
     }
     
     /**
@@ -326,14 +334,38 @@ public class SubscriptionService {
             if (subscription.getAutoRenew() && !subscription.getIsTrial()) {
                 try {
                     // Create renewal payment
-                    com.gsp26se114.chatbot_rag_be.entity.PaymentTransaction payment = 
+                    com.gsp26se114.chatbot_rag_be.entity.PaymentTransaction payment =
                         sePayService.createPayment(subscription, subscription.getCreatedBy());
                     payment.setIsAutoRenewal(true);
 
                     log.info("Created auto-renewal payment for subscription: {}", subscription.getId());
                     processedCount++;
 
-                    // TODO: Send email notification to tenant with QR code
+                    // Send email notification to tenant with QR code
+                    tenantRepository.findById(subscription.getTenantId()).ifPresent(tenant -> {
+                        if (tenant.getContactEmail() != null) {
+                            try {
+                                String html = emailTemplateService.generateSubscriptionRenewalEmail(
+                                    tenant.getName(),
+                                    subscription.getTier().name(),
+                                    subscription.getBillingCycle().name(),
+                                    subscription.getPrice().toPlainString(),
+                                    payment.getTransactionCode(),
+                                    payment.getQrImageUrl(),
+                                    subscription.getEndDate().format(java.time.format.DateTimeFormatter.ofPattern("dd/MM/yyyy HH:mm")),
+                                    payment.getExpiresAt().format(java.time.format.DateTimeFormatter.ofPattern("dd/MM/yyyy HH:mm"))
+                                );
+                                emailService.sendHtmlEmail(
+                                    tenant.getContactEmail(),
+                                    "🔔 Gia hạn subscription - " + subscription.getTier().name(),
+                                    html
+                                );
+                                log.info("Renewal email sent to: {}", tenant.getContactEmail());
+                            } catch (Exception emailEx) {
+                                log.error("Failed to send renewal email for subscription: {}", subscription.getId(), emailEx);
+                            }
+                        }
+                    });
                 } catch (Exception e) {
                     log.error("Failed to process auto-renewal for subscription: {}", subscription.getId(), e);
                 }

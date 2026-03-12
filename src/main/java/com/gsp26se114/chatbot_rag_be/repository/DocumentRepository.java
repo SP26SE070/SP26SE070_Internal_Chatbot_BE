@@ -93,4 +93,9 @@ public interface DocumentRepository extends JpaRepository<DocumentEntity, UUID> 
      * Count total documents by tenant ID
      */
     long countByTenantId(UUID tenantId);
+
+    /**
+     * Count documents by tenant, embeddingStatus and isActive (cho dashboard breakdown)
+     */
+    Long countByTenantIdAndEmbeddingStatusAndIsActive(UUID tenantId, String embeddingStatus, Boolean isActive);
 }
