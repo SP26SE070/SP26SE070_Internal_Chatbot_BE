@@ -32,6 +32,8 @@ DROP TABLE IF EXISTS invoices CASCADE;
 -- Xóa sequences (không CASCADE vì sẽ tạo lại ngay sau đó)
 DROP SEQUENCE IF EXISTS roles_id_seq;
 DROP SEQUENCE IF EXISTS departments_id_seq;
+DROP SEQUENCE IF EXISTS refresh_tokens_seq;
+DROP SEQUENCE IF EXISTS blacklisted_tokens_seq;
 
 -- Không cần sequence thủ công cho refresh_tokens và blacklisted_tokens vì dùng SERIAL
 
@@ -129,9 +131,14 @@ CREATE TABLE users (
     last_login_at TIMESTAMP
 );
 
+-- Tạo sequence rõ ràng cho refresh_tokens & blacklisted_tokens
+-- (tránh lỗi khi schema cũ vẫn tham chiếu refresh_tokens_seq)
+CREATE SEQUENCE refresh_tokens_seq START WITH 1 INCREMENT BY 1 NO MINVALUE NO MAXVALUE CACHE 1;
+CREATE SEQUENCE blacklisted_tokens_seq START WITH 1 INCREMENT BY 1 NO MINVALUE NO MAXVALUE CACHE 1;
+
 -- Tạo bảng Refresh Tokens
 CREATE TABLE refresh_tokens (
-    refresh_token_id SERIAL PRIMARY KEY,
+    refresh_token_id BIGINT PRIMARY KEY DEFAULT nextval('refresh_tokens_seq'),
     token VARCHAR(255) UNIQUE NOT NULL,
     user_id UUID REFERENCES users(user_id) ON DELETE CASCADE,
     expiry_date TIMESTAMP NOT NULL
@@ -139,7 +146,7 @@ CREATE TABLE refresh_tokens (
 
 -- Tạo bảng Blacklist (Cho Logout)
 CREATE TABLE blacklisted_tokens (
-    blacklisted_token_id SERIAL PRIMARY KEY,
+    blacklisted_token_id BIGINT PRIMARY KEY DEFAULT nextval('blacklisted_tokens_seq'),
     token VARCHAR(255) UNIQUE NOT NULL,
     expiry_date TIMESTAMP NOT NULL
 );

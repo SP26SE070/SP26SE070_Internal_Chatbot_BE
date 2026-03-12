@@ -91,7 +91,7 @@ public class DocumentController {
     }
 
     @PostMapping(value = "/upload", consumes = org.springframework.http.MediaType.MULTIPART_FORM_DATA_VALUE)
-    @PreAuthorize("hasAnyRole('TENANT_ADMIN', 'TENANT_USER')")
+    @PreAuthorize("hasAuthority('DOCUMENT_WRITE')")
     @SecurityRequirement(name = "bearerAuth")
     @Operation(
         summary = "Upload tài liệu vào Knowledge Base",
@@ -241,7 +241,7 @@ public class DocumentController {
     }
 
     @GetMapping("/detail/{id}")
-    @PreAuthorize("hasAnyRole('TENANT_ADMIN', 'TENANT_USER')")
+    @PreAuthorize("hasAuthority('DOCUMENT_READ')")
     @SecurityRequirement(name = "bearerAuth")
     @Operation(summary = "Xem chi tiết tài liệu theo ID",
         description = """
@@ -281,7 +281,7 @@ public class DocumentController {
     }
 
     @GetMapping
-    @PreAuthorize("hasAnyRole('TENANT_ADMIN', 'TENANT_USER')")
+    @PreAuthorize("hasAuthority('DOCUMENT_READ')")
     @SecurityRequirement(name = "bearerAuth")
     @Operation(
         summary = "Danh sách tài liệu của tenant",
@@ -316,7 +316,7 @@ public class DocumentController {
      * Update document access control settings
      */
     @PutMapping("/update-access/{id}")
-    @PreAuthorize("hasPermission('MANAGE_KNOWLEDGE_BASE')")
+    @PreAuthorize("hasAuthority('DOCUMENT_WRITE')")
     @SecurityRequirement(name = "bearerAuth")
     @Transactional
     @Operation(
@@ -450,7 +450,7 @@ public class DocumentController {
      *  4. Kích hoạt process lại embedding.
      */
     @PostMapping(value = "/update/{id}", consumes = org.springframework.http.MediaType.MULTIPART_FORM_DATA_VALUE)
-    @PreAuthorize("hasPermission('MANAGE_KNOWLEDGE_BASE')")
+    @PreAuthorize("hasAuthority('DOCUMENT_WRITE')")
     @SecurityRequirement(name = "bearerAuth")
     @Transactional
     @Operation(
@@ -560,7 +560,7 @@ public class DocumentController {
     // =========================================================
 
     @GetMapping("/versions/{id}")
-    @PreAuthorize("hasAnyRole('TENANT_ADMIN', 'TENANT_USER')")
+    @PreAuthorize("hasAuthority('DOCUMENT_READ')")
     @SecurityRequirement(name = "bearerAuth")
     @Operation(
         summary = "Lịch sử phiên bản của tài liệu",

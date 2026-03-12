@@ -95,7 +95,7 @@ public class SubscriptionController {
      * Get current active subscription (All tenant users)
      */
     @GetMapping("/api/v1/subscriptions/current")
-    @PreAuthorize("hasAnyRole('TENANT_ADMIN', 'CONTENT_MANAGER', 'EMPLOYEE')")
+    @PreAuthorize("hasRole('TENANT_ADMIN')")
     @Tag(name = "15. 💳 Tenant Admin - Subscription Plans", description = "Quản lý gói subscription (TENANT_ADMIN)")
     @Operation(summary = "📋 Get Current Subscription")
     public ResponseEntity<Map<String, Object>> getCurrentSubscription(@AuthenticationPrincipal UserPrincipal userPrincipal) {

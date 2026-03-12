@@ -67,7 +67,7 @@ public class DocumentCategoryController {
     // GET /tree  — Trả về cây đầy đủ của tenant
     // =========================================================
     @GetMapping("/tree")
-    @PreAuthorize("hasAnyRole('TENANT_ADMIN', 'TENANT_USER')")
+    @PreAuthorize("hasAuthority('DOCUMENT_READ')")
     @SecurityRequirement(name = "bearerAuth")
     @Operation(
         summary = "Cây phân loại tài liệu",
@@ -118,7 +118,7 @@ public class DocumentCategoryController {
     // GET /  — Flat list (tất cả categories, không lồng cây)
     // =========================================================
     @GetMapping
-    @PreAuthorize("hasAnyRole('TENANT_ADMIN', 'TENANT_USER')")
+    @PreAuthorize("hasAuthority('DOCUMENT_READ')")
     @SecurityRequirement(name = "bearerAuth")
     @Operation(
         summary = "Flat list tất cả categories của tenant",
@@ -144,7 +144,7 @@ public class DocumentCategoryController {
     // GET /{id}  — Chi tiết một category
     // =========================================================
     @GetMapping("/detail/{id}")
-    @PreAuthorize("hasAnyRole('TENANT_ADMIN', 'TENANT_USER')")
+    @PreAuthorize("hasAuthority('DOCUMENT_READ')")
     @SecurityRequirement(name = "bearerAuth")
     @Operation(
         summary = "Xem chi tiết một category",
@@ -168,7 +168,7 @@ public class DocumentCategoryController {
     // GET /{id}/children  — Sub-categories trực tiếp
     // =========================================================
     @GetMapping("/children/{id}")
-    @PreAuthorize("hasAnyRole('TENANT_ADMIN', 'TENANT_USER')")
+    @PreAuthorize("hasAuthority('DOCUMENT_READ')")
     @SecurityRequirement(name = "bearerAuth")
     @Operation(
         summary = "Sub-categories trực tiếp của một category",
@@ -195,7 +195,7 @@ public class DocumentCategoryController {
     // POST /  — Tạo category mới
     // =========================================================
     @PostMapping("/create")
-    @PreAuthorize("hasPermission('MANAGE_KNOWLEDGE_BASE')")
+    @PreAuthorize("hasAuthority('DOCUMENT_WRITE')")
     @SecurityRequirement(name = "bearerAuth")
     @Operation(
         summary = "Tạo category mới",
@@ -262,7 +262,7 @@ public class DocumentCategoryController {
     // PUT /{id}  — Cập nhật category
     // =========================================================
     @PutMapping("/update/{id}")
-    @PreAuthorize("hasPermission('MANAGE_KNOWLEDGE_BASE')")
+    @PreAuthorize("hasAuthority('DOCUMENT_WRITE')")
     @SecurityRequirement(name = "bearerAuth")
     @Operation(
         summary = "Cập nhật thông tin category",
@@ -331,7 +331,7 @@ public class DocumentCategoryController {
     // DELETE /{id}  — Soft-delete (deactivate)
     // =========================================================
     @DeleteMapping("/delete/{id}")
-    @PreAuthorize("hasPermission('MANAGE_KNOWLEDGE_BASE')")
+    @PreAuthorize("hasAuthority('DOCUMENT_WRITE')")
     @SecurityRequirement(name = "bearerAuth")
     @Operation(
         summary = "Vô hiệu hóa category (soft delete)",
