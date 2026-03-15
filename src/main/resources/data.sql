@@ -427,8 +427,6 @@ CREATE TABLE invoices (
     payment_transaction_id UUID REFERENCES payment_transactions(payment_transaction_id),
 
     -- Thông tin hóa đơn
-    amount DECIMAL(15, 2) NOT NULL,
-    tax_amount DECIMAL(15, 2) DEFAULT 0,
     total_amount DECIMAL(15, 2) NOT NULL,
     currency VARCHAR(10) DEFAULT 'VND',
     billing_period_start TIMESTAMP,
