@@ -210,9 +210,12 @@ public class TenantAdminService {
             throw new RuntimeException("Role không thuộc tenant này");
         }
         
-        // TENANT_ADMIN cannot create another TENANT_ADMIN
-        if (selectedRole.getId().equals(tenantAdminRole.getId())) {
-            throw new RuntimeException("TENANT_ADMIN không thể tạo user với role TENANT_ADMIN");
+        List<String> forbiddenRoleCodes = List.of("SUPER_ADMIN", "STAFF", "TENANT_ADMIN");
+        if (forbiddenRoleCodes.contains(selectedRole.getCode())) {
+            throw new RuntimeException(
+                "Không thể tạo user với role hệ thống: " + selectedRole.getCode() +
+                ". Chỉ được phép gán role EMPLOYEE hoặc custom role của tenant."
+            );
         }
         
         // Validate required fields
@@ -367,9 +370,12 @@ public class TenantAdminService {
             RoleEntity tenantAdminRoleCheck = roleRepository.findByCode("TENANT_ADMIN")
                     .orElseThrow(() -> new RuntimeException("Role TENANT_ADMIN không tồn tại"));
             
-            // TENANT_ADMIN cannot change role to TENANT_ADMIN
-            if (newRole.getId().equals(tenantAdminRoleCheck.getId())) {
-                throw new RuntimeException("TENANT_ADMIN không thể đặt role thành TENANT_ADMIN");
+            List<String> forbiddenRoleCodes = List.of("SUPER_ADMIN", "STAFF", "TENANT_ADMIN");
+            if (forbiddenRoleCodes.contains(newRole.getCode())) {
+                throw new RuntimeException(
+                    "Không thể cập nhật user với role hệ thống: " + newRole.getCode() +
+                    ". Chỉ được phép gán role EMPLOYEE hoặc custom role của tenant."
+                );
             }
         }
         
