@@ -17,6 +17,7 @@ public record UserResponse(
         String departmentName,
         String tenantName,
         List<String> permissions,
+        Boolean isActive,
         LocalDateTime createdAt,
         LocalDateTime updatedAt,
         LocalDateTime lastLoginAt

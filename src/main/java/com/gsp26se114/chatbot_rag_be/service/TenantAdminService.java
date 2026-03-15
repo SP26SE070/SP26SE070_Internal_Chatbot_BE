@@ -6,10 +6,12 @@ import com.gsp26se114.chatbot_rag_be.entity.Department;
 import com.gsp26se114.chatbot_rag_be.entity.RoleEntity;
 import com.gsp26se114.chatbot_rag_be.entity.Tenant;
 import com.gsp26se114.chatbot_rag_be.entity.User;
+import com.gsp26se114.chatbot_rag_be.entity.AuditLog;
 import com.gsp26se114.chatbot_rag_be.payload.request.CreateUserRequest;
 import com.gsp26se114.chatbot_rag_be.payload.request.UpdateUserRequest;
 import com.gsp26se114.chatbot_rag_be.payload.response.TenantAnalyticsResponse;
 import com.gsp26se114.chatbot_rag_be.payload.response.UserResponse;
+import com.gsp26se114.chatbot_rag_be.repository.AuditLogRepository;
 import com.gsp26se114.chatbot_rag_be.repository.DepartmentRepository;
 import com.gsp26se114.chatbot_rag_be.repository.RoleRepository;
 import com.gsp26se114.chatbot_rag_be.repository.TenantRepository;
@@ -17,6 +19,7 @@ import com.gsp26se114.chatbot_rag_be.repository.UserRepository;
 import com.gsp26se114.chatbot_rag_be.util.UserUtil;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
+import org.springframework.security.access.AccessDeniedException;
 import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
@@ -25,6 +28,7 @@ import java.time.LocalDateTime;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.NoSuchElementException;
 import java.util.UUID;
 import java.util.stream.Collectors;
 
@@ -37,6 +41,7 @@ public class TenantAdminService {
     private final TenantRepository tenantRepository;
     private final RoleRepository roleRepository;
     private final DepartmentRepository departmentRepository;
+    private final AuditLogRepository auditLogRepository;
     private final PasswordEncoder passwordEncoder;
     private final EmailService emailService;
     
@@ -122,12 +127,29 @@ public class TenantAdminService {
     /**
      * Get all users in tenant
      */
-    public List<UserResponse> getAllUsersInTenant(String tenantAdminEmail) {
+    public List<UserResponse> getAllUsersInTenant(String tenantAdminEmail, String status) {
         User tenantAdmin = getUserByEmail(tenantAdminEmail);
         UUID tenantId = tenantAdmin.getTenantId();
+        StatusFilter filter = StatusFilter.from(status);
         
-        log.info("Fetching all users for tenant: {}", tenantId);
-        List<User> users = userRepository.findByTenantId(tenantId);
+        log.info("Fetching users for tenant: {}, status={}", tenantId, filter);
+        List<User> users;
+        if (isTenantAdmin(tenantAdmin)) {
+            users = switch (filter) {
+                case ACTIVE -> userRepository.findByTenantIdAndIsActive(tenantId, true);
+                case INACTIVE -> userRepository.findByTenantIdAndIsActive(tenantId, false);
+                case ALL -> userRepository.findByTenantId(tenantId);
+            };
+        } else {
+            if (tenantAdmin.getDepartmentId() == null) {
+                return List.of();
+            }
+            users = switch (filter) {
+                case ACTIVE -> userRepository.findByTenantIdAndDepartmentIdAndIsActive(tenantId, tenantAdmin.getDepartmentId(), true);
+                case INACTIVE -> userRepository.findByTenantIdAndDepartmentIdAndIsActive(tenantId, tenantAdmin.getDepartmentId(), false);
+                case ALL -> userRepository.findByTenantIdAndDepartmentId(tenantId, tenantAdmin.getDepartmentId());
+            };
+        }
         
         return users.stream()
                 .map(user -> {
@@ -146,12 +168,14 @@ public class TenantAdminService {
     public UserResponse getUserById(String tenantAdminEmail, UUID userId) {
         User tenantAdmin = getUserByEmail(tenantAdminEmail);
         User user = userRepository.findById(userId)
-                .orElseThrow(() -> new RuntimeException("User không tồn tại với ID: " + userId));
+                .orElseThrow(() -> new NoSuchElementException("User không tồn tại với ID: " + userId));
         
         // Verify same tenant
         if (!user.getTenantId().equals(tenantAdmin.getTenantId())) {
-            throw new RuntimeException("Bạn không có quyền truy cập user này!");
+            throw new AccessDeniedException("Bạn không có quyền truy cập user này!");
         }
+
+        ensureDepartmentScope(tenantAdmin, user, "xem");
         
         RoleEntity role = user.getRoleId() != null ? 
             roleRepository.findById(user.getRoleId()).orElse(null) : null;
@@ -206,6 +230,12 @@ public class TenantAdminService {
         if (request.departmentId() != null) {
             department = departmentRepository.findById(request.departmentId())
                     .orElseThrow(() -> new RuntimeException("Department không tồn tại"));
+        }
+
+        if (!isTenantAdmin(tenantAdmin)) {
+            if (request.departmentId() == null || !request.departmentId().equals(tenantAdmin.getDepartmentId())) {
+                throw new RuntimeException("Bạn chỉ có thể tạo user trong chính phòng ban của mình");
+            }
         }
         
         // Generate login email (email ảo)
@@ -298,12 +328,14 @@ public class TenantAdminService {
     public UserResponse updateUser(String tenantAdminEmail, UUID userId, UpdateUserRequest request) {
         User tenantAdmin = getUserByEmail(tenantAdminEmail);
         User user = userRepository.findById(userId)
-                .orElseThrow(() -> new RuntimeException("User không tồn tại với ID: " + userId));
+                .orElseThrow(() -> new NoSuchElementException("User không tồn tại với ID: " + userId));
         
         // Verify same tenant
         if (!user.getTenantId().equals(tenantAdmin.getTenantId())) {
-            throw new RuntimeException("Bạn không có quyền cập nhật user này!");
+            throw new AccessDeniedException("Bạn không có quyền cập nhật user này!");
         }
+
+        ensureDepartmentScope(tenantAdmin, user, "cập nhật");
         
         // Cannot change TENANT_ADMIN role
         RoleEntity tenantAdminRole = roleRepository.findByCode("TENANT_ADMIN")
@@ -312,6 +344,15 @@ public class TenantAdminService {
             throw new RuntimeException("Không thể sửa thông tin TENANT_ADMIN!");
         }
         
+        boolean actorIsTenantAdmin = isTenantAdmin(tenantAdmin);
+
+        // Non-admin USER_WRITE can only do basic profile updates in same department
+        if (!actorIsTenantAdmin) {
+            if (request.roleId() != null || request.departmentId() != null) {
+                throw new IllegalArgumentException("Bạn chỉ được cập nhật thông tin cơ bản, không được đổi role/department");
+            }
+        }
+
         // Validate role change
         if (request.roleId() != null) {
             RoleEntity newRole = roleRepository.findById(request.roleId())
@@ -350,6 +391,10 @@ public class TenantAdminService {
             // Validate department exists
             departmentRepository.findById(request.departmentId())
                     .orElseThrow(() -> new RuntimeException("Department không tồn tại"));
+
+            if (!actorIsTenantAdmin && !request.departmentId().equals(tenantAdmin.getDepartmentId())) {
+                throw new RuntimeException("Bạn chỉ có thể chuyển user về phòng ban của chính bạn");
+            }
             user.setDepartmentId(request.departmentId());
         }
         if (request.roleId() != null) {
@@ -378,12 +423,14 @@ public class TenantAdminService {
     public void deleteUser(String tenantAdminEmail, UUID userId) {
         User tenantAdmin = getUserByEmail(tenantAdminEmail);
         User user = userRepository.findById(userId)
-                .orElseThrow(() -> new RuntimeException("User không tồn tại với ID: " + userId));
+                .orElseThrow(() -> new NoSuchElementException("User không tồn tại với ID: " + userId));
         
         // Verify same tenant
         if (!user.getTenantId().equals(tenantAdmin.getTenantId())) {
-            throw new RuntimeException("Bạn không có quyền xóa user này!");
+            throw new AccessDeniedException("Bạn không có quyền xóa user này!");
         }
+
+        ensureDepartmentScope(tenantAdmin, user, "xóa");
         
         // Cannot delete self
         if (user.getId().equals(tenantAdmin.getId())) {
@@ -396,9 +443,71 @@ public class TenantAdminService {
         if (user.getRoleId().equals(tenantAdminRole.getId())) {
             throw new RuntimeException("Không thể xóa TENANT_ADMIN!");
         }
-        
-        userRepository.delete(user);
-        log.info("Deleted user: {}", userId);
+
+        Boolean oldActive = user.getIsActive();
+        user.setIsActive(false);
+        user.setUpdatedAt(LocalDateTime.now());
+        userRepository.save(user);
+        writeUserStatusAudit(tenantAdmin, user, "USER_DEACTIVATE", oldActive, user.getIsActive(), "Soft delete user");
+        log.info("Soft-deleted user (isActive=false): {}", userId);
+    }
+
+    @Transactional
+    public UserResponse activateUser(String tenantAdminEmail, UUID userId) {
+        User tenantAdmin = getUserByEmail(tenantAdminEmail);
+        User user = userRepository.findById(userId)
+                .orElseThrow(() -> new NoSuchElementException("User không tồn tại với ID: " + userId));
+
+        if (!user.getTenantId().equals(tenantAdmin.getTenantId())) {
+            throw new AccessDeniedException("Bạn không có quyền cập nhật user này!");
+        }
+
+        ensureDepartmentScope(tenantAdmin, user, "kích hoạt");
+
+        Boolean oldActive = user.getIsActive();
+        user.setIsActive(true);
+        user.setUpdatedAt(LocalDateTime.now());
+        User saved = userRepository.save(user);
+        writeUserStatusAudit(tenantAdmin, saved, "USER_ACTIVATE", oldActive, saved.getIsActive(), "Activate user");
+        log.info("Activated user: {}", userId);
+
+        RoleEntity role = saved.getRoleId() != null ? roleRepository.findById(saved.getRoleId()).orElse(null) : null;
+        Department department = saved.getDepartmentId() != null ? departmentRepository.findById(saved.getDepartmentId()).orElse(null) : null;
+        return mapToUserResponse(saved, role, department);
+    }
+
+    @Transactional
+    public UserResponse deactivateUser(String tenantAdminEmail, UUID userId) {
+        User tenantAdmin = getUserByEmail(tenantAdminEmail);
+        User user = userRepository.findById(userId)
+                .orElseThrow(() -> new NoSuchElementException("User không tồn tại với ID: " + userId));
+
+        if (!user.getTenantId().equals(tenantAdmin.getTenantId())) {
+            throw new AccessDeniedException("Bạn không có quyền cập nhật user này!");
+        }
+
+        ensureDepartmentScope(tenantAdmin, user, "vô hiệu hóa");
+
+        if (user.getId().equals(tenantAdmin.getId())) {
+            throw new RuntimeException("Không thể tự vô hiệu hóa chính mình!");
+        }
+
+        RoleEntity tenantAdminRole = roleRepository.findByCode("TENANT_ADMIN")
+                .orElseThrow(() -> new RuntimeException("Role TENANT_ADMIN không tồn tại"));
+        if (user.getRoleId().equals(tenantAdminRole.getId())) {
+            throw new RuntimeException("Không thể vô hiệu hóa TENANT_ADMIN!");
+        }
+
+        Boolean oldActive = user.getIsActive();
+        user.setIsActive(false);
+        user.setUpdatedAt(LocalDateTime.now());
+        User saved = userRepository.save(user);
+        writeUserStatusAudit(tenantAdmin, saved, "USER_DEACTIVATE", oldActive, saved.getIsActive(), "Deactivate user");
+        log.info("Deactivated user: {}", userId);
+
+        RoleEntity role = saved.getRoleId() != null ? roleRepository.findById(saved.getRoleId()).orElse(null) : null;
+        Department department = saved.getDepartmentId() != null ? departmentRepository.findById(saved.getDepartmentId()).orElse(null) : null;
+        return mapToUserResponse(saved, role, department);
     }
     
     /**
@@ -414,6 +523,8 @@ public class TenantAdminService {
         if (!user.getTenantId().equals(tenantAdmin.getTenantId())) {
             throw new RuntimeException("Bạn không có quyền reset password cho user này!");
         }
+
+        ensureDepartmentScope(tenantAdmin, user, "reset mật khẩu");
         
         // Cannot reset TENANT_ADMIN password
         RoleEntity tenantAdminRole = roleRepository.findByCode("TENANT_ADMIN")
@@ -456,6 +567,62 @@ public class TenantAdminService {
         return userRepository.findByEmail(email)
                 .orElseThrow(() -> new RuntimeException("User không tồn tại với email: " + email));
     }
+
+    private boolean isTenantAdmin(User actor) {
+        if (actor.getRoleId() == null) {
+            return false;
+        }
+        return roleRepository.findById(actor.getRoleId())
+                .map(r -> "TENANT_ADMIN".equals(r.getCode()))
+                .orElse(false);
+    }
+
+    private void ensureDepartmentScope(User actor, User target, String action) {
+        if (isTenantAdmin(actor)) {
+            return;
+        }
+
+        if (actor.getDepartmentId() == null) {
+            throw new AccessDeniedException("Tài khoản của bạn chưa gán phòng ban, không thể " + action + " user");
+        }
+
+        if (target.getDepartmentId() == null || !actor.getDepartmentId().equals(target.getDepartmentId())) {
+            throw new AccessDeniedException("Bạn chỉ có quyền " + action + " user trong cùng phòng ban");
+        }
+    }
+
+    private void writeUserStatusAudit(User actor, User target, String action, Boolean oldActive, Boolean newActive, String description) {
+        AuditLog logEntry = new AuditLog();
+        logEntry.setTenantId(actor.getTenantId());
+        logEntry.setUserId(actor.getId());
+        logEntry.setUserEmail(actor.getEmail());
+        logEntry.setAction(action);
+        logEntry.setEntityType("User");
+        logEntry.setEntityId(String.valueOf(target.getId()));
+        logEntry.setOldValue(Map.of("isActive", String.valueOf(oldActive)));
+        logEntry.setNewValue(Map.of("isActive", String.valueOf(newActive)));
+        logEntry.setDescription(description + " - target=" + target.getEmail());
+        logEntry.setStatus("SUCCESS");
+        logEntry.setCreatedAt(LocalDateTime.now());
+        auditLogRepository.save(logEntry);
+    }
+
+    private enum StatusFilter {
+        ACTIVE,
+        INACTIVE,
+        ALL;
+
+        static StatusFilter from(String value) {
+            if (value == null || value.isBlank()) {
+                return ACTIVE;
+            }
+            try {
+                return StatusFilter.valueOf(value.trim().toUpperCase());
+            } catch (IllegalArgumentException ignored) {
+                throw new RuntimeException("status không hợp lệ. Chỉ chấp nhận: ACTIVE, INACTIVE, ALL");
+            }
+        }
+    }
     
     /**
      * Map User entity to UserResponse DTO
@@ -481,6 +648,7 @@ public class TenantAdminService {
                 department != null ? department.getName() : null,
                 tenantName,
                 user.getPermissions(),
+                user.getIsActive(),
                 user.getCreatedAt(),
                 user.getUpdatedAt(),
                 user.getLastLoginAt()
@@ -500,6 +668,8 @@ public class TenantAdminService {
         if (!user.getTenantId().equals(tenantAdmin.getTenantId())) {
             throw new RuntimeException("Bạn không có quyền cập nhật user này!");
         }
+
+        ensureDepartmentScope(tenantAdmin, user, "cập nhật quyền");
         
         // Cannot change TENANT_ADMIN permissions
         RoleEntity tenantAdminRole = roleRepository.findByCode("TENANT_ADMIN")

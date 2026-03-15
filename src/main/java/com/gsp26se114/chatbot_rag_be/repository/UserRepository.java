@@ -12,6 +12,9 @@ public interface UserRepository extends JpaRepository<User, UUID> {
     boolean existsByContactEmail(String contactEmail);
     boolean existsByEmail(String email);
     List<User> findByTenantId(UUID tenantId);
+    List<User> findByTenantIdAndIsActive(UUID tenantId, Boolean isActive);
+    List<User> findByTenantIdAndDepartmentId(UUID tenantId, Integer departmentId);
+    List<User> findByTenantIdAndDepartmentIdAndIsActive(UUID tenantId, Integer departmentId, Boolean isActive);
     List<User> findByRoleId(Integer roleId);
     long countByRoleId(Integer roleId);
     long countByTenantId(UUID tenantId);

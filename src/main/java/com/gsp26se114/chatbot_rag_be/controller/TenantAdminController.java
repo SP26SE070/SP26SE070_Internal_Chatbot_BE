@@ -27,7 +27,6 @@ import java.util.UUID;
 @RequiredArgsConstructor
 @Tag(name = "11. 👥 Tenant Admin - User Management", description = "Quản lý users trong tenant (TENANT_ADMIN)")
 @SecurityRequirement(name = "bearerAuth")
-@PreAuthorize("hasRole('TENANT_ADMIN')")
 public class TenantAdminController {
     
     private final TenantAdminService tenantAdminService;
@@ -36,6 +35,7 @@ public class TenantAdminController {
      * Get tenant dashboard analytics
      */
     @GetMapping("/dashboard/analytics")
+    @PreAuthorize("hasRole('TENANT_ADMIN')")
     @Operation(summary = "Lấy thống kê dashboard tenant", 
                description = "Thống kê tổng quan: users, departments, transfer requests")
     public ResponseEntity<TenantAnalyticsResponse> getTenantAnalytics(
@@ -48,11 +48,13 @@ public class TenantAdminController {
      * Get all users in tenant
      */
     @GetMapping("/users")
+    @PreAuthorize("hasRole('TENANT_ADMIN') or hasAuthority('USER_WRITE')")
     @Operation(summary = "Lấy danh sách users trong tenant", 
-               description = "Tenant Admin xem tất cả users thuộc tenant của mình")
+               description = "Lấy danh sách user theo trạng thái: ACTIVE | INACTIVE | ALL")
     public ResponseEntity<List<UserResponse>> getAllUsersInTenant(
-            @AuthenticationPrincipal UserDetails userDetails) {
-        List<UserResponse> users = tenantAdminService.getAllUsersInTenant(userDetails.getUsername());
+            @AuthenticationPrincipal UserDetails userDetails,
+            @RequestParam(value = "status", defaultValue = "ACTIVE") String status) {
+        List<UserResponse> users = tenantAdminService.getAllUsersInTenant(userDetails.getUsername(), status);
         return ResponseEntity.ok(users);
     }
     
@@ -60,6 +62,7 @@ public class TenantAdminController {
      * Get user by ID (in same tenant only)
      */
     @GetMapping("/users/{userId}")
+    @PreAuthorize("hasRole('TENANT_ADMIN') or hasAuthority('USER_WRITE')")
     @Operation(summary = "Xem chi tiết user", 
                description = "Xem thông tin chi tiết của user trong tenant")
     public ResponseEntity<UserResponse> getUserById(
@@ -73,6 +76,7 @@ public class TenantAdminController {
      * Create new user (CONTENT_MANAGER or EMPLOYEE)
      */
     @PostMapping("/users")
+    @PreAuthorize("hasRole('TENANT_ADMIN')")
     @Operation(summary = "Tạo user mới", 
                description = "Tạo CONTENT_MANAGER hoặc EMPLOYEE trong tenant")
     public ResponseEntity<UserResponse> createUser(
@@ -86,6 +90,7 @@ public class TenantAdminController {
      * Update user information
      */
     @PutMapping("/users/{userId}")
+    @PreAuthorize("hasRole('TENANT_ADMIN') or hasAuthority('USER_WRITE')")
     @Operation(summary = "Cập nhật thông tin user", 
                description = "Cập nhật fullName, phoneNumber, departmentId, role")
     public ResponseEntity<UserResponse> updateUser(
@@ -100,6 +105,7 @@ public class TenantAdminController {
      * Update user permissions (TENANT_ADMIN cấp quyền bổ sung cho user cụ thể)
      */
     @PutMapping("/users/{userId}/permissions")
+    @PreAuthorize("hasRole('TENANT_ADMIN')")
     @Operation(summary = "Cập nhật quyền của user", 
                description = "TENANT_ADMIN cấp quyền bổ sung cho user (ví dụ: DOCUMENT_READ, DOCUMENT_WRITE, ANALYTICS_VIEW)")
     public ResponseEntity<UserResponse> updateUserPermissions(
@@ -110,24 +116,48 @@ public class TenantAdminController {
                 userDetails.getUsername(), userId, request.getPermissions());
         return ResponseEntity.ok(user);
     }
+
+    @PutMapping("/users/{userId}/activate")
+    @PreAuthorize("hasRole('TENANT_ADMIN') or hasAuthority('USER_WRITE')")
+    @Operation(summary = "Kích hoạt user", 
+               description = "Bật lại tài khoản user trong tenant (set isActive = true)")
+    public ResponseEntity<UserResponse> activateUser(
+            @AuthenticationPrincipal UserDetails userDetails,
+            @PathVariable UUID userId) {
+        UserResponse user = tenantAdminService.activateUser(userDetails.getUsername(), userId);
+        return ResponseEntity.ok(user);
+    }
+
+    @PutMapping("/users/{userId}/deactivate")
+    @PreAuthorize("hasRole('TENANT_ADMIN') or hasAuthority('USER_WRITE')")
+    @Operation(summary = "Vô hiệu hóa user", 
+               description = "Tạm ngưng tài khoản user trong tenant (set isActive = false)")
+    public ResponseEntity<UserResponse> deactivateUser(
+            @AuthenticationPrincipal UserDetails userDetails,
+            @PathVariable UUID userId) {
+        UserResponse user = tenantAdminService.deactivateUser(userDetails.getUsername(), userId);
+        return ResponseEntity.ok(user);
+    }
     
     /**
      * Delete user (soft delete by removing from tenant)
      */
     @DeleteMapping("/users/{userId}")
+    @PreAuthorize("hasRole('TENANT_ADMIN') or hasAuthority('USER_WRITE')")
     @Operation(summary = "Xóa user", 
-               description = "Xóa user khỏi tenant (không thể xóa chính mình)")
+               description = "Xóa mềm user khỏi tenant (set isActive = false, không thể xóa chính mình)")
     public ResponseEntity<MessageResponse> deleteUser(
             @AuthenticationPrincipal UserDetails userDetails,
             @PathVariable UUID userId) {
         tenantAdminService.deleteUser(userDetails.getUsername(), userId);
-        return ResponseEntity.ok(new MessageResponse("User đã bị xóa khỏi tenant!"));
+        return ResponseEntity.ok(new MessageResponse("User đã được vô hiệu hóa (xóa mềm)!"));
     }
     
     /**
      * Reset user password
      */
     @PostMapping("/users/{userId}/reset-password")
+    @PreAuthorize("hasRole('TENANT_ADMIN')")
     @Operation(summary = "Reset mật khẩu user", 
                description = "Tạo mật khẩu mới và gửi email cho user")
     public ResponseEntity<MessageResponse> resetUserPassword(

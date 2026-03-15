@@ -105,7 +105,8 @@ public class StaffManagementController {
         User user = userRepository.findById(userId)
                 .orElseThrow(() -> new RuntimeException("User not found"));
 
-        user.setMustChangePassword(false);
+        user.setIsActive(true);
+        user.setUpdatedAt(LocalDateTime.now());
         userRepository.save(user);
 
         return ResponseEntity.ok(new MessageResponse("Tài khoản STAFF đã được kích hoạt"));
@@ -117,7 +118,8 @@ public class StaffManagementController {
         User user = userRepository.findById(userId)
                 .orElseThrow(() -> new RuntimeException("User not found"));
 
-        user.setMustChangePassword(true);
+        user.setIsActive(false);
+        user.setUpdatedAt(LocalDateTime.now());
         userRepository.save(user);
 
         return ResponseEntity.ok(new MessageResponse("Tài khoản STAFF đã bị vô hiệu hóa"));
