@@ -73,8 +73,7 @@ public class Subscription {
     
     private Long maxAiTokens; // Max AI tokens per month (for usage tracking)
     
-    @Column(length = 50)
-    private String contextWindowTokens; // Context window: 32k, 128k, 1M, 2M
+    private Integer contextWindowTokens; // Context window tokens per request
     
     // ========== RAG CONFIGURATION ==========
     private Boolean enableRag = true; // Enable Retrieval-Augmented Generation

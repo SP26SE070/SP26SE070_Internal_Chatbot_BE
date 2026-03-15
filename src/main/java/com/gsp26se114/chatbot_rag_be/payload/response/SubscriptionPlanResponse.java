@@ -38,11 +38,6 @@ public class SubscriptionPlanResponse {
     private Integer ragChunkSize;
     private String aiModel;
     private String embeddingModel;
-    private Boolean enableRag;
-    
-    // Trial info
-    private Boolean isTrial;
-    private Integer trialDays;
     
     // Status
     private Boolean isActive;

@@ -15,7 +15,5 @@ public interface SubscriptionPlanRepository extends JpaRepository<SubscriptionPl
     
     List<SubscriptionPlan> findByIsActiveTrueOrderByDisplayOrderAsc();
     
-    List<SubscriptionPlan> findByIsTrialTrue();
-    
     boolean existsByCode(String code);
 }

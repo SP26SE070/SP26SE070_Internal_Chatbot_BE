@@ -69,6 +69,12 @@ public class Tenant {
     @Column(name = "subscription_id")
     private UUID subscriptionId; // FK to the current active Subscription
 
+    @Column(name = "is_trial", nullable = false)
+    private Boolean isTrial = false;
+
+    @Column(name = "trial_used", nullable = false)
+    private Boolean trialUsed = false;
+
     // ========== AUDIT FIELDS ==========
     @Column(nullable = false, updatable = false)
     private LocalDateTime createdAt = LocalDateTime.now();

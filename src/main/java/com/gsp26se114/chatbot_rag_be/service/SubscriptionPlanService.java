@@ -72,11 +72,6 @@ public class SubscriptionPlanService {
             throw new IllegalArgumentException("Plan code already exists: " + request.getCode());
         }
         
-        // Validate trial plan
-        if (request.getIsTrial() && request.getTrialDays() == null) {
-            throw new IllegalArgumentException("Trial plan must have trialDays specified");
-        }
-        
         SubscriptionPlan plan = new SubscriptionPlan();
         plan.setCode(request.getCode().toUpperCase());
         plan.setName(request.getName());
@@ -102,11 +97,6 @@ public class SubscriptionPlanService {
         // AI Config
         plan.setAiModel(request.getAiModel());
         plan.setEmbeddingModel(request.getEmbeddingModel());
-        plan.setEnableRag(request.getEnableRag());
-        
-        // Trial
-        plan.setIsTrial(request.getIsTrial());
-        plan.setTrialDays(request.getTrialDays());
         
         // Status
         plan.setIsActive(true);
@@ -155,7 +145,6 @@ public class SubscriptionPlanService {
         // AI Config
         plan.setAiModel(request.getAiModel());
         plan.setEmbeddingModel(request.getEmbeddingModel());
-        plan.setEnableRag(request.getEnableRag());
         
         // Status
         plan.setIsActive(request.getIsActive());
@@ -214,9 +203,6 @@ public class SubscriptionPlanService {
                 .ragChunkSize(plan.getRagChunkSize())
                 .aiModel(plan.getAiModel())
                 .embeddingModel(plan.getEmbeddingModel())
-                .enableRag(plan.getEnableRag())
-                .isTrial(plan.getIsTrial())
-                .trialDays(plan.getTrialDays())
                 .isActive(plan.getIsActive())
                 .displayOrder(plan.getDisplayOrder())
                 .features(plan.getFeatures())

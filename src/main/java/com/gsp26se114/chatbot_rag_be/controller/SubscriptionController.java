@@ -2,6 +2,7 @@ package com.gsp26se114.chatbot_rag_be.controller;
 
 import com.gsp26se114.chatbot_rag_be.entity.PaymentTransaction;
 import com.gsp26se114.chatbot_rag_be.entity.Subscription;
+import com.gsp26se114.chatbot_rag_be.entity.SubscriptionTier;
 import com.gsp26se114.chatbot_rag_be.payload.request.CancelSubscriptionRequest;
 import com.gsp26se114.chatbot_rag_be.payload.request.SelectPlanRequest;
 import com.gsp26se114.chatbot_rag_be.payload.response.SubscriptionResponse;
@@ -43,14 +44,17 @@ public class SubscriptionController {
     @Operation(
         summary = "💳 Select Subscription Plan",
         description = """
-            Tenant Admin chọn gói subscription và tạo payment.
+            Tenant Admin chọn gói subscription.
             
             **Tier:**
+            - TRIAL: kích hoạt ngay (1 tenant chỉ trial 1 lần)
             - STARTER: 500K VND/month
             - STANDARD: 2M VND/month
             - ENTERPRISE: 5M VND/month
             
-            **Response:** QR code để chuyển tiền qua SePay
+            **Response:**
+            - TRIAL: trả về subscription active ngay
+            - Paid plans: QR code để chuyển tiền qua SePay
             """
     )
     public ResponseEntity<Map<String, Object>> selectPlan(
@@ -60,6 +64,23 @@ public class SubscriptionController {
         log.info("Tenant {} selecting plan: {} - {}", userPrincipal.getTenantId(), request.getTier(), request.getCycle());
 
         try {
+            if (request.getTier() == SubscriptionTier.TRIAL) {
+                Subscription trial = subscriptionService.createTrialSubscription(
+                    userPrincipal.getTenantId(),
+                    userPrincipal.getId()
+                );
+
+                Map<String, Object> response = new HashMap<>();
+                response.put("message", "Trial activated successfully");
+                response.put("subscription_id", trial.getId());
+                response.put("tier", trial.getTier().name());
+                response.put("status", trial.getStatus().name());
+                response.put("is_trial", trial.getIsTrial());
+                response.put("start_date", trial.getStartDate());
+                response.put("end_date", trial.getEndDate());
+                return ResponseEntity.ok(response);
+            }
+
             PaymentTransaction payment = subscriptionService.selectPaidPlan(
                 userPrincipal.getTenantId(),
                 request.getTier(),

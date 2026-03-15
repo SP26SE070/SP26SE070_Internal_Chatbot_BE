@@ -62,9 +62,9 @@ public class CreateSubscriptionPlanRequest {
     @NotNull(message = "Số AI token tối đa không được để trống")
     @Min(value = 0, message = "Số AI token tối đa phải >= 0")
     private Integer maxAiTokens;
-    
-    @NotNull(message = "Context window size không được để trống")
-    @Min(value = 1024, message = "Context window phải >= 1024")
+
+    @NotNull(message = "Context window tokens không được để trống")
+    @Min(value = 1, message = "Context window tokens phải >= 1")
     private Integer contextWindowTokens;
     
     @NotNull(message = "RAG chunk size không được để trống")
@@ -76,15 +76,6 @@ public class CreateSubscriptionPlanRequest {
     
     @Size(max = 100, message = "Embedding model không được vượt quá 100 ký tự")
     private String embeddingModel;
-    
-    @NotNull(message = "Enable RAG không được để trống")
-    private Boolean enableRag;
-    
-    @NotNull(message = "Is trial không được để trống")
-    private Boolean isTrial;
-    
-    @Min(value = 1, message = "Trial days phải >= 1 nếu là trial plan")
-    private Integer trialDays;
     
     @NotNull(message = "Display order không được để trống")
     @Min(value = 0, message = "Display order phải >= 0")

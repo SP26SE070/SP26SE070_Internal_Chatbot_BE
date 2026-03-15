@@ -1,6 +1,7 @@
 package com.gsp26se114.chatbot_rag_be.service;
 
 import com.gsp26se114.chatbot_rag_be.entity.*;
+import com.gsp26se114.chatbot_rag_be.repository.SubscriptionPlanRepository;
 import com.gsp26se114.chatbot_rag_be.repository.SubscriptionRepository;
 import com.gsp26se114.chatbot_rag_be.repository.TenantRepository;
 import lombok.RequiredArgsConstructor;
@@ -20,6 +21,7 @@ import java.util.UUID;
 public class SubscriptionService {
     
     private final SubscriptionRepository subscriptionRepository;
+    private final SubscriptionPlanRepository subscriptionPlanRepository;
     private final SePayService sePayService;
     private final TenantRepository tenantRepository;
     private final EmailService emailService;
@@ -31,82 +33,87 @@ public class SubscriptionService {
     @Transactional
     public Subscription createTrialSubscription(UUID tenantId, UUID createdByAdminId) {
         log.info("Creating trial subscription for tenant: {}", tenantId);
+
+        Tenant tenant = tenantRepository.findById(tenantId)
+                .orElseThrow(() -> new RuntimeException("Tenant not found: " + tenantId));
+
+        if (subscriptionRepository.findActiveSubscriptionByTenantId(tenantId).isPresent()) {
+            throw new IllegalStateException("Tenant đang có subscription active, không thể kích hoạt trial.");
+        }
+
+        if (Boolean.TRUE.equals(tenant.getTrialUsed())) {
+            throw new IllegalStateException("Tenant đã dùng trial trước đó, không thể cấp lại.");
+        }
         
         LocalDateTime now = LocalDateTime.now();
         LocalDateTime trialEnd = now.plusDays(14); // 14 ngày trial
+        SubscriptionPlan trialPlan = getActivePlanByTier(SubscriptionTier.TRIAL);
         
         Subscription subscription = new Subscription();
         subscription.setTenantId(tenantId);
+        subscription.setPlanId(trialPlan.getId());
         subscription.setTier(SubscriptionTier.TRIAL);
         subscription.setStatus(SubscriptionStatus.ACTIVE);
         subscription.setStartDate(now);
         subscription.setEndDate(trialEnd);
         subscription.setTrialEndDate(trialEnd);
         subscription.setIsTrial(true);
-        subscription.setPrice(BigDecimal.ZERO);
-        subscription.setCurrency("VND");
+        subscription.setPrice(resolvePriceByCycle(trialPlan, BillingCycle.MONTHLY));
+        subscription.setCurrency(trialPlan.getCurrency());
         subscription.setBillingCycle(BillingCycle.MONTHLY);
         subscription.setAutoRenew(false); // Trial không auto renew
-        
-        // Set usage limits cho TRIAL
-        subscription.setMaxUsers(5);
-        subscription.setMaxDocuments(100);
-        subscription.setMaxStorageGb(5);
-        subscription.setMaxApiCalls(1000);
+        applyPlanSnapshot(subscription, trialPlan);
         
         subscription.setCreatedAt(now);
         subscription.setCreatedBy(createdByAdminId);
         subscription.setNotes("Trial subscription - 14 days");
         
         Subscription saved = subscriptionRepository.save(subscription);
+
+        tenant.setSubscriptionId(saved.getId());
+        tenant.setIsTrial(true);
+        tenant.setTrialUsed(true);
+        tenant.setUpdatedAt(now);
+        tenantRepository.save(tenant);
+
         log.info("Trial subscription created: {} for tenant: {}", saved.getId(), tenantId);
         
         return saved;
     }
     
-    /**
-     * Lấy pricing và limits dựa theo tier
-     */
-    public SubscriptionPricing getPricingByTier(SubscriptionTier tier, BillingCycle cycle) {
-        return switch (tier) {
-            case TRIAL -> new SubscriptionPricing(BigDecimal.ZERO, 5, 100, 5, 1000);
-            case STARTER -> {
-                BigDecimal price = switch (cycle) {
-                    case MONTHLY -> new BigDecimal("5000"); // TEST: 5k VND for testing
-                    case QUARTERLY -> new BigDecimal("13500"); // TEST: 13.5k VND
-                    case YEARLY -> new BigDecimal("48000"); // TEST: 48k VND
-                };
-                yield new SubscriptionPricing(price, 20, 1000, 50, 10000);
-            }
-            case STANDARD -> {
-                BigDecimal price = switch (cycle) {
-                    case MONTHLY -> new BigDecimal("1500000"); // 1.5M VND/month
-                    case QUARTERLY -> new BigDecimal("4050000"); // 4.05M VND/quarter (10% off)
-                    case YEARLY -> new BigDecimal("14400000"); // 14.4M VND/year (20% off)
-                };
-                yield new SubscriptionPricing(price, 100, 10000, 500, 100000);
-            }
-            case ENTERPRISE -> {
-                BigDecimal price = switch (cycle) {
-                    case MONTHLY -> new BigDecimal("5000000"); // 5M VND/month
-                    case QUARTERLY -> new BigDecimal("13500000"); // 13.5M VND/quarter (10% off)
-                    case YEARLY -> new BigDecimal("48000000"); // 48M VND/year (20% off)
-                };
-                yield new SubscriptionPricing(price, -1, -1, -1, -1); // Unlimited
-            }
+    private SubscriptionPlan getActivePlanByTier(SubscriptionTier tier) {
+        SubscriptionPlan plan = subscriptionPlanRepository.findByCode(tier.name())
+                .orElseThrow(() -> new IllegalArgumentException("Plan không tồn tại cho tier: " + tier));
+
+        if (!Boolean.TRUE.equals(plan.getIsActive())) {
+            throw new IllegalStateException("Plan đang inactive: " + tier);
+        }
+
+        return plan;
+    }
+
+    private BigDecimal resolvePriceByCycle(SubscriptionPlan plan, BillingCycle cycle) {
+        return switch (cycle) {
+            case MONTHLY -> plan.getMonthlyPrice();
+            case QUARTERLY -> plan.getQuarterlyPrice();
+            case YEARLY -> plan.getYearlyPrice();
         };
     }
-    
-    /**
-     * Record class cho pricing info
-     */
-    public record SubscriptionPricing(
-        BigDecimal price,
-        Integer maxUsers,
-        Integer maxDocuments,
-        Integer maxStorageGb,
-        Integer maxApiCalls
-    ) {}
+
+    private void applyPlanSnapshot(Subscription subscription, SubscriptionPlan plan) {
+        subscription.setMaxUsers(plan.getMaxUsers());
+        subscription.setMaxDocuments(plan.getMaxDocuments());
+        subscription.setMaxStorageGb(plan.getMaxStorageGb());
+        subscription.setMaxApiCalls(plan.getMaxApiCalls());
+        subscription.setMaxChatbotRequests(plan.getMaxChatbotRequests());
+        subscription.setMaxRagDocuments(plan.getMaxRagDocuments());
+        subscription.setMaxAiTokens(plan.getMaxAiTokens().longValue());
+        subscription.setContextWindowTokens(plan.getContextWindowTokens());
+        subscription.setRagChunkSize(plan.getRagChunkSize());
+        subscription.setAiModel(plan.getAiModel());
+        subscription.setEmbeddingModel(plan.getEmbeddingModel());
+        subscription.setEnableRag(true);
+    }
     
     /**
      * Upgrade subscription sang tier cao hơn.
@@ -141,25 +148,22 @@ public class SubscriptionService {
             case QUARTERLY -> now.plusMonths(3);
             case YEARLY -> now.plusYears(1);
         };
-
-        SubscriptionPricing pricing = getPricingByTier(newTier, cycle);
+        SubscriptionPlan plan = getActivePlanByTier(newTier);
 
         Subscription newSubscription = new Subscription();
         newSubscription.setTenantId(tenantId);
+        newSubscription.setPlanId(plan.getId());
         newSubscription.setTier(newTier);
         newSubscription.setStatus(SubscriptionStatus.SUSPENDED);
         newSubscription.setStartDate(now);
         newSubscription.setEndDate(endDate);
         newSubscription.setIsTrial(false);
-        newSubscription.setPrice(pricing.price());
-        newSubscription.setCurrency("VND");
+        newSubscription.setPrice(resolvePriceByCycle(plan, cycle));
+        newSubscription.setCurrency(plan.getCurrency());
         newSubscription.setBillingCycle(cycle);
         newSubscription.setAutoRenew(true);
         newSubscription.setNextBillingDate(endDate);
-        newSubscription.setMaxUsers(pricing.maxUsers());
-        newSubscription.setMaxDocuments(pricing.maxDocuments());
-        newSubscription.setMaxStorageGb(pricing.maxStorageGb());
-        newSubscription.setMaxApiCalls(pricing.maxApiCalls());
+        applyPlanSnapshot(newSubscription, plan);
         newSubscription.setCreatedAt(now);
         newSubscription.setCreatedBy(upgradedByAdminId);
         newSubscription.setPaymentMethod("BANK_TRANSFER");
@@ -221,9 +225,7 @@ public class SubscriptionService {
                     throw new IllegalStateException("Tenant already has an active paid subscription. Please cancel first.");
                 }
             });
-
-        // Get pricing info
-        SubscriptionPricing pricing = getPricingByTier(tier, cycle);
+        SubscriptionPlan plan = getActivePlanByTier(tier);
 
         // Calculate end date
         LocalDateTime now = LocalDateTime.now();
@@ -236,20 +238,18 @@ public class SubscriptionService {
         // Create PENDING subscription
         Subscription subscription = new Subscription();
         subscription.setTenantId(tenantId);
+        subscription.setPlanId(plan.getId());
         subscription.setTier(tier);
         subscription.setStatus(SubscriptionStatus.SUSPENDED); // SUSPENDED until payment confirmed
         subscription.setStartDate(now);
         subscription.setEndDate(endDate);
         subscription.setIsTrial(false);
-        subscription.setPrice(pricing.price());
-        subscription.setCurrency("VND");
+        subscription.setPrice(resolvePriceByCycle(plan, cycle));
+        subscription.setCurrency(plan.getCurrency());
         subscription.setBillingCycle(cycle);
         subscription.setAutoRenew(true);
         subscription.setNextBillingDate(endDate);
-        subscription.setMaxUsers(pricing.maxUsers());
-        subscription.setMaxDocuments(pricing.maxDocuments());
-        subscription.setMaxStorageGb(pricing.maxStorageGb());
-        subscription.setMaxApiCalls(pricing.maxApiCalls());
+        applyPlanSnapshot(subscription, plan);
         subscription.setCreatedAt(now);
         subscription.setCreatedBy(userId);
         subscription.setPaymentMethod("BANK_TRANSFER");

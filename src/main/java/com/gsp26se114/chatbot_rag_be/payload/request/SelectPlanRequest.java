@@ -15,8 +15,7 @@ import lombok.Data;
 public class SelectPlanRequest {
 
     /**
-     * Subscription tier to purchase (STARTER, STANDARD, ENTERPRISE)
-     * Cannot select TRIAL via this endpoint
+        * Subscription tier to select (TRIAL, STARTER, STANDARD, ENTERPRISE)
      */
     @NotNull(message = "Tier is required")
     private SubscriptionTier tier;

@@ -4,6 +4,7 @@ import com.gsp26se114.chatbot_rag_be.config.SePayConfig;
 import com.gsp26se114.chatbot_rag_be.entity.*;
 import com.gsp26se114.chatbot_rag_be.repository.PaymentTransactionRepository;
 import com.gsp26se114.chatbot_rag_be.repository.SubscriptionRepository;
+import com.gsp26se114.chatbot_rag_be.repository.TenantRepository;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.http.*;
@@ -34,6 +35,7 @@ public class SePayService {
     private final SePayConfig sePayConfig;
     private final PaymentTransactionRepository paymentTransactionRepository;
     private final SubscriptionRepository subscriptionRepository;
+    private final TenantRepository tenantRepository;
     private final RestTemplate restTemplate = new RestTemplate();
 
     /**
@@ -273,6 +275,13 @@ public class SePayService {
             subscription.setLastPaymentDate(LocalDateTime.now());
             subscription.setUpdatedAt(LocalDateTime.now());
             subscriptionRepository.save(subscription);
+
+            tenantRepository.findById(tenantId).ifPresent(tenant -> {
+                tenant.setSubscriptionId(subscription.getId());
+                tenant.setIsTrial(false);
+                tenant.setUpdatedAt(LocalDateTime.now());
+                tenantRepository.save(tenant);
+            });
 
             log.info("Successfully processed payment: {}, Activated subscription: {} for tenant: {}", 
                 payment.getId(), subscription.getId(), tenantId);

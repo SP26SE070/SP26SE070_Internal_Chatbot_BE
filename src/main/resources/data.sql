@@ -67,6 +67,8 @@ CREATE TABLE tenants (
     
     -- Subscription Information (FK resolved via ALTER TABLE after subscriptions is created)
     subscription_id UUID, -- References subscriptions(subscription_id), added as FK constraint below
+    is_trial BOOLEAN NOT NULL DEFAULT FALSE,
+    trial_used BOOLEAN NOT NULL DEFAULT FALSE,
     
     -- Audit Fields
     created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP NOT NULL,
@@ -278,11 +280,6 @@ CREATE TABLE subscription_plans (
     -- AI Configuration
     ai_model VARCHAR(100),
     embedding_model VARCHAR(100),
-    enable_rag BOOLEAN NOT NULL DEFAULT FALSE,
-    
-    -- Trial specific
-    is_trial BOOLEAN NOT NULL DEFAULT FALSE,
-    trial_days INTEGER,
     
     -- Status
     is_active BOOLEAN NOT NULL DEFAULT TRUE,
@@ -329,7 +326,7 @@ CREATE TABLE subscriptions (
     max_chatbot_requests INTEGER,
     max_rag_documents INTEGER,
     max_ai_tokens BIGINT,
-    context_window_tokens VARCHAR(50),
+    context_window_tokens INTEGER,
     rag_chunk_size INTEGER,
 
     -- AI Model Configuration (snapshot from plan)
@@ -859,8 +856,8 @@ INSERT INTO subscription_plans (
     max_users, max_documents, max_storage_gb, max_api_calls,
     max_chatbot_requests, max_rag_documents, max_ai_tokens,
     context_window_tokens, rag_chunk_size,
-    ai_model, embedding_model, enable_rag,
-    is_trial, trial_days, is_active, display_order,
+    ai_model, embedding_model,
+    is_active, display_order,
     features, created_at, updated_at
 ) VALUES (
     'a0000000-0000-0000-0000-000000000001', 'TRIAL', 'Gói Dùng Thử', 'Gói dùng thử miễn phí 14 ngày để trải nghiệm hệ thống',
@@ -868,8 +865,8 @@ INSERT INTO subscription_plans (
     5, 100, 5, 1000,
     500, 50, 10000,
     4096, 512,
-    'gpt-3.5-turbo', 'text-embedding-ada-002', false,
-    true, 14, true, 0,
+    'gpt-3.5-turbo', 'text-embedding-ada-002',
+    true, 0,
     '✅ 5 users, ✅ 100 documents, ✅ 5GB storage, ✅ 1,000 API calls/month, ✅ Basic AI chatbot',
     CURRENT_TIMESTAMP, CURRENT_TIMESTAMP
 );
@@ -881,8 +878,8 @@ INSERT INTO subscription_plans (
     max_users, max_documents, max_storage_gb, max_api_calls,
     max_chatbot_requests, max_rag_documents, max_ai_tokens,
     context_window_tokens, rag_chunk_size,
-    ai_model, embedding_model, enable_rag,
-    is_trial, trial_days, is_active, display_order,
+    ai_model, embedding_model,
+    is_active, display_order,
     features, created_at, updated_at
 ) VALUES (
     'a0000000-0000-0000-0000-000000000002', 'STARTER', 'Gói Khởi Đầu', 'Phù hợp cho doanh nghiệp nhỏ và startup',
@@ -890,8 +887,8 @@ INSERT INTO subscription_plans (
     10, 500, 10, 5000,
     2000, 200, 50000,
     8192, 512,
-    'gpt-3.5-turbo', 'text-embedding-ada-002', true,
-    false, null, true, 1,
+    'gpt-3.5-turbo', 'text-embedding-ada-002',
+    true, 1,
     '✅ 10 users, ✅ 500 documents, ✅ 10GB storage, ✅ 5,000 API calls/month, ✅ RAG enabled, ✅ Priority support',
     CURRENT_TIMESTAMP, CURRENT_TIMESTAMP
 );
@@ -903,8 +900,8 @@ INSERT INTO subscription_plans (
     max_users, max_documents, max_storage_gb, max_api_calls,
     max_chatbot_requests, max_rag_documents, max_ai_tokens,
     context_window_tokens, rag_chunk_size,
-    ai_model, embedding_model, enable_rag,
-    is_trial, trial_days, is_active, display_order,
+    ai_model, embedding_model,
+    is_active, display_order,
     features, created_at, updated_at
 ) VALUES (
     'a0000000-0000-0000-0000-000000000003', 'STANDARD', 'Gói Tiêu Chuẩn', 'Phù hợp cho doanh nghiệp vừa',
@@ -912,8 +909,8 @@ INSERT INTO subscription_plans (
     50, 2000, 50, 20000,
     10000, 1000, 200000,
     16384, 1024,
-    'gpt-4', 'text-embedding-ada-002', true,
-    false, null, true, 2,
+    'gpt-4', 'text-embedding-ada-002',
+    true, 2,
     '✅ 50 users, ✅ 2,000 documents, ✅ 50GB storage, ✅ 20,000 API calls/month, ✅ GPT-4 model, ✅ Advanced RAG, ✅ 24/7 support',
     CURRENT_TIMESTAMP, CURRENT_TIMESTAMP
 );
@@ -925,8 +922,8 @@ INSERT INTO subscription_plans (
     max_users, max_documents, max_storage_gb, max_api_calls,
     max_chatbot_requests, max_rag_documents, max_ai_tokens,
     context_window_tokens, rag_chunk_size,
-    ai_model, embedding_model, enable_rag,
-    is_trial, trial_days, is_active, display_order,
+    ai_model, embedding_model,
+    is_active, display_order,
     features, created_at, updated_at
 ) VALUES (
     'a0000000-0000-0000-0000-000000000004', 'ENTERPRISE', 'Gói Doanh Nghiệp', 'Giải pháp toàn diện cho doanh nghiệp lớn',
@@ -934,8 +931,8 @@ INSERT INTO subscription_plans (
     999, 999999, 500, 999999,
     999999, 999999, 999999,
     32768, 2048,
-    'gpt-4', 'text-embedding-ada-002', true,
-    false, null, true, 3,
+    'gpt-4', 'text-embedding-ada-002',
+    true, 3,
     '✅ Unlimited users, ✅ Unlimited documents, ✅ 500GB storage, ✅ Unlimited API calls, ✅ GPT-4 model, ✅ Advanced RAG, ✅ Dedicated support, ✅ Custom integration',
     CURRENT_TIMESTAMP, CURRENT_TIMESTAMP
 );
@@ -989,7 +986,7 @@ INSERT INTO subscriptions (
     FALSE,
     999, 999999, 500, 999999,
     999999, 999999, 999999,
-    '32768', 2048,
+    32768, 2048,
     'gpt-4', 'text-embedding-ada-002', TRUE,
     'SEPAY',
     CURRENT_TIMESTAMP - interval '5 days'

@@ -70,7 +70,7 @@ public class SubscriptionPlan {
     
     @Column(nullable = false)
     private Integer maxAiTokens;
-    
+
     @Column(nullable = false)
     private Integer contextWindowTokens;
     
@@ -82,16 +82,6 @@ public class SubscriptionPlan {
     
     @Column(length = 100)
     private String embeddingModel;
-    
-    @Column(nullable = false)
-    private Boolean enableRag = false;
-    
-    // Trial specific
-    @Column(nullable = false)
-    private Boolean isTrial = false;
-    
-    @Column
-    private Integer trialDays; // null if not trial
     
     // Status
     @Column(nullable = false)
