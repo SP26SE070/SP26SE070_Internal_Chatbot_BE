@@ -40,12 +40,6 @@ public class Invoice {
     @Column(name = "payment_transaction_id")
     private UUID paymentTransactionId;
 
-    @Column(nullable = false, precision = 15, scale = 2)
-    private BigDecimal amount;
-
-    @Column(name = "tax_amount", precision = 15, scale = 2)
-    private BigDecimal taxAmount = BigDecimal.ZERO;
-
     @Column(name = "total_amount", nullable = false, precision = 15, scale = 2)
     private BigDecimal totalAmount;
 
