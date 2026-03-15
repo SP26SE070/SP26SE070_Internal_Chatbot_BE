@@ -76,8 +76,6 @@ public class Subscription {
     private Integer contextWindowTokens; // Context window tokens per request
     
     // ========== RAG CONFIGURATION ==========
-    private Boolean enableRag = true; // Enable Retrieval-Augmented Generation
-    
     private Integer maxRagDocuments; // Max documents for RAG context
     
     @Column(length = 50)

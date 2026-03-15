@@ -112,7 +112,6 @@ public class SubscriptionService {
         subscription.setRagChunkSize(plan.getRagChunkSize());
         subscription.setAiModel(plan.getAiModel());
         subscription.setEmbeddingModel(plan.getEmbeddingModel());
-        subscription.setEnableRag(true);
     }
     
     /**

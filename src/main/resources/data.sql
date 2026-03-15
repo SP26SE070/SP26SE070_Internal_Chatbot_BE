@@ -332,7 +332,6 @@ CREATE TABLE subscriptions (
     -- AI Model Configuration (snapshot from plan)
     ai_model VARCHAR(100),
     embedding_model VARCHAR(50),
-    enable_rag BOOLEAN DEFAULT TRUE,
 
     -- Auto Renewal & Cancellation
     cancelled_at TIMESTAMP,
@@ -967,7 +966,6 @@ INSERT INTO subscriptions (
     rag_chunk_size,
     ai_model,
     embedding_model,
-    enable_rag,
     payment_gateway,
     created_at
 ) VALUES (
@@ -987,7 +985,7 @@ INSERT INTO subscriptions (
     999, 999999, 500, 999999,
     999999, 999999, 999999,
     32768, 2048,
-    'gpt-4', 'text-embedding-ada-002', TRUE,
+    'gpt-4', 'text-embedding-ada-002',
     'SEPAY',
     CURRENT_TIMESTAMP - interval '5 days'
 );
