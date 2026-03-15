@@ -7,6 +7,7 @@ import org.springframework.http.ResponseEntity;
 import org.springframework.security.authentication.BadCredentialsException;
 import org.springframework.security.access.AccessDeniedException;
 import org.springframework.security.core.userdetails.UsernameNotFoundException;
+import org.springframework.http.converter.HttpMessageNotReadableException;
 import org.springframework.validation.FieldError;
 import org.springframework.web.bind.MethodArgumentNotValidException;
 import org.springframework.web.bind.annotation.ExceptionHandler;
@@ -81,6 +82,47 @@ public class GlobalExceptionHandler {
         log.warn("Bad request: {}", ex.getMessage());
         return ResponseEntity.status(HttpStatus.BAD_REQUEST)
                 .body(new ApiErrorResponse("BAD_REQUEST", ex.getMessage(), null));
+    }
+
+    @ExceptionHandler(HttpMessageNotReadableException.class)
+    public ResponseEntity<ApiErrorResponse> handleHttpMessageNotReadable(
+            HttpMessageNotReadableException ex) {
+        log.warn("Invalid request body: {}", ex.getMessage());
+
+        String message = "Dữ liệu request không hợp lệ";
+
+        Throwable cause = ex.getCause();
+        if (cause instanceof com.fasterxml.jackson.databind.exc.InvalidFormatException ife) {
+            String fieldName = ife.getPath().isEmpty() ? "unknown"
+                : ife.getPath().get(0).getFieldName();
+            if (fieldName != null && (fieldName.toLowerCase().contains("date")
+                    || fieldName.toLowerCase().contains("birth"))) {
+                message = "Trường '" + fieldName + "' không hợp lệ. " +
+                    "Định dạng ngày phải là yyyy-MM-dd (ví dụ: 2000-01-31).";
+            } else {
+                message = "Trường '" + fieldName + "' không hợp lệ: '" +
+                    ife.getValue() + "' không phải số nguyên. " +
+                    "Chỉ chấp nhận số nguyên, không chấp nhận số thập phân.";
+            }
+        } else if (cause != null && cause.getMessage() != null
+                && cause.getMessage().contains("tuổi")) {
+            // Extract only our custom message after "problem: "
+            String raw = cause.getMessage();
+            int idx = raw.indexOf("problem: ");
+            if (idx != -1) {
+                // Extract just the message part, stop at newline
+                String extracted = raw.substring(idx + 9);
+                int newline = extracted.indexOf("\n");
+                message = newline != -1 ? extracted.substring(0, newline) : extracted;
+            } else {
+                message = raw;
+            }
+        } else if (cause instanceof com.fasterxml.jackson.core.JsonParseException) {
+            message = "JSON không hợp lệ. Vui lòng kiểm tra định dạng request.";
+        }
+
+        return ResponseEntity.status(HttpStatus.BAD_REQUEST)
+                .body(new ApiErrorResponse("BAD_REQUEST", message, null));
     }
 
     /**
