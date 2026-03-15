@@ -17,15 +17,8 @@ public class DocumentVersionResponse {
     /** Số phiên bản của snapshot này */
     private Integer versionNumber;
 
-    private String originalFileName;
-    private String fileType;
-    private Long fileSize;
-
     /** Ghi chú nội dung thay đổi */
     private String versionNote;
-
-    private String createdByName;
-    private String createdByEmail;
 
     /** Ngày tháng phiên bản này được lưu (= ngày upload version tiếp theo) */
     private LocalDateTime createdAt;

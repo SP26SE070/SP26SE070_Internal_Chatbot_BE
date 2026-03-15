@@ -2,22 +2,24 @@ package com.gsp26se114.chatbot_rag_be.controller;
 
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.gsp26se114.chatbot_rag_be.entity.DocumentEntity;
+import com.gsp26se114.chatbot_rag_be.entity.DocumentTag;
 import com.gsp26se114.chatbot_rag_be.entity.DocumentVersion;
 import com.gsp26se114.chatbot_rag_be.entity.DocumentVisibility;
 import com.gsp26se114.chatbot_rag_be.payload.request.UpdateDocumentAccessRequest;
+import com.gsp26se114.chatbot_rag_be.payload.response.DeletedDocumentResponse;
 import com.gsp26se114.chatbot_rag_be.payload.response.DocumentResponse;
+import com.gsp26se114.chatbot_rag_be.payload.response.DocumentTagResponse;
 import com.gsp26se114.chatbot_rag_be.payload.response.DocumentVersionResponse;
 import com.gsp26se114.chatbot_rag_be.repository.DocumentCategoryRepository;
 import com.gsp26se114.chatbot_rag_be.repository.DocumentChunkRepository;
 import com.gsp26se114.chatbot_rag_be.repository.DocumentRepository;
+import com.gsp26se114.chatbot_rag_be.repository.DocumentTagRepository;
 import com.gsp26se114.chatbot_rag_be.repository.DocumentVersionRepository;
 import com.gsp26se114.chatbot_rag_be.security.service.UserPrincipal;
 import com.gsp26se114.chatbot_rag_be.service.DocumentProcessingService;
 import com.gsp26se114.chatbot_rag_be.service.MinioService;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.Parameter;
-import io.swagger.v3.oas.annotations.media.Content;
-import io.swagger.v3.oas.annotations.media.Schema;
 import io.swagger.v3.oas.annotations.responses.ApiResponse;
 import io.swagger.v3.oas.annotations.responses.ApiResponses;
 import io.swagger.v3.oas.annotations.security.SecurityRequirement;
@@ -34,7 +36,9 @@ import org.springframework.web.multipart.MultipartFile;
 
 import java.time.LocalDateTime;
 import java.util.Arrays;
+import java.util.LinkedHashSet;
 import java.util.List;
+import java.util.Set;
 import java.util.UUID;
 
 /**
@@ -51,6 +55,7 @@ public class DocumentController {
     private final DocumentRepository documentRepository;
     private final DocumentCategoryRepository documentCategoryRepository;
     private final DocumentChunkRepository documentChunkRepository;
+    private final DocumentTagRepository documentTagRepository;
     private final DocumentVersionRepository documentVersionRepository;
     private final DocumentProcessingService documentProcessingService;
     private final ObjectMapper objectMapper;
@@ -74,19 +79,43 @@ public class DocumentController {
                 .originalFileName(doc.getOriginalFileName())
                 .fileType(doc.getFileType())
                 .fileSize(doc.getFileSize())
-                .category(doc.getCategory())
                 .categoryId(doc.getCategoryId())
                 .description(doc.getDescription())
+            .tags(doc.getTags() == null ? List.of() : doc.getTags().stream()
+                .map(this::toTagResponse)
+                .sorted((left, right) -> left.getName().compareToIgnoreCase(right.getName()))
+                .toList())
                 .visibility(doc.getVisibility())
                 .accessibleDepartments(doc.getAccessibleDepartments())
                 .accessibleRoles(doc.getAccessibleRoles())
                 .embeddingStatus(doc.getEmbeddingStatus())
                 .chunkCount(doc.getChunkCount())
-                .uploadedByName(doc.getUploadedByName())
                 .uploadedAt(doc.getUploadedAt())
                 .documentTitle(doc.getDocumentTitle())
-                .versionNumber(doc.getVersionNumber())
-                .versionNote(doc.getVersionNote())
+                .build();
+    }
+
+    private DocumentTagResponse toTagResponse(DocumentTag tag) {
+        return DocumentTagResponse.builder()
+                .id(tag.getId())
+                .name(tag.getName())
+                .code(tag.getCode())
+                .description(tag.getDescription())
+                .isActive(tag.getIsActive())
+                .createdAt(tag.getCreatedAt())
+                .updatedAt(tag.getUpdatedAt())
+                .build();
+    }
+
+    private DeletedDocumentResponse toDeletedResponse(DocumentEntity doc) {
+        return DeletedDocumentResponse.builder()
+                .id(doc.getId())
+                .originalFileName(doc.getOriginalFileName())
+                .documentTitle(doc.getDocumentTitle())
+                .description(doc.getDescription())
+                .uploadedAt(doc.getUploadedAt())
+                .deletedBy(doc.getDeletedBy())
+                .deletedAt(doc.getDeletedAt())
                 .build();
     }
 
@@ -118,6 +147,8 @@ public class DocumentController {
             @RequestPart("file") MultipartFile file,
             @Parameter(description = "UUID của document category (tùy chọn, lấy từ API /categories)")
             @RequestParam(value = "categoryId", required = false) UUID categoryId,
+            @Parameter(description = "Danh sách tag ID để gắn vào tài liệu")
+            @RequestParam(value = "tagIds", required = false) List<UUID> tagIds,
             @Parameter(description = "Mô tả ngắn về tài liệu")
             @RequestParam(value = "description", required = false) String description,
             @Parameter(description = "Phạm vi hiển thị: COMPANY_WIDE | SPECIFIC_DEPARTMENTS | SPECIFIC_ROLES")
@@ -184,6 +215,12 @@ public class DocumentController {
 
             // Save metadata to database
             DocumentEntity document = new DocumentEntity();
+            Set<DocumentTag> tags;
+            try {
+                tags = resolveTags(userDetails.getTenantId(), tagIds);
+            } catch (IllegalArgumentException e) {
+                return ResponseEntity.badRequest().body(e.getMessage());
+            }
             document.setFileName(fileName);
             document.setOriginalFileName(file.getOriginalFilename());
             document.setFileType(contentType);
@@ -200,6 +237,7 @@ public class DocumentController {
                 document.setCategoryId(categoryId);
             }
             document.setDescription(description);
+            document.setTags(tags);
             document.setVisibility(visibility);
             
             // Force null for COMPANY_WIDE to ensure data integrity
@@ -216,9 +254,6 @@ public class DocumentController {
             
             document.setOwnerDepartmentId(userDetails.getDepartmentId());
             document.setUploadedBy(userDetails.getId());
-            document.setUploadedByName(userDetails.getEmail());
-            document.setUploadedByEmail(userDetails.getEmail());
-            document.setUploadedByRole(userDetails.getRoleCode());
             document.setUploadedAt(LocalDateTime.now());
             document.setEmbeddingStatus("PENDING");
             document.setEmbeddingModel("gemini-embedding-001");
@@ -226,6 +261,17 @@ public class DocumentController {
 
             document = documentRepository.save(document);
             log.info("Document saved to database: {}", document.getId());
+
+                DocumentVersion initialVersion = DocumentVersion.builder()
+                    .documentId(document.getId())
+                    .tenantId(document.getTenantId())
+                    .versionNumber(1)
+                    .storagePath(document.getStoragePath())
+                    .versionNote("Initial upload")
+                    .createdBy(userDetails.getId())
+                    .createdAt(LocalDateTime.now())
+                    .build();
+                documentVersionRepository.save(initialVersion);
 
             // Trigger async processing
             documentProcessingService.processDocumentAsync(document.getId());
@@ -261,6 +307,7 @@ public class DocumentController {
     ) {
         return documentRepository.findById(id)
                 .filter(doc -> doc.getTenantId().equals(userDetails.getTenantId()))
+                .filter(DocumentEntity::getIsActive)
                 .filter(doc -> {
                     // Check access control
                     if (doc.getVisibility() == DocumentVisibility.COMPANY_WIDE) {
@@ -307,6 +354,28 @@ public class DocumentController {
 
         List<DocumentResponse> responses = documents.stream()
                 .map(this::toResponse)
+                .toList();
+
+        return ResponseEntity.ok(responses);
+    }
+
+    @GetMapping("/deleted")
+    @PreAuthorize("hasAuthority('DOCUMENT_READ')")
+    @SecurityRequirement(name = "bearerAuth")
+    @Operation(
+        summary = "Danh sách tài liệu đã xóa mềm",
+        description = "Trả về toàn bộ tài liệu đã xóa mềm của tenant để có thể chọn tài liệu cần khôi phục."
+    )
+    public ResponseEntity<List<DeletedDocumentResponse>> listDeletedDocuments(
+            @AuthenticationPrincipal UserPrincipal userDetails
+    ) {
+        List<DocumentEntity> documents = documentRepository.findByTenantIdAndIsActiveOrderByDeletedAtDesc(
+                userDetails.getTenantId(),
+                false
+        );
+
+        List<DeletedDocumentResponse> responses = documents.stream()
+                .map(this::toDeletedResponse)
                 .toList();
 
         return ResponseEntity.ok(responses);
@@ -382,6 +451,10 @@ public class DocumentController {
             return ResponseEntity.status(403).body("Bạn không có quyền cập nhật tài liệu này");
         }
 
+        if (!Boolean.TRUE.equals(document.getIsActive())) {
+            return ResponseEntity.badRequest().body("Tài liệu đã bị xóa mềm, không thể cập nhật");
+        }
+
         // Update document access control
         document.setVisibility(request.visibility());
         
@@ -434,6 +507,91 @@ public class DocumentController {
 
         // Return updated document
         return ResponseEntity.ok(toResponse(document));
+    }
+
+    @DeleteMapping("/{id}")
+    @PreAuthorize("hasAuthority('DOCUMENT_WRITE')")
+    @SecurityRequirement(name = "bearerAuth")
+    @Transactional
+    @Operation(
+        summary = "Xóa mềm tài liệu",
+        description = "Đánh dấu tài liệu là đã xóa (is_active=false), lưu deleted_by/deleted_at và xóa chunks để chatbot không truy xuất được nữa."
+    )
+    @ApiResponses({
+        @ApiResponse(responseCode = "200", description = "Xóa mềm thành công"),
+        @ApiResponse(responseCode = "403", description = "Tài liệu thuộc tenant khác"),
+        @ApiResponse(responseCode = "404", description = "Không tìm thấy tài liệu")
+    })
+    public ResponseEntity<?> softDeleteDocument(
+            @Parameter(description = "ID của tài liệu cần xóa", required = true) @PathVariable UUID id,
+            @AuthenticationPrincipal UserPrincipal userDetails
+    ) {
+        DocumentEntity document = documentRepository.findById(id)
+                .orElseThrow(() -> new RuntimeException("Không tìm thấy tài liệu"));
+
+        if (!document.getTenantId().equals(userDetails.getTenantId())) {
+            return ResponseEntity.status(403).body("Bạn không có quyền xóa tài liệu này");
+        }
+
+        if (!Boolean.TRUE.equals(document.getIsActive())) {
+            return ResponseEntity.ok("Tài liệu đã ở trạng thái xóa mềm trước đó");
+        }
+
+        document.setIsActive(false);
+        document.setDeletedBy(userDetails.getId());
+        document.setDeletedAt(LocalDateTime.now());
+        document.setUpdatedBy(userDetails.getId());
+        document.setUpdatedAt(LocalDateTime.now());
+        documentRepository.save(document);
+
+        // Remove chunks so deleted documents are excluded from RAG retrieval.
+        documentChunkRepository.deleteByDocumentId(id);
+
+        return ResponseEntity.ok("Đã xóa mềm tài liệu thành công");
+    }
+
+    @PostMapping("/{id}/restore")
+    @PreAuthorize("hasAuthority('DOCUMENT_WRITE')")
+    @SecurityRequirement(name = "bearerAuth")
+    @Transactional
+    @Operation(
+        summary = "Khôi phục tài liệu đã xóa mềm",
+        description = "Khôi phục tài liệu về trạng thái active, xóa thông tin deleted_by/deleted_at và reprocess lại chunks để chatbot dùng lại được."
+    )
+    @ApiResponses({
+        @ApiResponse(responseCode = "200", description = "Khôi phục thành công"),
+        @ApiResponse(responseCode = "403", description = "Tài liệu thuộc tenant khác"),
+        @ApiResponse(responseCode = "404", description = "Không tìm thấy tài liệu")
+    })
+    public ResponseEntity<?> restoreDocument(
+            @Parameter(description = "ID của tài liệu cần khôi phục", required = true) @PathVariable UUID id,
+            @AuthenticationPrincipal UserPrincipal userDetails
+    ) {
+        DocumentEntity document = documentRepository.findById(id)
+                .orElseThrow(() -> new RuntimeException("Không tìm thấy tài liệu"));
+
+        if (!document.getTenantId().equals(userDetails.getTenantId())) {
+            return ResponseEntity.status(403).body("Bạn không có quyền khôi phục tài liệu này");
+        }
+
+        if (Boolean.TRUE.equals(document.getIsActive())) {
+            return ResponseEntity.ok("Tài liệu đang ở trạng thái hoạt động");
+        }
+
+        document.setIsActive(true);
+        document.setDeletedBy(null);
+        document.setDeletedAt(null);
+        document.setUpdatedBy(userDetails.getId());
+        document.setUpdatedAt(LocalDateTime.now());
+        document.setEmbeddingStatus("PENDING");
+        document.setEmbeddingError(null);
+        document.setChunkCount(null);
+        documentRepository.save(document);
+
+        // Chunks were removed on soft delete, so rebuild them on restore.
+        documentProcessingService.processDocumentAsync(id);
+
+        return ResponseEntity.ok("Đã khôi phục tài liệu, hệ thống đang xử lý lại embedding");
     }
 
     // =========================================================
@@ -493,44 +651,27 @@ public class DocumentController {
                 return ResponseEntity.status(403).body("Bạn không có quyền cập nhật tài liệu này");
             }
 
+            if (!Boolean.TRUE.equals(doc.getIsActive())) {
+                return ResponseEntity.badRequest().body("Tài liệu đã bị xóa mềm, không thể upload phiên bản mới");
+            }
+
             if (file.isEmpty()) return ResponseEntity.badRequest().body("File rỗng");
             if (file.getSize() > MAX_FILE_SIZE) return ResponseEntity.badRequest().body("File vượt quá 50MB");
             if (!ALLOWED_CONTENT_TYPES.contains(file.getContentType())) {
                 return ResponseEntity.badRequest().body("Loại file không được hỗ trợ");
             }
 
-            // --- 2. Snapshot bản hiện tại vào document_versions ---
-            DocumentVersion snapshot = DocumentVersion.builder()
-                    .documentId(doc.getId())
-                    .tenantId(doc.getTenantId())
-                    .versionNumber(doc.getVersionNumber() != null ? doc.getVersionNumber() : 1)
-                    .originalFileName(doc.getOriginalFileName())
-                    .fileName(doc.getFileName())
-                    .fileType(doc.getFileType())
-                    .fileSize(doc.getFileSize())
-                    .storagePath(doc.getStoragePath())
-                    .versionNote(doc.getVersionNote())
-                    .createdBy(userDetails.getId())
-                    .createdByName(userDetails.getEmail())
-                    .createdByEmail(userDetails.getEmail())
-                    .createdAt(LocalDateTime.now())
-                    .build();
-            documentVersionRepository.save(snapshot);
-
-            // --- 3. Upload file mới lên MinIO ---
+                // --- 2. Upload file mới lên MinIO ---
             String folder = "tenant-" + userDetails.getTenantId() + "/documents";
             String newStoragePath = minioService.uploadDocument(file, folder);
             String newFileName = newStoragePath.substring(newStoragePath.lastIndexOf('/') + 1);
 
-            // --- 4. Cập nhật bản ghi documents ---
-            int newVersionNumber = (doc.getVersionNumber() != null ? doc.getVersionNumber() : 1) + 1;
+                // --- 3. Cập nhật bản ghi documents ---
             doc.setFileName(newFileName);
             doc.setOriginalFileName(file.getOriginalFilename());
             doc.setFileType(file.getContentType());
             doc.setFileSize(file.getSize());
             doc.setStoragePath(newStoragePath);
-            doc.setVersionNumber(newVersionNumber);
-            doc.setVersionNote(versionNote);
             if (documentTitle != null && !documentTitle.isBlank()) doc.setDocumentTitle(documentTitle);
             doc.setUpdatedBy(userDetails.getId());
             doc.setUpdatedAt(LocalDateTime.now());
@@ -540,12 +681,25 @@ public class DocumentController {
 
             documentRepository.save(doc);
 
-            // --- 5. Xóa chunks cũ, re-embed ---
+                // --- 4. Lưu version mới vào document_versions (bảng lưu toàn bộ versions) ---
+                int nextVersionNumber = Math.toIntExact(documentVersionRepository.countByDocumentId(doc.getId()) + 1);
+                DocumentVersion newVersion = DocumentVersion.builder()
+                    .documentId(doc.getId())
+                    .tenantId(doc.getTenantId())
+                    .versionNumber(nextVersionNumber)
+                    .storagePath(doc.getStoragePath())
+                    .versionNote(versionNote)
+                    .createdBy(userDetails.getId())
+                    .createdAt(LocalDateTime.now())
+                    .build();
+                documentVersionRepository.save(newVersion);
+
+                // --- 5. Xóa chunks cũ, re-embed ---
             documentChunkRepository.deleteByDocumentId(id);
             documentProcessingService.processDocumentAsync(id);
 
-            log.info("New version {} uploaded for document {} by {}",
-                    newVersionNumber, id, userDetails.getEmail());
+                log.info("New version {} uploaded for document {} by {}",
+                    nextVersionNumber, id, userDetails.getEmail());
 
             return ResponseEntity.ok(toResponse(doc));
 
@@ -565,12 +719,12 @@ public class DocumentController {
     @Operation(
         summary = "Lịch sử phiên bản của tài liệu",
         description = """
-            Trả về danh sách các phiên bản cũ đã được lưu trong `document_versions`.
-            **Không bao gồm bản hiện tại** — để xem bản hiện tại dùng `GET /api/v1/knowledge/documents/{id}`.
+            Trả về danh sách toàn bộ phiên bản đã được lưu trong `document_versions`.
+            Bao gồm cả bản hiện tại và các bản trước đó.
 
             Kết quả sắp xếp giảm dần theo `version_number` (phiên bản mới nhất lên trước).
 
-            Mỗi phần tử trả về: `versionId`, `versionNumber`, `originalFileName`, `fileType`, `fileSize`, `versionNote`, `createdByName`, `createdAt`.
+                Mỗi phần tử trả về: `versionId`, `versionNumber`, `versionNote`, `createdBy`, `createdAt`.
             """
     )
     @ApiResponses({
@@ -583,7 +737,7 @@ public class DocumentController {
     ) {
         // Kiểm tra quyền tenant
         boolean belongs = documentRepository.findById(id)
-                .map(d -> d.getTenantId().equals(userDetails.getTenantId()))
+            .map(d -> d.getTenantId().equals(userDetails.getTenantId()) && Boolean.TRUE.equals(d.getIsActive()))
                 .orElse(false);
         if (!belongs) return ResponseEntity.notFound().build();
 
@@ -594,16 +748,25 @@ public class DocumentController {
                         .versionId(v.getId())
                         .documentId(v.getDocumentId())
                         .versionNumber(v.getVersionNumber())
-                        .originalFileName(v.getOriginalFileName())
-                        .fileType(v.getFileType())
-                        .fileSize(v.getFileSize())
                         .versionNote(v.getVersionNote())
-                        .createdByName(v.getCreatedByName())
-                        .createdByEmail(v.getCreatedByEmail())
                         .createdAt(v.getCreatedAt())
                         .build())
                 .toList();
 
         return ResponseEntity.ok(history);
+    }
+
+    private Set<DocumentTag> resolveTags(UUID tenantId, List<UUID> tagIds) {
+        if (tagIds == null || tagIds.isEmpty()) {
+            return new LinkedHashSet<>();
+        }
+
+        List<UUID> distinctTagIds = tagIds.stream().distinct().toList();
+        List<DocumentTag> tags = documentTagRepository.findByTenantIdAndIdInAndIsActiveTrue(tenantId, distinctTagIds);
+        if (tags.size() != distinctTagIds.size()) {
+            throw new IllegalArgumentException("Có tag không tồn tại, không active, hoặc không thuộc tenant này");
+        }
+
+        return new LinkedHashSet<>(tags);
     }
 }

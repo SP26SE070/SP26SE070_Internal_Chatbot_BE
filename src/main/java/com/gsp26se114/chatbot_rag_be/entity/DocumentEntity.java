@@ -5,8 +5,10 @@ import lombok.*;
 import org.hibernate.annotations.JdbcTypeCode;
 import org.hibernate.type.SqlTypes;
 
+import java.util.LinkedHashSet;
 import java.time.LocalDateTime;
 import java.util.List;
+import java.util.Set;
 import java.util.UUID;
 
 /**
@@ -52,11 +54,18 @@ public class DocumentEntity {
     @Column(name = "category_id")
     private UUID categoryId;
 
-    @Column(length = 100)
-    private String category;           // "HR", "IT", "Finance", "Onboarding" (legacy, dùng categoryId thay thế)
-    
     @Column(length = 1000)
     private String description;        // Mô tả tài liệu
+
+    @ManyToMany(fetch = FetchType.EAGER)
+    @JoinTable(
+        name = "document_tag_mappings",
+        joinColumns = @JoinColumn(name = "document_id"),
+        inverseJoinColumns = @JoinColumn(name = "tag_id")
+    )
+    @ToString.Exclude
+    @EqualsAndHashCode.Exclude
+    private Set<DocumentTag> tags = new LinkedHashSet<>();
     
     // ========== ACCESS CONTROL ==========
     @Enumerated(EnumType.STRING)
@@ -77,16 +86,7 @@ public class DocumentEntity {
     // ========== UPLOAD HISTORY (AUDIT TRAIL) ==========
     @Column(name = "uploaded_by", nullable = false)
     private UUID uploadedBy;           // User ID người upload
-    
-    @Column(name = "uploaded_by_name", nullable = false, length = 200)
-    private String uploadedByName;     // "Nguyễn Văn A" (denormalized)
-    
-    @Column(name = "uploaded_by_email", nullable = false)
-    private String uploadedByEmail;    // "admin@fpt.com" (denormalized)
-    
-    @Column(name = "uploaded_by_role", length = 100)
-    private String uploadedByRole;     // "TENANT_ADMIN" hoặc "HR_MANAGER" (denormalized)
-    
+
     @Column(name = "uploaded_at", nullable = false)
     private LocalDateTime uploadedAt = LocalDateTime.now();
     
@@ -105,18 +105,7 @@ public class DocumentEntity {
     @Column(name = "document_title", length = 500)
     private String documentTitle;
 
-    /** Version hiện tại: 1, 2, 3... (tăng mỗi khi upload version mới) */
-    @Column(name = "version_number")
-    private Integer versionNumber = 1;
-
-    /** Ghi chú thay đổi của version hiện tại, ví dụ: "Cập nhật điều khoản nghỉ phép" */
-    @Column(name = "version_note", length = 500)
-    private String versionNote;
-
-    // ========== VECTOR DB INFO ==========
-    @Column(name = "vector_db_id", length = 200)
-    private String vectorDbId;         // ID trong Vector DB (Pinecone, Weaviate, etc.)
-    
+    // ========== EMBEDDING INFO ==========
     @Column(name = "embedding_status", length = 20)
     private String embeddingStatus = "PENDING"; // "PENDING", "PROCESSING", "COMPLETED", "FAILED"
     

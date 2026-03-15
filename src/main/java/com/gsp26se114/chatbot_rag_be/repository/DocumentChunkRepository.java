@@ -35,6 +35,8 @@ public interface DocumentChunkRepository extends JpaRepository<DocumentChunkEnti
         FROM document_chunks c
         JOIN documents d ON c.document_id = d.document_id
         WHERE c.tenant_id = :tenantId
+                    AND (:categoryId IS NULL OR c.category_id = :categoryId)
+                    AND (:tagIds IS NULL OR c.tag_ids @> CAST(:tagIds AS jsonb))
           AND (c.embedding <=> CAST(:queryEmbedding AS vector)) < :maxDistance
           AND (
               d.uploaded_by = CAST(:userId AS uuid)
@@ -53,6 +55,8 @@ public interface DocumentChunkRepository extends JpaRepository<DocumentChunkEnti
             @Param("queryEmbedding") String queryEmbedding,
             @Param("userDepartmentId") Integer userDepartmentId,
             @Param("userRoleId") Integer userRoleId,
+                @Param("categoryId") UUID categoryId,
+                @Param("tagIds") String tagIds,
             @Param("maxDistance") double maxDistance,
             @Param("limit") int limit
     );
@@ -100,11 +104,13 @@ public interface DocumentChunkRepository extends JpaRepository<DocumentChunkEnti
             document_chunk_id, document_id, tenant_id, chunk_index, content, 
             embedding, embedding_model, token_count, 
             visibility, accessible_departments, accessible_roles, owner_department_id,
+            category_id, tag_ids,
             created_at
         ) VALUES (
             :id, :documentId, :tenantId, :chunkIndex, :content,
             CAST(:embedding AS vector), :embeddingModel, :tokenCount,
             :visibility, CAST(:accessibleDepartments AS jsonb), CAST(:accessibleRoles AS jsonb), :ownerDepartmentId,
+            :categoryId, CAST(:tagIds AS jsonb),
             :createdAt
         )
         """, nativeQuery = true)
@@ -120,6 +126,8 @@ public interface DocumentChunkRepository extends JpaRepository<DocumentChunkEnti
             @Param("visibility") String visibility,
             @Param("accessibleDepartments") String accessibleDepartments,
             @Param("accessibleRoles") String accessibleRoles,
+                @Param("categoryId") UUID categoryId,
+                @Param("tagIds") String tagIds,
             @Param("ownerDepartmentId") Integer ownerDepartmentId,
             @Param("createdAt") java.time.LocalDateTime createdAt
     );

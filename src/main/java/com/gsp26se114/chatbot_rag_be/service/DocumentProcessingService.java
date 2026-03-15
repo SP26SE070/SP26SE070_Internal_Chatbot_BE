@@ -3,6 +3,7 @@ package com.gsp26se114.chatbot_rag_be.service;
 import com.google.gson.Gson;
 import com.gsp26se114.chatbot_rag_be.entity.DocumentChunkEntity;
 import com.gsp26se114.chatbot_rag_be.entity.DocumentEntity;
+import com.gsp26se114.chatbot_rag_be.entity.DocumentTag;
 import com.gsp26se114.chatbot_rag_be.repository.DocumentChunkRepository;
 import com.gsp26se114.chatbot_rag_be.repository.DocumentRepository;
 import lombok.RequiredArgsConstructor;
@@ -144,6 +145,8 @@ public class DocumentProcessingService {
                         .accessibleDepartments(document.getAccessibleDepartments())
                         .accessibleRoles(document.getAccessibleRoles())
                         .ownerDepartmentId(document.getOwnerDepartmentId())
+                        .categoryId(document.getCategoryId())
+                        .tagIds(extractTagIds(document))
                         .createdAt(java.time.LocalDateTime.now())
                         .build();
                 
@@ -158,6 +161,8 @@ public class DocumentProcessingService {
                             c.getVisibility(), 
                             gson.toJson(c.getAccessibleDepartments()),  // Convert List to JSON
                             gson.toJson(c.getAccessibleRoles()),         // Convert List to JSON
+                            c.getCategoryId(),
+                            gson.toJson(c.getTagIds()),
                             c.getOwnerDepartmentId(), c.getCreatedAt()
                         );
                     }
@@ -176,6 +181,8 @@ public class DocumentProcessingService {
                         c.getVisibility(), 
                         gson.toJson(c.getAccessibleDepartments()),  // Convert List to JSON
                         gson.toJson(c.getAccessibleRoles()),         // Convert List to JSON
+                        c.getCategoryId(),
+                        gson.toJson(c.getTagIds()),
                         c.getOwnerDepartmentId(), c.getCreatedAt()
                     );
                 }
@@ -242,5 +249,15 @@ public class DocumentProcessingService {
         
         // Process again
         processDocumentAsync(documentId);
+    }
+
+    private List<UUID> extractTagIds(DocumentEntity document) {
+        if (document.getTags() == null || document.getTags().isEmpty()) {
+            return List.of();
+        }
+
+        return document.getTags().stream()
+                .map(DocumentTag::getId)
+                .toList();
     }
 }

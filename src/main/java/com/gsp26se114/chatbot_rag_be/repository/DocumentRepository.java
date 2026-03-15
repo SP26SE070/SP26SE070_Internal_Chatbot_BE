@@ -20,15 +20,6 @@ public interface DocumentRepository extends JpaRepository<DocumentEntity, UUID> 
     List<DocumentEntity> findByTenantIdAndIsActiveOrderByUploadedAtDesc(UUID tenantId, Boolean isActive);
     
     /**
-     * Lấy documents theo category
-     */
-    List<DocumentEntity> findByTenantIdAndCategoryAndIsActiveOrderByUploadedAtDesc(
-        UUID tenantId, 
-        String category, 
-        Boolean isActive
-    );
-    
-    /**
      * Lấy documents mà user có quyền xem (cho RAG query)
      * Logic:
      * 1. COMPANY_WIDE → Tất cả xem được
@@ -67,6 +58,11 @@ public interface DocumentRepository extends JpaRepository<DocumentEntity, UUID> 
      * Lấy documents được upload bởi user
      */
     List<DocumentEntity> findByUploadedByAndIsActiveOrderByUploadedAtDesc(UUID uploadedBy, Boolean isActive);
+
+    /**
+     * Lấy danh sách documents đã xóa mềm của tenant
+     */
+    List<DocumentEntity> findByTenantIdAndIsActiveOrderByDeletedAtDesc(UUID tenantId, Boolean isActive);
     
     /**
      * Count documents của user (để check quota)
@@ -82,12 +78,6 @@ public interface DocumentRepository extends JpaRepository<DocumentEntity, UUID> 
      * Lấy documents có embedding status = PENDING (để process)
      */
     List<DocumentEntity> findByEmbeddingStatusAndIsActive(String embeddingStatus, Boolean isActive);
-    
-    /**
-     * Count documents được upload bởi specific role (để check trước khi xóa role)
-     */
-    @Query("SELECT COUNT(d) FROM DocumentEntity d WHERE d.uploadedByRole = :roleName AND d.isActive = true")
-    Long countByUploadedByRole(@Param("roleName") String roleName);
     
     /**
      * Count total documents by tenant ID

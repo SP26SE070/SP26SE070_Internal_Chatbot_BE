@@ -10,7 +10,7 @@ import java.util.UUID;
  * Snapshot lịch sử các phiên bản cũ của một tài liệu.
  *
  * Luồng tạo version mới:
- *  1. Copy metadata + storage_path của bản hiện tại vào document_versions.
+ *  1. Lưu thông tin version_number + storage_path của bản tại thời điểm tạo version.
  *  2. Upload file mới lên MinIO.
  *  3. Cập nhật documents với file mới, tăng version_number, ghi version_note.
  *
@@ -43,22 +43,10 @@ public class DocumentVersion {
     @Column(name = "tenant_id", nullable = false)
     private UUID tenantId;
 
-    // ========== SNAPSHOT FILE INFO ==========
+    // ========== VERSION SNAPSHOT ==========
     /** Số phiên bản (1, 2, 3...) của bản cũ được snapshot tại đây */
     @Column(name = "version_number", nullable = false)
     private Integer versionNumber;
-
-    @Column(name = "original_file_name", nullable = false)
-    private String originalFileName;
-
-    @Column(name = "file_name", nullable = false)
-    private String fileName;
-
-    @Column(name = "file_type", nullable = false, length = 100)
-    private String fileType;
-
-    @Column(name = "file_size", nullable = false)
-    private Long fileSize;
 
     /** Path file cũ trên MinIO — vẫn giữ để cho phép xem/tải lại */
     @Column(name = "storage_path", nullable = false, length = 500)
@@ -73,13 +61,7 @@ public class DocumentVersion {
     @Column(name = "created_by", nullable = false)
     private UUID createdBy;
 
-    /** Tên người tạo version này (denormalized để hiển thị nhanh trong UI) */
-    @Column(name = "created_by_name", nullable = false, length = 200)
-    private String createdByName;
-
-    @Column(name = "created_by_email", nullable = false)
-    private String createdByEmail;
-
     @Column(name = "created_at", nullable = false, updatable = false)
+    @Builder.Default
     private LocalDateTime createdAt = LocalDateTime.now();
 }

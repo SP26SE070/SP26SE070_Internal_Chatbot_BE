@@ -23,19 +23,16 @@ public class DocumentResponse {
     private String originalFileName;
     private String fileType;
     private Long fileSize;
-    private String category;
     private UUID categoryId;
     private String description;
+    private List<DocumentTagResponse> tags;
     private DocumentVisibility visibility;
     private List<Integer> accessibleDepartments;
     private List<Integer> accessibleRoles;
     private String embeddingStatus;
     private Integer chunkCount;
-    private String uploadedByName;
     private LocalDateTime uploadedAt;
 
-    // Versioning fields
+    // Display field
     private String documentTitle;
-    private Integer versionNumber;
-    private String versionNote;
 }

@@ -8,6 +8,8 @@ CREATE EXTENSION IF NOT EXISTS "vector";  -- pgvector for embeddings
 -- Xóa bảng con trước để tránh conflict khi DROP bảng cha
 DROP TABLE IF EXISTS document_versions CASCADE;
 DROP TABLE IF EXISTS document_chunks CASCADE;
+DROP TABLE IF EXISTS document_tag_mappings CASCADE;
+DROP TABLE IF EXISTS document_tags CASCADE;
 DROP TABLE IF EXISTS payment_transactions CASCADE;
 DROP TABLE IF EXISTS subscriptions CASCADE;
 DROP TABLE IF EXISTS subscription_plans CASCADE;
@@ -131,6 +133,9 @@ CREATE TABLE users (
     last_login_at TIMESTAMP
 );
 
+CREATE INDEX IF NOT EXISTS idx_users_tenant_department ON users(tenant_id, department_id);
+CREATE INDEX IF NOT EXISTS idx_users_tenant_active ON users(tenant_id, is_active);
+
 -- Tạo sequence rõ ràng cho refresh_tokens & blacklisted_tokens
 -- (tránh lỗi khi schema cũ vẫn tham chiếu refresh_tokens_seq)
 CREATE SEQUENCE refresh_tokens_seq START WITH 1 INCREMENT BY 1 NO MINVALUE NO MAXVALUE CACHE 1;
@@ -162,10 +167,13 @@ CREATE TABLE IF NOT EXISTS documents (
     file_size BIGINT NOT NULL,
     storage_path VARCHAR(500) NOT NULL,
     
-    -- Tenant & Category
+    -- Tenant & Classification
     tenant_id UUID NOT NULL REFERENCES tenants(tenant_id) ON DELETE CASCADE,
-    category VARCHAR(100),
+    category_id UUID,
     description VARCHAR(1000),
+
+    -- Display
+    document_title VARCHAR(500),
     
     -- Access Control
     visibility VARCHAR(30) NOT NULL DEFAULT 'COMPANY_WIDE',
@@ -175,17 +183,13 @@ CREATE TABLE IF NOT EXISTS documents (
     
     -- Upload History (Audit Trail)
     uploaded_by UUID NOT NULL REFERENCES users(user_id),
-    uploaded_by_name VARCHAR(200) NOT NULL,
-    uploaded_by_email VARCHAR(255) NOT NULL,
-    uploaded_by_role VARCHAR(100),
     uploaded_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
     
     -- Update History
     updated_by UUID REFERENCES users(user_id),
     updated_at TIMESTAMP,
     
-    -- Vector DB Info
-    vector_db_id VARCHAR(200),
+    -- Embedding Processing
     embedding_status VARCHAR(20) DEFAULT 'PENDING',
     chunk_count INTEGER,
     embedding_model VARCHAR(100),
@@ -205,6 +209,8 @@ CREATE TABLE IF NOT EXISTS documents (
 CREATE INDEX IF NOT EXISTS idx_documents_tenant_visibility ON documents(tenant_id, visibility);
 CREATE INDEX IF NOT EXISTS idx_documents_uploaded_at ON documents(uploaded_at);
 CREATE INDEX IF NOT EXISTS idx_documents_embedding_status ON documents(embedding_status) WHERE is_active = true;
+CREATE INDEX IF NOT EXISTS idx_documents_tenant_active_uploaded ON documents(tenant_id, uploaded_at DESC) WHERE is_active = true;
+CREATE INDEX IF NOT EXISTS idx_documents_tenant_deleted_at ON documents(tenant_id, deleted_at DESC) WHERE is_active = false;
 
 -- Tạo bảng Document Chunks với Vector Embeddings (pgvector)
 CREATE TABLE IF NOT EXISTS document_chunks (
@@ -357,7 +363,9 @@ CREATE INDEX IF NOT EXISTS idx_subscriptions_tenant ON subscriptions(tenant_id);
 CREATE INDEX IF NOT EXISTS idx_subscriptions_status ON subscriptions(status);
 CREATE INDEX IF NOT EXISTS idx_subscriptions_plan ON subscriptions(plan_id);
 
--- Add FK constraint on tenants.subscription_id AFTER subscriptions table is created
+ALTER TABLE tenants
+    DROP CONSTRAINT IF EXISTS fk_tenant_subscription;
+
 ALTER TABLE tenants
     ADD CONSTRAINT fk_tenant_subscription
     FOREIGN KEY (subscription_id) REFERENCES subscriptions(subscription_id) ON DELETE SET NULL;
@@ -478,12 +486,37 @@ CREATE TABLE document_categories (
 CREATE INDEX IF NOT EXISTS idx_doc_categories_tenant ON document_categories(tenant_id);
 CREATE INDEX IF NOT EXISTS idx_doc_categories_parent ON document_categories(parent_id);
 
--- Thêm FK category_id vào documents
 ALTER TABLE documents
-    ADD COLUMN IF NOT EXISTS category_id UUID REFERENCES document_categories(category_id) ON DELETE SET NULL,
-    ADD COLUMN IF NOT EXISTS document_title VARCHAR(500),        -- Tên hiển thị để nhóm các version (vd: "Policy nội quy 2026")
-    ADD COLUMN IF NOT EXISTS version_number INTEGER DEFAULT 1,   -- Version hiện tại của tài liệu
-    ADD COLUMN IF NOT EXISTS version_note VARCHAR(500);          -- Ghi chú thay đổi mới nhất
+    DROP CONSTRAINT IF EXISTS fk_documents_category;
+
+ALTER TABLE documents
+    ADD CONSTRAINT fk_documents_category
+    FOREIGN KEY (category_id) REFERENCES document_categories(category_id) ON DELETE SET NULL;
+
+-- Tạo bảng Document Tags (controlled vocabulary per-tenant)
+CREATE TABLE IF NOT EXISTS document_tags (
+    tag_id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
+    tenant_id UUID NOT NULL REFERENCES tenants(tenant_id) ON DELETE CASCADE,
+    name VARCHAR(150) NOT NULL,
+    code VARCHAR(100) NOT NULL,
+    description TEXT,
+    is_active BOOLEAN DEFAULT TRUE NOT NULL,
+    created_by UUID REFERENCES users(user_id),
+    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP NOT NULL,
+    updated_at TIMESTAMP,
+    UNIQUE(tenant_id, code)
+);
+
+CREATE INDEX IF NOT EXISTS idx_doc_tags_tenant ON document_tags(tenant_id);
+
+-- Bảng mapping many-to-many document <-> tags
+CREATE TABLE IF NOT EXISTS document_tag_mappings (
+    document_id UUID NOT NULL REFERENCES documents(document_id) ON DELETE CASCADE,
+    tag_id UUID NOT NULL REFERENCES document_tags(tag_id) ON DELETE CASCADE,
+    PRIMARY KEY (document_id, tag_id)
+);
+
+CREATE INDEX IF NOT EXISTS idx_doc_tag_mappings_tag ON document_tag_mappings(tag_id);
 
 -- Tạo bảng Document Versions (lịch sử các phiên bản tài liệu)
 CREATE TABLE IF NOT EXISTS document_versions (
@@ -491,20 +524,14 @@ CREATE TABLE IF NOT EXISTS document_versions (
     document_id       UUID NOT NULL REFERENCES documents(document_id) ON DELETE CASCADE,
     tenant_id         UUID NOT NULL REFERENCES tenants(tenant_id) ON DELETE CASCADE,
 
-    -- Snapshot thông tin file tại thời điểm version này
+    -- Snapshot version tối giản
     version_number    INTEGER NOT NULL,                         -- Số phiên bản (1, 2, 3...)
-    original_file_name VARCHAR(255) NOT NULL,
-    file_name         VARCHAR(255) NOT NULL,
-    file_type         VARCHAR(100) NOT NULL,
-    file_size         BIGINT NOT NULL,
     storage_path      VARCHAR(500) NOT NULL,                    -- Path file cũ trên MinIO
 
     version_note      VARCHAR(500),                             -- Ghi chú thay đổi: "Cập nhật điều khoản nghỉ phép"
 
     -- Audit
     created_by        UUID NOT NULL REFERENCES users(user_id),
-    created_by_name   VARCHAR(200) NOT NULL,
-    created_by_email  VARCHAR(255) NOT NULL,
     created_at        TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP
 );
 
@@ -515,9 +542,11 @@ CREATE INDEX IF NOT EXISTS idx_doc_versions_created   ON document_versions(docum
 -- Thêm cột keywords vào document_chunks
 ALTER TABLE document_chunks
     ADD COLUMN IF NOT EXISTS category_id UUID REFERENCES document_categories(category_id) ON DELETE SET NULL,
+    ADD COLUMN IF NOT EXISTS tag_ids JSONB DEFAULT '[]'::jsonb,
     ADD COLUMN IF NOT EXISTS keywords JSONB DEFAULT '[]'::jsonb;
 
 CREATE INDEX IF NOT EXISTS idx_document_chunks_category ON document_chunks(category_id);
+CREATE INDEX IF NOT EXISTS idx_document_chunks_tag_ids ON document_chunks USING GIN(tag_ids);
 
 -- Tạo bảng Document Summaries (Tóm tắt AI-generated 1-1 với document)
 CREATE TABLE document_summaries (
@@ -1082,9 +1111,9 @@ INSERT INTO documents (
     document_id, file_name, original_file_name, file_type, file_size,
     storage_path, tenant_id, description, visibility,
     owner_department_id, accessible_departments, accessible_roles,
-    uploaded_by, uploaded_by_name, uploaded_by_email, uploaded_by_role,
+    uploaded_by,
     uploaded_at, embedding_status, is_active,
-    category_id, document_title, version_number
+    category_id, document_title
 ) VALUES
 
 -- 1. Nội quy công ty - COMPANY_WIDE
@@ -1096,10 +1125,9 @@ INSERT INTO documents (
  'COMPANY_WIDE',
  NULL, '[]'::jsonb, '[]'::jsonb,
  (SELECT user_id FROM users WHERE email = 'admin@fpt.com'),
- 'FPT Tenant Admin', 'admin@fpt.com', 'TENANT_ADMIN',
  CURRENT_TIMESTAMP - interval '8 days',
  'COMPLETED', TRUE,
- 'c1200000-0000-0000-0000-000000000012', 'Nội quy công ty 2026', 1),
+ 'c1200000-0000-0000-0000-000000000012', 'Nội quy công ty 2026'),
 
 -- 2. Hướng dẫn onboarding - COMPANY_WIDE
 ('d2000000-0000-0000-0000-000000000002',
@@ -1110,10 +1138,9 @@ INSERT INTO documents (
  'COMPANY_WIDE',
  NULL, '[]'::jsonb, '[]'::jsonb,
  (SELECT user_id FROM users WHERE email = 'admin@fpt.com'),
- 'FPT Tenant Admin', 'admin@fpt.com', 'TENANT_ADMIN',
  CURRENT_TIMESTAMP - interval '7 days',
  'COMPLETED', TRUE,
- 'c3100000-0000-0000-0000-000000000031', 'Hướng dẫn Onboarding nhân viên mới', 1),
+ 'c3100000-0000-0000-0000-000000000031', 'Hướng dẫn Onboarding nhân viên mới'),
 
 -- 3. Chính sách nghỉ phép - COMPANY_WIDE
 ('d3000000-0000-0000-0000-000000000003',
@@ -1124,10 +1151,9 @@ INSERT INTO documents (
  'COMPANY_WIDE',
  NULL, '[]'::jsonb, '[]'::jsonb,
  (SELECT user_id FROM users WHERE email = 'admin@fpt.com'),
- 'FPT Tenant Admin', 'admin@fpt.com', 'TENANT_ADMIN',
  CURRENT_TIMESTAMP - interval '6 days',
  'COMPLETED', TRUE,
- 'c1100000-0000-0000-0000-000000000011', 'Chính sách nghỉ phép 2026', 1),
+ 'c1100000-0000-0000-0000-000000000011', 'Chính sách nghỉ phép 2026'),
 
 -- 4. Kiến trúc hệ thống nội bộ - chỉ DEV department
 ('d4000000-0000-0000-0000-000000000004',
@@ -1140,10 +1166,9 @@ INSERT INTO documents (
  (SELECT jsonb_agg(department_id) FROM departments WHERE tenant_id = '550e8400-e29b-41d4-a716-446655440000' AND code = 'DEV'),
  '[]'::jsonb,
  (SELECT user_id FROM users WHERE email = 'admin@fpt.com'),
- 'FPT Tenant Admin', 'admin@fpt.com', 'TENANT_ADMIN',
  CURRENT_TIMESTAMP - interval '5 days',
  'COMPLETED', TRUE,
- 'c2100000-0000-0000-0000-000000000021', 'System Architecture v2.0', 2),
+ 'c2100000-0000-0000-0000-000000000021', 'System Architecture v2.0'),
 
 -- 5. Coding Standards - COMPANY_WIDE
 ('d5000000-0000-0000-0000-000000000005',
@@ -1154,7 +1179,6 @@ INSERT INTO documents (
  'COMPANY_WIDE',
  NULL, '[]'::jsonb, '[]'::jsonb,
  (SELECT user_id FROM users WHERE email = 'admin@fpt.com'),
- 'FPT Tenant Admin', 'admin@fpt.com', 'TENANT_ADMIN',
  CURRENT_TIMESTAMP - interval '4 days',
  'PENDING', TRUE,
- 'c2200000-0000-0000-0000-000000000022', 'Coding Standards - Java & Spring Boot', 1);
+ 'c2200000-0000-0000-0000-000000000022', 'Coding Standards - Java & Spring Boot');
