@@ -68,7 +68,7 @@ public class PaymentController {
             ```javascript
             const pollPayment = async (paymentId) => {
               const interval = setInterval(async () => {
-                const response = await fetch(`/api/v1/payment/status/${paymentId}`);
+                const response = await fetch(`/api/v1/payment/status/{paymentId}`);
                 const data = await response.json();
                 
                 if (data.status !== 'PENDING') {
