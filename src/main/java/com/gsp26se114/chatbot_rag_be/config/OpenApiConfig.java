@@ -93,7 +93,10 @@ public class OpenApiConfig {
                     new Tag().name("18. 🗂️ Document Categories")
                             .description("Quản lý phân loại tài liệu theo cấu trúc cây"),
                     
-                    new Tag().name("19. 🤖 Chatbot")
+                    new Tag().name("19. 🏷️ Document Tags")
+                            .description("Quản lý bộ tag chuẩn cho tài liệu"),
+
+                    new Tag().name("20. 🤖 Chatbot")
                             .description("RAG-powered chatbot APIs"),
                     
                     new Tag().name("99. 🔧 Admin - Document Management")

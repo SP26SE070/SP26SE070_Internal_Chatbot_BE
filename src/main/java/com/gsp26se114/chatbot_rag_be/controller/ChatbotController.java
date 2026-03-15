@@ -1,5 +1,6 @@
 package com.gsp26se114.chatbot_rag_be.controller;
 
+import com.fasterxml.jackson.databind.ObjectMapper;
 import com.gsp26se114.chatbot_rag_be.entity.DocumentChunkEntity;
 import com.gsp26se114.chatbot_rag_be.entity.DocumentEntity;
 import com.gsp26se114.chatbot_rag_be.payload.request.ChatRequest;
@@ -30,13 +31,14 @@ import java.util.stream.Collectors;
 @RequestMapping("/api/v1/chatbot")
 @RequiredArgsConstructor
 @Slf4j
-@Tag(name = "19. 🤖 Chatbot", description = "RAG-powered chatbot APIs")
+@Tag(name = "20. 🤖 Chatbot", description = "RAG-powered chatbot APIs")
 public class ChatbotController {
 
     private final EmbeddingService embeddingService;
     private final GeminiChatService geminiChatService;
     private final DocumentChunkRepository chunkRepository;
     private final DocumentRepository documentRepository;
+    private final ObjectMapper objectMapper;
 
     @PostMapping("/chat")
     @PreAuthorize("isAuthenticated()")
@@ -58,6 +60,11 @@ public class ChatbotController {
             // Step 2: Find similar chunks with access control
             int topK = request.getTopK() != null ? request.getTopK() : 3;
             double maxDistance = 0.35; // Only retrieve chunks with cosine distance < 0.35 (similarity > 65%)
+                String tagIdsJson = null;
+
+                if (request.getTagIds() != null && !request.getTagIds().isEmpty()) {
+                tagIdsJson = objectMapper.writeValueAsString(request.getTagIds().stream().distinct().toList());
+                }
             
             List<DocumentChunkEntity> similarChunks = chunkRepository.findSimilarChunksWithAccessControl(
                     userDetails.getTenantId(),
@@ -65,6 +72,8 @@ public class ChatbotController {
                     vectorString,
                     userDetails.getDepartmentId(),
                     userDetails.getRoleId(),
+                    request.getCategoryId(),
+                    tagIdsJson,
                     maxDistance,
                     topK
             );

@@ -6,6 +6,7 @@ import org.hibernate.annotations.JdbcTypeCode;
 import org.hibernate.type.SqlTypes;
 
 import java.time.LocalDateTime;
+import java.util.List;
 import java.util.UUID;
 
 /**
@@ -78,6 +79,11 @@ public class DocumentChunkEntity {
     /** Category của document cha (denormalized để filter nhanh) */
     @Column(name = "category_id")
     private UUID categoryId;
+
+    /** Tag IDs của document cha (denormalized để filter nhanh trong RAG query) */
+    @JdbcTypeCode(SqlTypes.JSON)
+    @Column(name = "tag_ids", columnDefinition = "jsonb")
+    private List<UUID> tagIds;
 
     /** Từ khóa trích xuất từ chunk để pre-filter: ["onboarding", "HR", "checklist"] */
     @JdbcTypeCode(SqlTypes.JSON)
