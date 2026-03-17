@@ -143,4 +143,20 @@ public class EmailTemplateService {
                 .replace("${requestId}", requestId != null ? requestId : "");
     }
 
+    /**
+     * Template 9: Tenant Registration Rejected
+     */
+    public String generateTenantRejectedEmail(
+            String representativeName,
+            String companyName,
+            String rejectionReason) {
+        String template = loadTemplate("tenant-rejected.html");
+        return template
+                .replace("${representativeName}", representativeName != null ? representativeName : "")
+                .replace("${companyName}", companyName != null ? companyName : "")
+                .replace("${rejectionReason}", rejectionReason != null && !rejectionReason.isBlank()
+                        ? rejectionReason
+                        : "Hiện tại chúng tôi chưa thể đáp ứng yêu cầu đăng ký này.");
+    }
+
 }
