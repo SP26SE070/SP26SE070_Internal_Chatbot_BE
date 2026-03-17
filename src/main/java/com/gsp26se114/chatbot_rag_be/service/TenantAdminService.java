@@ -225,7 +225,15 @@ public class TenantAdminService {
         if (request.contactEmail() == null || request.contactEmail().trim().isEmpty()) {
             throw new RuntimeException("Contact email không được để trống");
         }
-        
+
+        // Validate contactEmail uniqueness
+        if (userRepository.existsByContactEmail(request.contactEmail())) {
+            throw new IllegalArgumentException(
+                "Contact email '" + request.contactEmail() + "' đã được sử dụng bởi tài khoản khác. " +
+                "Vui lòng sử dụng email khác."
+            );
+        }
+
         // Validate role and department exist
         RoleEntity role = roleRepository.findById(request.roleId())
                 .orElseThrow(() -> new RuntimeException("Role không tồn tại"));
