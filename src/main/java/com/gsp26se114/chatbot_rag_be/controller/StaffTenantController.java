@@ -2,15 +2,21 @@ package com.gsp26se114.chatbot_rag_be.controller;
 
 import com.gsp26se114.chatbot_rag_be.entity.Tenant;
 import com.gsp26se114.chatbot_rag_be.entity.TenantStatus;
+import com.gsp26se114.chatbot_rag_be.entity.RoleEntity;
+import com.gsp26se114.chatbot_rag_be.entity.User;
 import com.gsp26se114.chatbot_rag_be.payload.response.MessageResponse;
 import com.gsp26se114.chatbot_rag_be.repository.TenantRepository;
+import com.gsp26se114.chatbot_rag_be.repository.RoleRepository;
+import com.gsp26se114.chatbot_rag_be.repository.UserRepository;
 import com.gsp26se114.chatbot_rag_be.service.EmailService;
+import com.gsp26se114.chatbot_rag_be.util.UserUtil;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.security.SecurityRequirement;
 import io.swagger.v3.oas.annotations.tags.Tag;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.http.ResponseEntity;
+import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.web.bind.annotation.*;
 
@@ -29,6 +35,9 @@ public class StaffTenantController {
 
     private final TenantRepository tenantRepository;
     private final EmailService emailService;
+    private final UserRepository userRepository;
+    private final RoleRepository roleRepository;
+    private final PasswordEncoder passwordEncoder;
 
     @GetMapping
     @Operation(summary = "Lấy tất cả tenants", description = "Xem danh sách tất cả tenants trong hệ thống")
@@ -60,14 +69,58 @@ public class StaffTenantController {
         tenant.setReviewedAt(LocalDateTime.now());
         tenantRepository.save(tenant);
 
-        // Send approval email
+        // Create TENANT_ADMIN user for this tenant
+        String representativeName = tenant.getRepresentativeName() != null
+                ? tenant.getRepresentativeName()
+                : tenant.getContactEmail();
+
+        RoleEntity tenantAdminRole = roleRepository.findByCode("TENANT_ADMIN")
+                .orElseThrow(() -> new RuntimeException("Role TENANT_ADMIN không tồn tại"));
+
+        String loginEmail = generateTenantAdminLoginEmail(tenant.getName());
+        String temporaryPassword = com.gsp26se114.chatbot_rag_be.util.UserUtil.generateRandomPassword();
+
+        User tenantAdminUser = new User();
+        tenantAdminUser.setEmail(loginEmail);
+        tenantAdminUser.setContactEmail(tenant.getContactEmail());
+        tenantAdminUser.setPassword(passwordEncoder.encode(temporaryPassword));
+        tenantAdminUser.setFullName(representativeName);
+        tenantAdminUser.setPhoneNumber(tenant.getRepresentativePhone());
+        tenantAdminUser.setRoleId(tenantAdminRole.getId());
+        tenantAdminUser.setTenantId(tenant.getId());
+        tenantAdminUser.setMustChangePassword(true);
+        tenantAdminUser.setIsActive(true);
+        tenantAdminUser.setCreatedAt(LocalDateTime.now());
+
+        userRepository.save(tenantAdminUser);
+
+        // Send approval email with credentials
         try {
-            emailService.sendTenantApprovalEmail(tenant);
+            emailService.sendTenantApprovalEmail(tenant, loginEmail, temporaryPassword);
         } catch (Exception e) {
             log.error("Failed to send approval email", e);
         }
 
         return ResponseEntity.ok(new MessageResponse("Tenant đã được phê duyệt"));
+    }
+
+    private String generateTenantAdminLoginEmail(String tenantName) {
+        String username = "admin";
+        String tenantDomain = UserUtil.removeAccent(tenantName)
+                .toLowerCase()
+                .replaceAll("\\s+", "")
+                .replaceAll("[^a-z0-9]", "");
+
+        String baseEmail = username + "@" + tenantDomain + ".com";
+        String loginEmail = baseEmail;
+        int suffix = 1;
+
+        while (userRepository.existsByEmail(loginEmail)) {
+            loginEmail = username + suffix + "@" + tenantDomain + ".com";
+            suffix++;
+        }
+
+        return loginEmail;
     }
 
     @PutMapping("/{tenantId}/suspend")

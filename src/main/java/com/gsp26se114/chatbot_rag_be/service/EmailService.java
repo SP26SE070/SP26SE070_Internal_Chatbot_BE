@@ -11,8 +11,6 @@ import org.thymeleaf.TemplateEngine;
 import org.thymeleaf.context.Context;
 
 import java.io.UnsupportedEncodingException;
-import java.util.HashMap;
-import java.util.Map;
 
 @Slf4j
 @Service
@@ -20,6 +18,7 @@ import java.util.Map;
 public class EmailService {
     private final JavaMailSender mailSender;
     private final TemplateEngine templateEngine;
+    private final EmailTemplateService emailTemplateService;
 
     /**
      * Gửi OTP để reset password
@@ -192,9 +191,11 @@ public class EmailService {
     }
 
     /**
-     * Send tenant approval notification email
+     * Send tenant approval notification email using HTML template with placeholders.
      */
-    public void sendTenantApprovalEmail(com.gsp26se114.chatbot_rag_be.entity.Tenant tenant) {
+    public void sendTenantApprovalEmail(com.gsp26se114.chatbot_rag_be.entity.Tenant tenant,
+                                        String loginEmail,
+                                        String temporaryPassword) {
         try {
             String tenantAdminEmail = tenant.getContactEmail();
 
@@ -203,15 +204,18 @@ public class EmailService {
                 return;
             }
 
-            Map<String, Object> variables = new HashMap<>();
-            variables.put("tenantName", tenant.getName());
-            variables.put("approvedAt", tenant.getReviewedAt());
+            String htmlContent = emailTemplateService.generateTenantApprovedEmail(
+                    tenant.getRepresentativeName(),
+                    tenant.getName(),
+                    loginEmail,
+                    temporaryPassword,
+                    tenantAdminEmail
+            );
 
-            sendTemplateMessage(
+            sendHtmlEmail(
                     tenantAdminEmail,
                     "Tenant Approved - Welcome to Chatbot RAG Platform",
-                    "tenant-approved",
-                    variables
+                    htmlContent
             );
         } catch (Exception e) {
             log.error("Failed to send tenant approval email", e);

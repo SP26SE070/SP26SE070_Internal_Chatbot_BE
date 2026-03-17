@@ -2,8 +2,9 @@ package com.gsp26se114.chatbot_rag_be.controller;
 
 import com.gsp26se114.chatbot_rag_be.payload.request.*;
 import com.gsp26se114.chatbot_rag_be.payload.response.*;
-// import com.gsp26se114.chatbot_rag_be.service.AdminService; // DISABLED
 import com.gsp26se114.chatbot_rag_be.service.AuthService;
+import com.gsp26se114.chatbot_rag_be.service.TenantRegistrationService;
+import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.Parameter;
 import io.swagger.v3.oas.annotations.tags.Tag;
 import jakarta.validation.Valid;
@@ -19,7 +20,7 @@ import org.springframework.web.bind.annotation.*;
 public class AuthController {
     
     private final AuthService authService;
-    // private final AdminService adminService; // DISABLED
+    private final TenantRegistrationService tenantRegistrationService;
 
     // 1. ĐĂNG NHẬP
     @PostMapping("/login")
@@ -56,19 +57,17 @@ public class AuthController {
         return ResponseEntity.ok(authService.refreshAccessToken(req.refreshToken()));
     }
 
-    // 6. ĐĂNG KÝ TENANT MỚI (Public - không cần login) - DISABLED
-    /*
+    // 6. ĐĂNG KÝ TENANT MỚI (Public - không cần login)
     @PostMapping("/register-tenant")
     @Operation(summary = "Đăng ký tổ chức mới", 
                description = "API public cho công ty đăng ký sử dụng platform. Status ban đầu: PENDING, chờ SUPER_ADMIN phê duyệt.")
     public ResponseEntity<MessageResponse> registerTenant(
             @Valid @RequestBody TenantRegistrationRequest request) {
         
-        adminService.registerTenant(request);
+        tenantRegistrationService.registerTenant(request);
         
         return ResponseEntity.ok(new MessageResponse(
             "Đăng ký thành công! Yêu cầu của bạn đang chờ xét duyệt. " +
             "Chúng tôi sẽ gửi thông báo qua email khi có kết quả."));
     }
-    */
 }

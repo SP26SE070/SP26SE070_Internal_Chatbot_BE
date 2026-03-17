@@ -125,4 +125,22 @@ public class EmailTemplateService {
                 .replace("${expiresAt}", expiresAt);
     }
 
+    /**
+     * Template 8: Tenant Registration Success (request received)
+     */
+    public String generateTenantRegistrationSuccessEmail(
+            String companyName,
+            String contactEmail,
+            String representativeName,
+            String representativePhone,
+            String requestId) {
+        String template = loadTemplate("tenant-registration-success.html");
+        return template
+                .replace("${companyName}", companyName != null ? companyName : "")
+                .replace("${contactEmail}", contactEmail != null ? contactEmail : "")
+                .replace("${representativeName}", representativeName != null ? representativeName : "")
+                .replace("${representativePhone}", representativePhone != null ? representativePhone : "")
+                .replace("${requestId}", requestId != null ? requestId : "");
+    }
+
 }
