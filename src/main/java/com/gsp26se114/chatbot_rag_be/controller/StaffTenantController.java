@@ -46,6 +46,13 @@ public class StaffTenantController {
         return ResponseEntity.ok(tenants);
     }
 
+    @GetMapping("/pending")
+    @Operation(summary = "Lấy danh sách tenants đang chờ duyệt", description = "Filter tenants theo trạng thái PENDING")
+    public ResponseEntity<List<Tenant>> getPendingTenants() {
+        List<Tenant> tenants = tenantRepository.findByStatus(TenantStatus.PENDING);
+        return ResponseEntity.ok(tenants);
+    }
+
     @GetMapping("/{tenantId}")
     @Operation(summary = "Xem chi tiết tenant", description = "Lấy thông tin chi tiết của một tenant")
     public ResponseEntity<Tenant> getTenantById(@PathVariable UUID tenantId) {
@@ -133,6 +140,33 @@ public class StaffTenantController {
         tenantRepository.save(tenant);
 
         return ResponseEntity.ok(new MessageResponse("Tenant đã bị tạm ngưng"));
+    }
+
+    @PutMapping("/{tenantId}/reject")
+    @Operation(summary = "Từ chối tenant", description = "Chuyển trạng thái tenant sang REJECTED kèm lý do")
+    public ResponseEntity<MessageResponse> rejectTenant(
+            @PathVariable UUID tenantId,
+            @RequestParam(name = "reason", required = false) String reason) {
+        Tenant tenant = tenantRepository.findById(tenantId)
+                .orElseThrow(() -> new RuntimeException("Tenant not found"));
+
+        if (tenant.getStatus() != TenantStatus.PENDING) {
+            return ResponseEntity.badRequest()
+                    .body(new MessageResponse("Chỉ có thể từ chối tenant đang ở trạng thái PENDING"));
+        }
+
+        tenant.setStatus(TenantStatus.REJECTED);
+        tenant.setReviewedAt(LocalDateTime.now());
+        tenant.setRejectionReason(reason);
+        tenantRepository.save(tenant);
+
+        try {
+            emailService.sendTenantRejectedEmail(tenant);
+        } catch (Exception e) {
+            log.error("Failed to send tenant rejected email", e);
+        }
+
+        return ResponseEntity.ok(new MessageResponse("Tenant đã bị từ chối"));
     }
 
     @PutMapping("/{tenantId}/activate")

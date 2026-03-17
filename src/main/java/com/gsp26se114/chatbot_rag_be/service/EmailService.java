@@ -221,5 +221,32 @@ public class EmailService {
             log.error("Failed to send tenant approval email", e);
         }
     }
+
+    /**
+     * Send tenant rejection notification email using HTML template.
+     */
+    public void sendTenantRejectedEmail(com.gsp26se114.chatbot_rag_be.entity.Tenant tenant) {
+        try {
+            String contactEmail = tenant.getContactEmail();
+            if (contactEmail == null) {
+                log.warn("No contact email found for tenant (rejected): {}", tenant.getName());
+                return;
+            }
+
+            String htmlContent = emailTemplateService.generateTenantRejectedEmail(
+                    tenant.getRepresentativeName(),
+                    tenant.getName(),
+                    tenant.getRejectionReason()
+            );
+
+            sendHtmlEmail(
+                    contactEmail,
+                    "Thông báo kết quả đăng ký Chatbot RAG Platform",
+                    htmlContent
+            );
+        } catch (Exception e) {
+            log.error("Failed to send tenant rejected email", e);
+        }
+    }
 }
 

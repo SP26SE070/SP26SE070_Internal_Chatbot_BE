@@ -1,0 +1,72 @@
+<!DOCTYPE html>
+<html lang="vi">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Yêu cầu đăng ký bị từ chối - Chatbot RAG Platform</title>
+    <style>
+        body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif; line-height: 1.6; color: #111827; background-color: #f3f4f6; margin: 0; padding: 20px; }
+        .container { max-width: 640px; margin: 0 auto; background: #ffffff; border-radius: 16px; overflow: hidden; box-shadow: 0 20px 60px rgba(0, 0, 0, 0.1); }
+        .header { background: linear-gradient(135deg, #f97373 0%, #ef4444 100%); padding: 32px 24px; text-align: center; color: #ffffff; }
+        .header h1 { margin: 0 0 8px; font-size: 24px; font-weight: 700; }
+        .header p { margin: 0; font-size: 14px; opacity: 0.95; }
+        .content { padding: 32px 24px; }
+        .greeting { font-size: 18px; font-weight: 600; margin-bottom: 12px; }
+        .greeting span { color: #2563eb; }
+        .intro { font-size: 14px; color: #4b5563; margin-bottom: 20px; }
+        .company { font-weight: 600; color: #111827; }
+        .status-box { border-radius: 12px; padding: 16px 18px; background: #fef2f2; border: 1px solid #fecaca; display: flex; align-items: center; gap: 10px; margin: 20px 0; }
+        .status-box span.icon { font-size: 22px; }
+        .status-box span.text { font-size: 14px; color: #b91c1c; font-weight: 600; }
+        .reason-box { background: #f9fafb; border-radius: 12px; padding: 18px 18px 10px; border: 1px solid #e5e7eb; margin-bottom: 20px; }
+        .reason-box h3 { margin: 0 0 8px; font-size: 15px; color: #111827; }
+        .reason-box p { margin: 0 0 10px; font-size: 14px; color: #b91c1c; white-space: pre-wrap; }
+        .info-list { font-size: 14px; color: #4b5563; margin: 16px 0; padding-left: 18px; }
+        .info-list li { margin-bottom: 6px; }
+        .footer { padding: 20px 24px 24px; border-top: 1px solid #e5e7eb; background: #f9fafb; text-align: center; font-size: 12px; color: #6b7280; }
+        .footer strong { color: #111827; }
+    </style>
+</head>
+<body>
+<div class="container">
+    <div class="header">
+        <h1>Yêu cầu đăng ký bị từ chối</h1>
+        <p>Chatbot RAG Platform</p>
+    </div>
+    <div class="content">
+        <p class="greeting">
+            Xin chào <span>${representativeName}</span>,
+        </p>
+        <p class="intro">
+            Cảm ơn bạn và <span class="company">${companyName}</span> đã quan tâm tới <strong>Chatbot RAG Platform</strong>.
+            Sau khi xem xét kỹ lưỡng, rất tiếc chúng tôi hiện <strong>chưa thể phê duyệt</strong> yêu cầu đăng ký của bạn.
+        </p>
+
+        <div class="status-box">
+            <span class="icon">⚠️</span>
+            <span class="text">Trạng thái yêu cầu: ĐÃ BỊ TỪ CHỐI</span>
+        </div>
+
+        <div class="reason-box">
+            <h3>💬 Lý do từ chối</h3>
+            <p>${rejectionReason}</p>
+        </div>
+
+        <ul class="info-list">
+            <li>Nếu bạn cần thêm thông tin chi tiết, vui lòng phản hồi email này hoặc liên hệ đội ngũ hỗ trợ.</li>
+            <li>Bạn hoàn toàn có thể gửi lại yêu cầu đăng ký sau khi đã điều chỉnh/thay đổi thông tin cho phù hợp.</li>
+        </ul>
+
+        <p class="intro" style="margin-top: 18px;">
+            Một lần nữa, rất cảm ơn <span class="company">${companyName}</span> đã quan tâm đến nền tảng của chúng tôi.
+        </p>
+    </div>
+    <div class="footer">
+        <p><strong>Chatbot RAG Team</strong></p>
+        <p>📧 support@chatbot-rag.com &nbsp;&nbsp;|&nbsp;&nbsp; 🌐 chatbot-rag.com</p>
+        <p style="margin-top: 8px;">Email này được gửi tự động. Vui lòng không trả lời trực tiếp.</p>
+    </div>
+</div>
+</body>
+</html>
+
