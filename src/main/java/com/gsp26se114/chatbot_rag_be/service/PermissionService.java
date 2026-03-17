@@ -14,6 +14,7 @@ import org.springframework.stereotype.Service;
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.List;
+import java.util.Set;
 
 @Slf4j
 @Service
@@ -116,74 +117,49 @@ public class PermissionService {
      */
     public List<PermissionCategoryResponse> getAvailablePermissions() {
         List<PermissionCategoryResponse> categories = new ArrayList<>();
-        
-        // User Management
+
+        // User Management — read only
         categories.add(PermissionCategoryResponse.builder()
                 .category("User Management")
                 .permissions(Arrays.asList(
-                        new PermissionResponse(PermissionConstants.USER_READ, "View users", "Xem danh sách người dùng"),
-                        new PermissionResponse(PermissionConstants.USER_WRITE, "Create/Edit users", "Tạo và sửa người dùng"),
-                        new PermissionResponse(PermissionConstants.USER_DELETE, "Delete users", "Xóa người dùng"),
-                        new PermissionResponse(PermissionConstants.USER_ALL, "All user permissions", "Tất cả quyền quản lý người dùng")
+                        new PermissionResponse(PermissionConstants.USER_READ,
+                            "View users", "Xem danh sách người dùng")
                 ))
                 .build());
-        
-        // Department Management
+
+        // Department Management — read only
         categories.add(PermissionCategoryResponse.builder()
                 .category("Department Management")
                 .permissions(Arrays.asList(
-                        new PermissionResponse(PermissionConstants.DEPT_READ, "View departments", "Xem danh sách phòng ban"),
-                        new PermissionResponse(PermissionConstants.DEPT_WRITE, "Create/Edit departments", "Tạo và sửa phòng ban"),
-                        new PermissionResponse(PermissionConstants.DEPT_DELETE, "Delete departments", "Xóa phòng ban"),
-                        new PermissionResponse(PermissionConstants.DEPT_ALL, "All department permissions", "Tất cả quyền quản lý phòng ban")
+                        new PermissionResponse(PermissionConstants.DEPT_READ,
+                            "View departments", "Xem danh sách phòng ban")
                 ))
                 .build());
-        
-        // Role Management
-        categories.add(PermissionCategoryResponse.builder()
-                .category("Role Management")
-                .permissions(Arrays.asList(
-                        new PermissionResponse(PermissionConstants.ROLE_READ, "View roles", "Xem danh sách roles"),
-                        new PermissionResponse(PermissionConstants.ROLE_WRITE, "Create/Edit custom roles", "Tạo và sửa custom roles"),
-                        new PermissionResponse(PermissionConstants.ROLE_ALL, "All role permissions", "Tất cả quyền quản lý roles")
-                ))
-                .build());
-        
-        // Document Management
+
+        // Document Management — full allowed
         categories.add(PermissionCategoryResponse.builder()
                 .category("Document Management")
                 .permissions(Arrays.asList(
-                        new PermissionResponse(PermissionConstants.DOCUMENT_READ, "View documents", "Xem tài liệu"),
-                        new PermissionResponse(PermissionConstants.DOCUMENT_WRITE, "Upload/Edit documents", "Upload và sửa tài liệu"),
-                        new PermissionResponse(PermissionConstants.DOCUMENT_DELETE, "Delete documents", "Xóa tài liệu"),
-                        new PermissionResponse(PermissionConstants.DOCUMENT_ALL, "All document permissions", "Tất cả quyền quản lý tài liệu")
+                        new PermissionResponse(PermissionConstants.DOCUMENT_READ,
+                            "View documents", "Xem tài liệu"),
+                        new PermissionResponse(PermissionConstants.DOCUMENT_WRITE,
+                            "Upload/Edit documents", "Upload và sửa tài liệu"),
+                        new PermissionResponse(PermissionConstants.DOCUMENT_DELETE,
+                            "Delete documents", "Xóa tài liệu"),
+                        new PermissionResponse(PermissionConstants.DOCUMENT_ALL,
+                            "All document permissions", "Tất cả quyền quản lý tài liệu")
                 ))
                 .build());
-        
-        // Subscription Management
-        categories.add(PermissionCategoryResponse.builder()
-                .category("Subscription Management")
-                .permissions(Arrays.asList(
-                        new PermissionResponse(PermissionConstants.SUBSCRIPTION_MANAGE, "Manage subscription", "Quản lý gói subscription")
-                ))
-                .build());
-        
-        // Analytics
-        categories.add(PermissionCategoryResponse.builder()
-                .category("Analytics")
-                .permissions(Arrays.asList(
-                        new PermissionResponse(PermissionConstants.ANALYTICS_VIEW, "View analytics", "Xem báo cáo và thống kê")
-                ))
-                .build());
-        
+
         // Profile
         categories.add(PermissionCategoryResponse.builder()
                 .category("Profile")
                 .permissions(Arrays.asList(
-                        new PermissionResponse(PermissionConstants.PROFILE_MANAGE, "Manage own profile", "Quản lý thông tin cá nhân")
+                        new PermissionResponse(PermissionConstants.PROFILE_MANAGE,
+                            "Manage own profile", "Quản lý thông tin cá nhân")
                 ))
                 .build());
-        
+
         return categories;
     }
     
@@ -216,17 +192,24 @@ public class PermissionService {
      */
     public void validatePermissions(List<String> permissions) {
         if (permissions == null || permissions.isEmpty()) {
-            throw new RuntimeException("Permissions không được để trống");
+            throw new IllegalArgumentException("Permissions không được để trống");
         }
-        
+
+        Set<String> forbidden = PermissionConstants.getCustomRoleForbiddenPermissions();
+
         for (String permission : permissions) {
+            // Check permission exists in the system
             if (!PermissionConstants.isValid(permission)) {
-                throw new RuntimeException("Invalid permission: " + permission);
+                throw new IllegalArgumentException(
+                    "Permission '" + permission + "' không tồn tại trong hệ thống."
+                );
             }
-            
-            // TENANT_ADMIN cannot assign system-only permissions
-            if (PermissionConstants.getSystemOnlyPermissions().contains(permission)) {
-                throw new RuntimeException("Cannot assign system-level permission: " + permission);
+            // Check permission not forbidden for custom roles
+            if (forbidden.contains(permission)) {
+                throw new IllegalArgumentException(
+                    "Permission '" + permission + "' không thể gán cho custom role. " +
+                    "Đây là quyền dành riêng cho TENANT_ADMIN."
+                );
             }
         }
     }
