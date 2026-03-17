@@ -234,6 +234,18 @@ public class TenantAdminService {
             );
         }
 
+        // Normalize and validate phoneNumber uniqueness
+        String normalizedPhone = null;
+        if (request.phoneNumber() != null && !request.phoneNumber().isBlank()) {
+            normalizedPhone = normalizePhoneNumber(request.phoneNumber());
+            if (userRepository.existsByPhoneNumber(normalizedPhone)) {
+                throw new IllegalArgumentException(
+                    "Số điện thoại '" + request.phoneNumber() + "' đã được sử dụng bởi tài khoản khác. " +
+                    "Vui lòng sử dụng số điện thoại khác."
+                );
+            }
+        }
+
         // Validate role and department exist
         RoleEntity role = roleRepository.findById(request.roleId())
                 .orElseThrow(() -> new RuntimeException("Role không tồn tại"));
@@ -270,7 +282,12 @@ public class TenantAdminService {
         newUser.setContactEmail(request.contactEmail());  // Email thật nhận thông báo
         newUser.setPassword(passwordEncoder.encode(temporaryPassword));
         newUser.setFullName(request.fullName());
-        newUser.setPhoneNumber(request.phoneNumber());
+        // Set phone number (normalized if provided)
+        if (normalizedPhone != null) {
+            newUser.setPhoneNumber(normalizedPhone);
+        } else {
+            newUser.setPhoneNumber(request.phoneNumber());
+        }
         newUser.setDateOfBirth(request.dateOfBirth());    // Ngày sinh
         newUser.setAddress(request.address());            // Địa chỉ
         newUser.setRoleId(request.roleId());
@@ -713,5 +730,16 @@ public class TenantAdminService {
             departmentRepository.findById(user.getDepartmentId()).orElse(null) : null;
         
         return mapToUserResponse(user, role, department);
+    }
+
+    private String normalizePhoneNumber(String phoneNumber) {
+        if (phoneNumber == null || phoneNumber.isBlank()) {
+            return phoneNumber;
+        }
+        // Convert +84xxxxxxxxx → 0xxxxxxxxx
+        if (phoneNumber.startsWith("+84")) {
+            return "0" + phoneNumber.substring(3);
+        }
+        return phoneNumber;
     }
 }
