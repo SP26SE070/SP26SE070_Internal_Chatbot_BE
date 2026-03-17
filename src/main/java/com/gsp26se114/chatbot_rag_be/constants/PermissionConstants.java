@@ -76,4 +76,26 @@ public class PermissionConstants {
     public static Set<String> getSystemOnlyPermissions() {
         return Set.of(ALL, TENANT_APPROVE);
     }
+
+    /**
+     * Permissions forbidden for custom roles
+     * Only TENANT_ADMIN can have these
+     */
+    public static Set<String> getCustomRoleForbiddenPermissions() {
+        return Set.of(
+            ALL,                  // Super admin only
+            TENANT_APPROVE,       // Staff only
+            USER_ALL,             // Admin only
+            USER_WRITE,           // Admin only
+            USER_DELETE,          // Admin only
+            DEPT_ALL,             // Admin only
+            DEPT_WRITE,           // Admin only
+            DEPT_DELETE,          // Admin only
+            ROLE_ALL,             // Admin only
+            ROLE_WRITE,           // Admin only
+            ROLE_READ,            // Admin only
+            SUBSCRIPTION_MANAGE,  // Admin only
+            ANALYTICS_VIEW        // Admin only
+        );
+    }
 }
