@@ -15,8 +15,11 @@ import org.springframework.transaction.annotation.Transactional;
 
 import java.time.LocalDateTime;
 import java.util.List;
+import java.util.NoSuchElementException;
 import java.util.UUID;
 import java.util.stream.Collectors;
+
+import org.springframework.security.access.AccessDeniedException;
 
 @Slf4j
 @Service
@@ -66,13 +69,23 @@ public class TenantRoleService {
     public RoleResponse getRoleById(Integer roleId, UUID tenantId) {
         log.info("Fetching role by ID: {} for tenant: {}", roleId, tenantId);
         RoleEntity role = roleRepository.findById(roleId)
-                .orElseThrow(() -> new RuntimeException("Role không tồn tại với ID: " + roleId));
-        
-        // Security check: custom roles must belong to tenant
-        if (role.isCustomRole() && !role.belongsToTenant(tenantId)) {
-            throw new RuntimeException("Role này thuộc về tenant khác");
+                .orElseThrow(() -> new NoSuchElementException(
+                    "Role không tồn tại với ID: " + roleId));
+
+        // Block SYSTEM roles — Tenant Admin cannot view SUPER_ADMIN or STAFF
+        if (role.isSystemRole()) {
+            throw new AccessDeniedException(
+                "Bạn không có quyền xem role hệ thống này."
+            );
         }
-        
+
+        // Block custom roles from other tenants
+        if (role.isCustomRole() && !role.belongsToTenant(tenantId)) {
+            throw new AccessDeniedException(
+                "Role này thuộc về tenant khác."
+            );
+        }
+
         return mapToResponse(role, tenantId);
     }
     
