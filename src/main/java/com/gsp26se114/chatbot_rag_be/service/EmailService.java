@@ -128,33 +128,24 @@ public class EmailService {
     }
     
     /**
-     * Send welcome email to newly created STAFF account
+     * Send welcome email to STAFF's contact email. Body contains virtual login email (staff@system.com...) and temp password.
+     *
+     * @param toContactEmail Email thật để nhận thông báo
+     * @param staffName      Họ tên STAFF
+     * @param loginEmail     Email đăng nhập ảo (staff@system.com, staff2@system.com, ...)
+     * @param temporaryPassword Mật khẩu tạm
      */
     public void sendStaffWelcome(
-            String staffEmail,
+            String toContactEmail,
             String staffName,
+            String loginEmail,
             String temporaryPassword) {
-        
         try {
-            Context context = new Context();
-            context.setVariable("staffName", staffName);
-            context.setVariable("staffEmail", staffEmail);
-            context.setVariable("temporaryPassword", temporaryPassword);
-            
-            String htmlContent = templateEngine.process("email/staff-welcome", context);
-            
-            MimeMessage message = mailSender.createMimeMessage();
-            MimeMessageHelper helper = new MimeMessageHelper(message, true, "UTF-8");
-            
-            helper.setTo(staffEmail);
-            helper.setSubject("Tài khoản STAFF - Chatbot RAG Platform");
-            helper.setText(htmlContent, true);
-            helper.setFrom("noreply@chatbot-rag.com", "Chatbot RAG Platform");
-            
-            mailSender.send(message);
-            log.info("Staff welcome email sent successfully to: {}", staffEmail);
-        } catch (MessagingException | UnsupportedEncodingException e) {
-            log.error("Failed to send staff welcome email to: {}", staffEmail, e);
+            String htmlContent = emailTemplateService.generateStaffWelcomeEmail(staffName, loginEmail, temporaryPassword);
+            sendHtmlEmail(toContactEmail, "Tài khoản STAFF - Chatbot RAG Platform", htmlContent);
+            log.info("Staff welcome email sent to contact: {}", toContactEmail);
+        } catch (Exception e) {
+            log.error("Failed to send staff welcome email to: {}", toContactEmail, e);
             throw new RuntimeException("Failed to send welcome email", e);
         }
     }

@@ -38,47 +38,59 @@ public class StaffManagementController {
     private final EmailService emailService;
 
     @PostMapping
-    @Operation(summary = "Tạo tài khoản STAFF", 
-               description = "SUPER_ADMIN tạo account cho STAFF để quản lý tenant")
+    @Operation(summary = "Tạo tài khoản STAFF",
+               description = "SUPER_ADMIN tạo account STAFF. Email đăng nhập ảo: staff@system.com, staff2@system.com...; contactEmail dùng để nhận thông báo.")
     public ResponseEntity<?> createStaff(@Valid @RequestBody CreateStaffRequest request) {
-        // Check email exists
-        if (userRepository.existsByEmail(request.getEmail())) {
-            return ResponseEntity.badRequest()
-                    .body(new MessageResponse("Email đã được sử dụng"));
-        }
-
         // Get STAFF role
         RoleEntity staffRole = roleRepository.findByCode("STAFF")
                 .orElseThrow(() -> new RuntimeException("STAFF role not found"));
 
+        // Generate virtual login email: staff@system.com, staff2@system.com, ...
+        String loginEmail = generateStaffLoginEmail();
+
         // Generate temporary password
         String temporaryPassword = UserUtil.generateRandomPassword();
 
-        // Create staff user
+        // Create staff user: email = login (ảo), contactEmail = nhận thông báo
         User staff = new User();
-        staff.setEmail(request.getEmail());
+        staff.setEmail(loginEmail);
+        staff.setContactEmail(request.getContactEmail());
         staff.setPassword(passwordEncoder.encode(temporaryPassword));
         staff.setFullName(request.getFullName());
         staff.setPhoneNumber(request.getPhone());
         staff.setRoleId(staffRole.getId());
-        staff.setMustChangePassword(true);  // Force password change on first login
+        staff.setMustChangePassword(true);
         staff.setCreatedAt(LocalDateTime.now());
 
         User savedStaff = userRepository.save(staff);
 
-        // Send welcome email with credentials
+        // Send welcome email to contactEmail with login credentials (login email ảo + temp password)
         try {
             emailService.sendStaffWelcome(
-                savedStaff.getEmail(),
+                savedStaff.getContactEmail(),
                 savedStaff.getFullName(),
+                savedStaff.getEmail(),
                 temporaryPassword
             );
-            log.info("SUPER_ADMIN created new STAFF account: {} - Welcome email sent", request.getEmail());
+            log.info("SUPER_ADMIN created STAFF: login={}, contact={} - Welcome email sent", loginEmail, request.getContactEmail());
         } catch (Exception e) {
-            log.error("Failed to send welcome email to STAFF: {}", request.getEmail(), e);
+            log.error("Failed to send welcome email to STAFF contact: {}", request.getContactEmail(), e);
         }
 
-        return ResponseEntity.ok(new MessageResponse("Tài khoản STAFF đã được tạo thành công. Email thông tin đăng nhập đã được gửi."));
+        return ResponseEntity.ok(new MessageResponse("Tài khoản STAFF đã được tạo thành công. Email thông tin đăng nhập đã được gửi tới " + request.getContactEmail()));
+    }
+
+    /** Generate unique login email: staff@system.com, staff2@system.com, ... */
+    private String generateStaffLoginEmail() {
+        String base = "staff@system.com";
+        if (!userRepository.existsByEmail(base)) {
+            return base;
+        }
+        int suffix = 2;
+        while (userRepository.existsByEmail("staff" + suffix + "@system.com")) {
+            suffix++;
+        }
+        return "staff" + suffix + "@system.com";
     }
 
     @GetMapping

@@ -126,6 +126,17 @@ public class EmailTemplateService {
     }
 
     /**
+     * Template: Staff Welcome - login credentials
+     */
+    public String generateStaffWelcomeEmail(String staffName, String staffEmail, String temporaryPassword) {
+        String template = loadTemplate("staff-welcome.html");
+        return template
+                .replace("${staffName}", staffName != null ? staffName : "")
+                .replace("${staffEmail}", staffEmail != null ? staffEmail : "")
+                .replace("${temporaryPassword}", temporaryPassword != null ? temporaryPassword : "");
+    }
+
+    /**
      * Template 8: Tenant Registration Success (request received)
      */
     public String generateTenantRegistrationSuccessEmail(

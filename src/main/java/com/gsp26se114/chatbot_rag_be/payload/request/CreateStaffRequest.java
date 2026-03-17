@@ -6,9 +6,10 @@ import lombok.Data;
 
 @Data
 public class CreateStaffRequest {
-    @NotBlank(message = "Email is required")
-    @Email(message = "Email must be valid")
-    private String email;
+    /** Email thật để nhận thông báo (welcome, OTP, ...). Đăng nhập dùng email ảo staff@system.com, staff2@system.com, ... */
+    @NotBlank(message = "Contact email is required")
+    @Email(message = "Contact email must be valid")
+    private String contactEmail;
 
     @NotBlank(message = "Full name is required")
     private String fullName;
