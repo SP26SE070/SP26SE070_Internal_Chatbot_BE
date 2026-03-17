@@ -85,15 +85,9 @@ public class RolePermissionConstants {
         PermissionConstants.DOCUMENT_WRITE,
         PermissionConstants.DOCUMENT_DELETE,
         PermissionConstants.DOCUMENT_ALL,
-        
-        // Analytics
-        PermissionConstants.ANALYTICS_VIEW,
-        
+
         // User management (chỉ read)
-        PermissionConstants.USER_READ,
-        
-        // Department management (chỉ read)
-        PermissionConstants.DEPT_READ
+        PermissionConstants.USER_READ
     );
     
     /**
