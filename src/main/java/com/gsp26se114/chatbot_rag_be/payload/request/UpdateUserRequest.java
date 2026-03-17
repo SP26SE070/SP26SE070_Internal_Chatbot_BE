@@ -1,6 +1,7 @@
 package com.gsp26se114.chatbot_rag_be.payload.request;
 
 import jakarta.validation.constraints.Min;
+import jakarta.validation.constraints.Pattern;
 import jakarta.validation.constraints.Size;
 
 import java.time.LocalDate;
@@ -9,7 +10,10 @@ public record UpdateUserRequest(
         @Size(max = 255, message = "Họ tên không được quá 255 ký tự")
         String fullName,
 
-        @Size(max = 10, message = "Số điện thoại không được quá 10 ký tự")
+        @Pattern(
+            regexp = "^(0\\d{9}|\\+84\\d{9})$",
+            message = "Số điện thoại không hợp lệ. Chỉ chấp nhận định dạng 0xxxxxxxxx hoặc +84xxxxxxxxx (9 chữ số sau +84)"
+        )
         String phoneNumber,
 
         LocalDate dateOfBirth,
