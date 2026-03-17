@@ -252,7 +252,7 @@ public class TenantAdminService {
         if (request.permissions() != null && !request.permissions().isEmpty()) {
             for (String permission : request.permissions()) {
                 if (!RolePermissionConstants.isGrantable(permission)) {
-                    throw new RuntimeException("Permission '" + permission + "' không thể được cấp");
+                    throw new IllegalArgumentException("Permission '" + permission + "' không thể được cấp");
                 }
             }
         }
@@ -687,7 +687,7 @@ public class TenantAdminService {
         // Validate all permissions are grantable
         for (String permission : permissions) {
             if (!RolePermissionConstants.isGrantable(permission)) {
-                throw new RuntimeException("Permission '" + permission + "' không thể được cấp");
+                throw new IllegalArgumentException("Permission '" + permission + "' không thể được cấp");
             }
         }
         
