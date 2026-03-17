@@ -4,6 +4,7 @@ import jakarta.validation.constraints.Email;
 import jakarta.validation.constraints.Min;
 import jakarta.validation.constraints.NotBlank;
 import jakarta.validation.constraints.NotNull;
+import jakarta.validation.constraints.Pattern;
 import jakarta.validation.constraints.Size;
 
 import java.time.LocalDate;
@@ -17,7 +18,10 @@ public record CreateUserRequest(
         @Email(message = "Contact email không hợp lệ")
         String contactEmail,
 
-        @Size(max = 10, message = "Số điện thoại không được quá 10 ký tự")
+        @Pattern(
+            regexp = "^(0\\d{9}|\\+84\\d{9})$",
+            message = "Số điện thoại không hợp lệ. Chỉ chấp nhận định dạng 0xxxxxxxxx hoặc +84xxxxxxxxx (9 chữ số sau +84)"
+        )
         String phoneNumber,
 
         LocalDate dateOfBirth,
