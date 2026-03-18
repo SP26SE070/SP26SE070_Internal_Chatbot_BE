@@ -102,11 +102,26 @@ public class PaymentController {
             @ApiResponse(responseCode = "401", description = "Unauthorized")
         }
     )
-    public ResponseEntity<Map<String, Object>> getPaymentStatus(@PathVariable UUID paymentId) {
-        log.info("Checking payment status for ID: {}", paymentId);
+    public ResponseEntity<Map<String, Object>> getPaymentStatus(
+            @PathVariable UUID paymentId,
+            @AuthenticationPrincipal UserPrincipal userPrincipal) {
+        log.info("Checking payment status for ID: {} by tenant: {}",
+            paymentId, userPrincipal.getTenantId());
 
         try {
             PaymentTransaction payment = sePayService.getPaymentById(paymentId);
+
+            // Ownership check — TENANT_ADMIN can only view their own payments
+            // SUPER_ADMIN can view all payments
+            boolean isSuperAdmin = userPrincipal.getAuthorities().stream()
+                .anyMatch(a -> a.getAuthority().equals("ROLE_SUPER_ADMIN"));
+
+            if (!isSuperAdmin &&
+                !payment.getTenantId().equals(userPrincipal.getTenantId())) {
+                log.warn("Tenant {} attempted to access payment {} of tenant {}",
+                    userPrincipal.getTenantId(), paymentId, payment.getTenantId());
+                return ResponseEntity.status(403).build();
+            }
 
             Map<String, Object> response = new HashMap<>();
             response.put("payment_id", payment.getId());
