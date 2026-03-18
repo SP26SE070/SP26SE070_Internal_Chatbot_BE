@@ -40,7 +40,7 @@ public class SubscriptionController {
      */
     @PostMapping("/api/v1/subscriptions/select-plan")
     @PreAuthorize("hasRole('TENANT_ADMIN')")
-    @Tag(name = "15. 💳 Tenant Admin - Subscription Plans", description = "Quản lý gói subscription (TENANT_ADMIN)")
+    @Tag(name = "16. 💳 Tenant Admin - Subscription Plans", description = "Quản lý gói subscription (TENANT_ADMIN)")
     @Operation(
         summary = "💳 Select Subscription Plan",
         description = """
@@ -117,7 +117,7 @@ public class SubscriptionController {
      */
     @GetMapping("/api/v1/subscriptions/current")
     @PreAuthorize("hasRole('TENANT_ADMIN')")
-    @Tag(name = "15. 💳 Tenant Admin - Subscription Plans", description = "Quản lý gói subscription (TENANT_ADMIN)")
+    @Tag(name = "16. 💳 Tenant Admin - Subscription Plans", description = "Quản lý gói subscription (TENANT_ADMIN)")
     @Operation(summary = "📋 Get Current Subscription")
     public ResponseEntity<Map<String, Object>> getCurrentSubscription(@AuthenticationPrincipal UserPrincipal userPrincipal) {
         try {
@@ -151,7 +151,7 @@ public class SubscriptionController {
      */
     @PutMapping("/api/v1/subscriptions/cancel")
     @PreAuthorize("hasRole('TENANT_ADMIN')")
-    @Tag(name = "15. 💳 Tenant Admin - Subscription Plans", description = "Quản lý gói subscription (TENANT_ADMIN)")
+    @Tag(name = "16. 💳 Tenant Admin - Subscription Plans", description = "Quản lý gói subscription (TENANT_ADMIN)")
     @Operation(summary = "❌ Cancel Subscription")
     public ResponseEntity<Map<String, Object>> cancelSubscription(
         @Valid @RequestBody CancelSubscriptionRequest request,
@@ -177,7 +177,7 @@ public class SubscriptionController {
      */
     @PutMapping("/api/v1/subscriptions/auto-renew")
     @PreAuthorize("hasRole('TENANT_ADMIN')")
-    @Tag(name = "15. 💳 Tenant Admin - Subscription Plans", description = "Quản lý gói subscription (TENANT_ADMIN)")
+    @Tag(name = "16. 💳 Tenant Admin - Subscription Plans", description = "Quản lý gói subscription (TENANT_ADMIN)")
     @Operation(summary = "🔄 Toggle Auto-Renewal")
     public ResponseEntity<Map<String, Object>> toggleAutoRenew(
         @RequestParam boolean autoRenew,

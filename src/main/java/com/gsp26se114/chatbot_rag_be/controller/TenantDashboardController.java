@@ -21,7 +21,7 @@ import java.util.UUID;
 @RestController
 @RequestMapping("/api/v1/tenant-admin/dashboard")
 @RequiredArgsConstructor
-@Tag(name = "14. 📊 Tenant Admin - Dashboard & Analytics", 
+@Tag(name = "15. 📊 Tenant Admin - Dashboard & Analytics", 
      description = "Dashboard và thống kê của tenant (token, LLM request, documents) - TENANT_ADMIN")
 @SecurityRequirement(name = "bearerAuth")
 @PreAuthorize("hasRole('TENANT_ADMIN')")

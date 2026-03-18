@@ -16,7 +16,7 @@ import org.springframework.web.bind.annotation.*;
 @RestController
 @RequestMapping("/api/v1/tenant-subscription")
 @RequiredArgsConstructor
-@Tag(name = "10. 💳 Tenant Admin - Subscription", description = "Xem và quản lý subscription (TENANT_ADMIN)")
+@Tag(name = "11. 💳 Tenant Admin - Subscription", description = "Xem và quản lý subscription (TENANT_ADMIN)")
 @SecurityRequirement(name = "bearerAuth")
 @PreAuthorize("hasRole('TENANT_ADMIN')")
 public class TenantSubscriptionController {

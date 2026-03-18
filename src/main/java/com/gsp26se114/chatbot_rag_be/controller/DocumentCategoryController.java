@@ -40,7 +40,7 @@ import java.util.stream.Collectors;
 @RequestMapping("/api/v1/knowledge/categories")
 @RequiredArgsConstructor
 @Slf4j
-@Tag(name = "18. 🗂️ Document Categories", description = "Quản lý phân loại tài liệu theo cấu trúc cây")
+@Tag(name = "19. 🗂️ Document Categories", description = "Quản lý phân loại tài liệu theo cấu trúc cây")
 public class DocumentCategoryController {
 
     private final DocumentCategoryRepository categoryRepository;

@@ -25,7 +25,7 @@ import java.util.UUID;
 @RestController
 @RequestMapping("/api/v1/tenant-admin")
 @RequiredArgsConstructor
-@Tag(name = "11. 👥 Tenant Admin - User Management", description = "Quản lý users trong tenant (TENANT_ADMIN)")
+@Tag(name = "12. 👥 Tenant Admin - User Management", description = "Quản lý users trong tenant (TENANT_ADMIN)")
 @SecurityRequirement(name = "bearerAuth")
 public class TenantAdminController {
     

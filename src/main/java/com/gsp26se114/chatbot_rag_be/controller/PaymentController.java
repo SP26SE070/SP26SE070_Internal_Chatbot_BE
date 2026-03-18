@@ -32,7 +32,7 @@ import java.util.stream.Collectors;
 @RestController
 @RequestMapping("/api/v1/payment")
 @RequiredArgsConstructor
-@Tag(name = "16. 💳 Payment Management", description = "Quản lý thanh toán và giao dịch")
+@Tag(name = "17. 💳 Payment Management", description = "Quản lý thanh toán và giao dịch")
 public class PaymentController {
 
     private final SePayService sePayService;

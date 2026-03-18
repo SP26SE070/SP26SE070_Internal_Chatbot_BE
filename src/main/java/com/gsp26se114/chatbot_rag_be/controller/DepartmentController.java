@@ -24,7 +24,7 @@ import java.util.List;
 @RestController
 @RequestMapping("/api/v1/tenant-admin/departments")
 @RequiredArgsConstructor
-@Tag(name = "12. 🏢 Tenant Admin - Department Management", description = "Quản lý phòng ban trong tenant (TENANT_ADMIN)")
+@Tag(name = "13. 🏢 Tenant Admin - Department Management", description = "Quản lý phòng ban trong tenant (TENANT_ADMIN)")
 @SecurityRequirement(name = "bearerAuth")
 @PreAuthorize("hasRole('TENANT_ADMIN')")
 public class DepartmentController {

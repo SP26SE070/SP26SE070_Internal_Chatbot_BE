@@ -42,6 +42,27 @@ public interface PaymentTransactionRepository extends JpaRepository<PaymentTrans
     List<PaymentTransaction> findByStatus(PaymentStatus status);
 
     /**
+     * Find all transactions ordered by created date (newest first) - for Staff
+     */
+    List<PaymentTransaction> findAllByOrderByCreatedAtDesc();
+
+    /**
+     * Find by tenant and status, ordered by created date - for Staff filter
+     */
+    List<PaymentTransaction> findByTenantIdAndStatusOrderByCreatedAtDesc(UUID tenantId, PaymentStatus status);
+
+    /**
+     * Find by status ordered by created date - for Staff filter
+     */
+    List<PaymentTransaction> findByStatusOrderByCreatedAtDesc(PaymentStatus status);
+
+    /**
+     * Find all with subscription fetched (for Staff list - avoid N+1)
+     */
+    @Query("SELECT pt FROM PaymentTransaction pt LEFT JOIN FETCH pt.subscription ORDER BY pt.createdAt DESC")
+    List<PaymentTransaction> findAllForStaffOrderByCreatedAtDesc();
+
+    /**
      * Find pending payments that have expired
      */
     @Query("SELECT pt FROM PaymentTransaction pt WHERE pt.status = 'PENDING' AND pt.expiresAt < :now")

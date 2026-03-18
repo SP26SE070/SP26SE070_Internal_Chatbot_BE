@@ -27,7 +27,7 @@ import java.util.UUID;
 @RequestMapping("/api/v1/knowledge/tags")
 @RequiredArgsConstructor
 @Slf4j
-@Tag(name = "19. 🏷️ Document Tags", description = "Quản lý bộ tag chuẩn cho tài liệu")
+@Tag(name = "20. 🏷️ Document Tags", description = "Quản lý bộ tag chuẩn cho tài liệu")
 public class DocumentTagController {
 
     private final DocumentTagRepository documentTagRepository;
