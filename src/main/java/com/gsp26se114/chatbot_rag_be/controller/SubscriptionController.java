@@ -5,8 +5,10 @@ import com.gsp26se114.chatbot_rag_be.entity.Subscription;
 import com.gsp26se114.chatbot_rag_be.entity.SubscriptionTier;
 import com.gsp26se114.chatbot_rag_be.payload.request.CancelSubscriptionRequest;
 import com.gsp26se114.chatbot_rag_be.payload.request.SelectPlanRequest;
+import com.gsp26se114.chatbot_rag_be.payload.response.SubscriptionPlanResponse;
 import com.gsp26se114.chatbot_rag_be.payload.response.SubscriptionResponse;
 import com.gsp26se114.chatbot_rag_be.security.service.UserPrincipal;
+import com.gsp26se114.chatbot_rag_be.service.SubscriptionPlanService;
 import com.gsp26se114.chatbot_rag_be.service.SubscriptionService;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.security.SecurityRequirement;
@@ -20,6 +22,7 @@ import org.springframework.security.core.annotation.AuthenticationPrincipal;
 import org.springframework.web.bind.annotation.*;
 
 import java.util.HashMap;
+import java.util.List;
 import java.util.Map;
 
 @Slf4j
@@ -27,7 +30,8 @@ import java.util.Map;
 @RequiredArgsConstructor
 @SecurityRequirement(name = "bearerAuth")
 public class SubscriptionController {
-    
+
+    private final SubscriptionPlanService subscriptionPlanService;
     private final SubscriptionService subscriptionService;
     
     // ==================== SUPER ADMIN APIs MOVED TO AdminSubscriptionController ====================
@@ -196,7 +200,19 @@ public class SubscriptionController {
             return ResponseEntity.badRequest().body(Map.of("error", e.getMessage()));
         }
     }
-    
+
+    /**
+     * Get available subscription plans (All authenticated users)
+     */
+    @GetMapping("/api/v1/subscriptions/plans")
+    @Tag(name = "15. 💳 Tenant Admin - Subscription Plans", description = "Quản lý gói subscription (TENANT_ADMIN)")
+    @Operation(summary = "📋 Get Available Plans", description = "Lấy danh sách các gói subscription khả dụng")
+    public ResponseEntity<List<SubscriptionPlanResponse>> getAvailablePlans() {
+        log.info("Fetching available subscription plans");
+        List<SubscriptionPlanResponse> plans = subscriptionPlanService.getActivePlans();
+        return ResponseEntity.ok(plans);
+    }
+
     /**
      * Helper: Map entity to response
      */
