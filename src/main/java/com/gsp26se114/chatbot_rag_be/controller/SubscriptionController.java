@@ -3,10 +3,12 @@ package com.gsp26se114.chatbot_rag_be.controller;
 import com.gsp26se114.chatbot_rag_be.entity.PaymentTransaction;
 import com.gsp26se114.chatbot_rag_be.entity.Subscription;
 import com.gsp26se114.chatbot_rag_be.entity.SubscriptionTier;
+import com.gsp26se114.chatbot_rag_be.entity.Tenant;
 import com.gsp26se114.chatbot_rag_be.payload.request.CancelSubscriptionRequest;
 import com.gsp26se114.chatbot_rag_be.payload.request.SelectPlanRequest;
 import com.gsp26se114.chatbot_rag_be.payload.response.SubscriptionPlanResponse;
 import com.gsp26se114.chatbot_rag_be.payload.response.SubscriptionResponse;
+import com.gsp26se114.chatbot_rag_be.repository.TenantRepository;
 import com.gsp26se114.chatbot_rag_be.security.service.UserPrincipal;
 import com.gsp26se114.chatbot_rag_be.service.SubscriptionPlanService;
 import com.gsp26se114.chatbot_rag_be.service.SubscriptionService;
@@ -33,6 +35,7 @@ public class SubscriptionController {
 
     private final SubscriptionPlanService subscriptionPlanService;
     private final SubscriptionService subscriptionService;
+    private final TenantRepository tenantRepository;
     
     // ==================== SUPER ADMIN APIs MOVED TO AdminSubscriptionController ====================
     // ✅ All /api/v1/admin/subscriptions/* endpoints moved to AdminSubscriptionController (Tag 05)
@@ -205,11 +208,26 @@ public class SubscriptionController {
      * Get available subscription plans (All authenticated users)
      */
     @GetMapping("/api/v1/subscriptions/plans")
-    @Tag(name = "15. 💳 Tenant Admin - Subscription Plans", description = "Quản lý gói subscription (TENANT_ADMIN)")
-    @Operation(summary = "📋 Get Available Plans", description = "Lấy danh sách các gói subscription khả dụng")
-    public ResponseEntity<List<SubscriptionPlanResponse>> getAvailablePlans() {
-        log.info("Fetching available subscription plans");
+    @PreAuthorize("hasRole('TENANT_ADMIN')")
+    @Tag(name = "16. 💳 Tenant Admin - Subscription Plans", description = "Quản lý gói subscription (TENANT_ADMIN)")
+    @Operation(summary = "📋 Get Available Plans", description = "Lấy danh sách các gói subscription khả dụng (isActive = true). Tenant đã từng dùng trial (trialUsed = true) sẽ không thấy plan TRIAL nữa.")
+    public ResponseEntity<List<SubscriptionPlanResponse>> getAvailablePlans(
+            @AuthenticationPrincipal UserPrincipal userPrincipal) {
+        log.info("Fetching available subscription plans for tenant: {}", userPrincipal.getTenantId());
+
         List<SubscriptionPlanResponse> plans = subscriptionPlanService.getActivePlans();
+
+        Tenant tenant = tenantRepository.findById(userPrincipal.getTenantId())
+                .orElseThrow(() -> new RuntimeException("Tenant không tồn tại: " + userPrincipal.getTenantId()));
+
+        // Business rule: mỗi tenant chỉ trial 1 lần trong đời.
+        // Nếu đã từng dùng trial (trialUsed=true), ẩn TRIAL plan vĩnh viễn.
+        if (Boolean.TRUE.equals(tenant.getTrialUsed())) {
+            plans = plans.stream()
+                    .filter(p -> !"TRIAL".equalsIgnoreCase(p.getCode()))
+                    .toList();
+        }
+
         return ResponseEntity.ok(plans);
     }
 

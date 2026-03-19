@@ -1,5 +1,6 @@
 package com.gsp26se114.chatbot_rag_be.controller;
 
+import com.gsp26se114.chatbot_rag_be.entity.Tenant;
 import com.gsp26se114.chatbot_rag_be.repository.*;
 import com.gsp26se114.chatbot_rag_be.security.service.UserPrincipal;
 import io.swagger.v3.oas.annotations.Operation;
@@ -31,6 +32,7 @@ public class TenantDashboardController {
     private final DocumentRepository documentRepository;
     private final DocumentChunkRepository documentChunkRepository;
     private final ChatMessageRepository chatMessageRepository;
+    private final TenantRepository tenantRepository;
 
     @GetMapping
     @Operation(summary = "Dashboard tổng quan của tenant", 
@@ -69,6 +71,36 @@ public class TenantDashboardController {
         dashboard.put("llmUsage", llmStats);
         
         return ResponseEntity.ok(dashboard);
+    }
+
+    @GetMapping("/tenant")
+    @Operation(summary = "Xem thông tin tenant", description = "TENANT_ADMIN xem thông tin tổ chức (tenant) của mình")
+    public ResponseEntity<Map<String, Object>> getTenantInfo(@AuthenticationPrincipal UserPrincipal userPrincipal) {
+        Tenant tenant = tenantRepository.findById(userPrincipal.getTenantId())
+                .orElseThrow(() -> new RuntimeException("Tenant not found: " + userPrincipal.getTenantId()));
+
+        Map<String, Object> data = new HashMap<>();
+        data.put("tenant_id", tenant.getId());
+        data.put("name", tenant.getName());
+        data.put("address", tenant.getAddress());
+        data.put("website", tenant.getWebsite());
+        data.put("company_size", tenant.getCompanySize());
+        data.put("contact_email", tenant.getContactEmail());
+        data.put("representative_name", tenant.getRepresentativeName());
+        data.put("representative_position", tenant.getRepresentativePosition());
+        data.put("representative_phone", tenant.getRepresentativePhone());
+        data.put("request_message", tenant.getRequestMessage());
+        data.put("requested_at", tenant.getRequestedAt());
+        data.put("status", tenant.getStatus() != null ? tenant.getStatus().name() : null);
+        data.put("reviewed_by", tenant.getReviewedBy());
+        data.put("reviewed_at", tenant.getReviewedAt());
+        data.put("rejection_reason", tenant.getRejectionReason());
+        data.put("subscription_id", tenant.getSubscriptionId());
+        data.put("is_trial", tenant.getIsTrial());
+        data.put("trial_used", tenant.getTrialUsed());
+        data.put("created_at", tenant.getCreatedAt());
+        data.put("updated_at", tenant.getUpdatedAt());
+        return ResponseEntity.ok(data);
     }
 
     @GetMapping("/documents")

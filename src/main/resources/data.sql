@@ -993,6 +993,28 @@ UPDATE tenants
 SET subscription_id = 'b0000000-0000-0000-0000-000000000001'
 WHERE tenant_id = '550e8400-e29b-41d4-a716-446655440000';
 
+-- Đồng bộ trạng thái trial ở tenant theo lịch sử/thực trạng subscription
+-- Rule: mỗi tenant chỉ được trial 1 lần trong đời
+-- 1) Đã từng có subscription trial -> trial_used = TRUE
+UPDATE tenants t
+SET trial_used = TRUE
+WHERE EXISTS (
+    SELECT 1
+    FROM subscriptions s
+    WHERE s.tenant_id = t.tenant_id
+      AND s.is_trial = TRUE
+);
+
+-- 2) is_trial phản ánh trạng thái hiện tại: chỉ TRUE khi có subscription ACTIVE và is_trial = TRUE
+UPDATE tenants t
+SET is_trial = EXISTS (
+    SELECT 1
+    FROM subscriptions s
+    WHERE s.tenant_id = t.tenant_id
+      AND s.status = 'ACTIVE'
+      AND s.is_trial = TRUE
+);
+
 -------------------------------------------------------
 -- 8. SEED DATA: DOCUMENT CATEGORIES (FPT Software)
 -- Tenant: 550e8400-e29b-41d4-a716-446655440000
