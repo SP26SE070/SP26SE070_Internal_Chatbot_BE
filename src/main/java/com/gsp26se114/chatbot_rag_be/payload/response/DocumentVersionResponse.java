@@ -22,4 +22,7 @@ public class DocumentVersionResponse {
 
     /** Ngày tháng phiên bản này được lưu (= ngày upload version tiếp theo) */
     private LocalDateTime createdAt;
+
+    /** Phiên bản đang được chọn để RAG truy vấn */
+    private Boolean activeForRag;
 }

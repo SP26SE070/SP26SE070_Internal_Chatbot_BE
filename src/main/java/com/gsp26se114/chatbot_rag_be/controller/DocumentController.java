@@ -347,7 +347,11 @@ public class DocumentController {
                     .createdBy(userDetails.getId())
                     .createdAt(LocalDateTime.now())
                     .build();
-                documentVersionRepository.save(initialVersion);
+                initialVersion = documentVersionRepository.save(initialVersion);
+
+            // By default, first upload version is active for RAG
+            document.setActiveVersionId(initialVersion.getId());
+            documentRepository.save(document);
 
             // Trigger async processing
             documentProcessingService.processDocumentAsync(document.getId());
@@ -804,7 +808,11 @@ public class DocumentController {
                     .createdBy(userDetails.getId())
                     .createdAt(LocalDateTime.now())
                     .build();
-                documentVersionRepository.save(newVersion);
+                newVersion = documentVersionRepository.save(newVersion);
+
+            // Default behavior: latest uploaded version becomes active for RAG
+            doc.setActiveVersionId(newVersion.getId());
+            documentRepository.save(doc);
 
                 // --- 5. Xóa chunks cũ, re-embed ---
             documentChunkRepository.deleteByDocumentId(id);
@@ -863,10 +871,94 @@ public class DocumentController {
                         .versionNumber(v.getVersionNumber())
                         .versionNote(v.getVersionNote())
                         .createdAt(v.getCreatedAt())
+                        .activeForRag(v.getId().equals(doc.getActiveVersionId()))
                         .build())
                 .toList();
 
         return ResponseEntity.ok(history);
+    }
+
+    @GetMapping("/{id}/rag-version")
+    @PreAuthorize("hasAuthority('DOCUMENT_READ')")
+    @SecurityRequirement(name = "bearerAuth")
+    @Operation(summary = "Xem version đang active cho RAG", description = "Trả về version hiện tại mà chatbot đang dùng để truy vấn tài liệu")
+    public ResponseEntity<?> getActiveRagVersion(
+            @PathVariable UUID id,
+            @AuthenticationPrincipal UserPrincipal userDetails
+    ) {
+        DocumentEntity doc = documentRepository.findById(id)
+                .filter(d -> d.getTenantId().equals(userDetails.getTenantId()) && Boolean.TRUE.equals(d.getIsActive()))
+                .orElse(null);
+        if (doc == null || !canReadDocument(userDetails, doc)) {
+            return ResponseEntity.notFound().build();
+        }
+        if (doc.getActiveVersionId() == null) {
+            return ResponseEntity.ok(java.util.Map.of(
+                    "document_id", doc.getId(),
+                    "active_version_id", null
+            ));
+        }
+
+        DocumentVersion active = documentVersionRepository
+                .findByIdAndDocumentIdAndTenantId(doc.getActiveVersionId(), doc.getId(), userDetails.getTenantId())
+                .orElse(null);
+        if (active == null) {
+            return ResponseEntity.ok(java.util.Map.of(
+                    "document_id", doc.getId(),
+                    "active_version_id", doc.getActiveVersionId()
+            ));
+        }
+
+        return ResponseEntity.ok(java.util.Map.of(
+                "document_id", doc.getId(),
+                "active_version_id", active.getId(),
+                "version_number", active.getVersionNumber(),
+                "version_note", active.getVersionNote(),
+                "created_at", active.getCreatedAt()
+        ));
+    }
+
+    @PutMapping("/{id}/rag-version/{versionId}")
+    @PreAuthorize("hasAuthority('DOCUMENT_WRITE')")
+    @SecurityRequirement(name = "bearerAuth")
+    @Transactional
+    @Operation(summary = "Chọn version cho RAG", description = "Đổi version active để chatbot chỉ truy vấn theo version được chọn")
+    public ResponseEntity<?> setActiveRagVersion(
+            @PathVariable UUID id,
+            @PathVariable UUID versionId,
+            @AuthenticationPrincipal UserPrincipal userDetails
+    ) {
+        DocumentEntity doc = documentRepository.findById(id)
+                .orElseThrow(() -> new RuntimeException("Không tìm thấy tài liệu"));
+
+        if (!doc.getTenantId().equals(userDetails.getTenantId())) {
+            return ResponseEntity.status(403).body("Bạn không có quyền cập nhật tài liệu này");
+        }
+        if (!canManageDocument(userDetails, doc)) {
+            return ResponseEntity.status(403).body("Bạn chỉ có thể đổi RAG version cho tài liệu do chính mình upload");
+        }
+        if (!Boolean.TRUE.equals(doc.getIsActive())) {
+            return ResponseEntity.badRequest().body("Tài liệu đã bị xóa mềm, không thể đổi RAG version");
+        }
+
+        DocumentVersion version = documentVersionRepository
+                .findByIdAndDocumentIdAndTenantId(versionId, id, userDetails.getTenantId())
+                .orElse(null);
+        if (version == null) {
+            return ResponseEntity.badRequest().body("Version không tồn tại hoặc không thuộc tài liệu này");
+        }
+
+        doc.setActiveVersionId(version.getId());
+        doc.setUpdatedBy(userDetails.getId());
+        doc.setUpdatedAt(LocalDateTime.now());
+        documentRepository.save(doc);
+
+        return ResponseEntity.ok(java.util.Map.of(
+                "message", "Đã đổi version active cho RAG",
+                "document_id", doc.getId(),
+                "active_version_id", version.getId(),
+                "version_number", version.getVersionNumber()
+        ));
     }
 
     @GetMapping("/{id}/content")

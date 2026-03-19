@@ -33,6 +33,9 @@ public class DocumentChunkEntity {
     @Column(name = "document_id", nullable = false)
     private UUID documentId;
 
+    @Column(name = "version_id")
+    private UUID versionId;
+
     @Column(name = "tenant_id", nullable = false)
     private UUID tenantId;
 

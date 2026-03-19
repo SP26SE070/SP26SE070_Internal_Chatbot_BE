@@ -134,6 +134,7 @@ public class DocumentProcessingService {
                 DocumentChunkEntity chunk = DocumentChunkEntity.builder()
                         .id(UUID.randomUUID())
                         .documentId(document.getId())
+                        .versionId(document.getActiveVersionId())
                         .tenantId(document.getTenantId())
                         .chunkIndex(i)
                         .content(chunkText)
@@ -163,6 +164,7 @@ public class DocumentProcessingService {
                             gson.toJson(c.getAccessibleRoles()),         // Convert List to JSON
                             c.getCategoryId(),
                             gson.toJson(c.getTagIds()),
+                            c.getVersionId(),
                             c.getOwnerDepartmentId(), c.getCreatedAt()
                         );
                     }
@@ -183,6 +185,7 @@ public class DocumentProcessingService {
                         gson.toJson(c.getAccessibleRoles()),         // Convert List to JSON
                         c.getCategoryId(),
                         gson.toJson(c.getTagIds()),
+                        c.getVersionId(),
                         c.getOwnerDepartmentId(), c.getCreatedAt()
                     );
                 }

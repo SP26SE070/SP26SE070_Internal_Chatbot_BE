@@ -105,6 +105,14 @@ public class DocumentEntity {
     @Column(name = "document_title", length = 500)
     private String documentTitle;
 
+    /**
+     * Version currently active for RAG retrieval.
+     * When user uploads a new version, this points to the latest by default.
+     * Can be switched manually to rollback RAG context.
+     */
+    @Column(name = "active_version_id")
+    private UUID activeVersionId;
+
     // ========== EMBEDDING INFO ==========
     @Column(name = "embedding_status", length = 20)
     private String embeddingStatus = "PENDING"; // "PENDING", "PROCESSING", "COMPLETED", "FAILED"

@@ -13,6 +13,9 @@ public interface DocumentVersionRepository extends JpaRepository<DocumentVersion
     /** Lấy toàn bộ lịch sử version của một tài liệu, sắp xếp mới nhất trên đầu */
     List<DocumentVersion> findByDocumentIdOrderByVersionNumberDesc(UUID documentId);
 
+    /** Tìm version theo id + document + tenant để validate ownership */
+    java.util.Optional<DocumentVersion> findByIdAndDocumentIdAndTenantId(UUID id, UUID documentId, UUID tenantId);
+
     /** Đếm số version đã lưu cho một tài liệu */
     long countByDocumentId(UUID documentId);
 }

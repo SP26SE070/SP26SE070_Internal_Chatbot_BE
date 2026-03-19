@@ -176,6 +176,7 @@ CREATE TABLE IF NOT EXISTS documents (
 
     -- Display
     document_title VARCHAR(500),
+    active_version_id UUID,
     
     -- Access Control
     visibility VARCHAR(30) NOT NULL DEFAULT 'COMPANY_WIDE',
@@ -218,6 +219,7 @@ CREATE INDEX IF NOT EXISTS idx_documents_tenant_deleted_at ON documents(tenant_i
 CREATE TABLE IF NOT EXISTS document_chunks (
     document_chunk_id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
     document_id UUID NOT NULL REFERENCES documents(document_id) ON DELETE CASCADE,
+    version_id UUID,
     tenant_id UUID NOT NULL REFERENCES tenants(tenant_id),
     
     -- Chunk Info
@@ -242,6 +244,7 @@ CREATE TABLE IF NOT EXISTS document_chunks (
 
 -- Indexes for vector similarity search
 CREATE INDEX IF NOT EXISTS idx_chunks_document ON document_chunks(document_id);
+CREATE INDEX IF NOT EXISTS idx_chunks_version ON document_chunks(version_id);
 CREATE INDEX IF NOT EXISTS idx_chunks_tenant ON document_chunks(tenant_id);
 
 -- HNSW index for fast similarity search (pgvector)
@@ -1014,6 +1017,26 @@ SET is_trial = EXISTS (
       AND s.status = 'ACTIVE'
       AND s.is_trial = TRUE
 );
+
+-- Đồng bộ active version cho RAG (document-level)
+-- 1) Nếu document có version thì lấy version_number lớn nhất làm active
+UPDATE documents d
+SET active_version_id = v.version_id
+FROM (
+    SELECT DISTINCT ON (document_id) document_id, version_id
+    FROM document_versions
+    ORDER BY document_id, version_number DESC
+) v
+WHERE d.document_id = v.document_id
+  AND d.active_version_id IS NULL;
+
+-- 2) Backfill version_id cho chunks cũ: gán theo active_version_id của document
+UPDATE document_chunks c
+SET version_id = d.active_version_id
+FROM documents d
+WHERE c.document_id = d.document_id
+  AND c.version_id IS NULL
+  AND d.active_version_id IS NOT NULL;
 
 -------------------------------------------------------
 -- 8. SEED DATA: DOCUMENT CATEGORIES (FPT Software)
