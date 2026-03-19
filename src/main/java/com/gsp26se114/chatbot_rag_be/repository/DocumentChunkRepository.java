@@ -82,7 +82,7 @@ public interface DocumentChunkRepository extends JpaRepository<DocumentChunkEnti
     @Modifying
     @Query(value = """
         UPDATE document_chunks
-        SET visibility = CAST(:visibility AS visibility_enum),
+        SET visibility = :visibility,
             accessible_departments = CAST(:accessibleDepartments AS jsonb),
             accessible_roles = CAST(:accessibleRoles AS jsonb)
         WHERE document_id = :documentId

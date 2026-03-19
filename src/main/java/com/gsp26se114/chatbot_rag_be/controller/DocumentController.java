@@ -5,6 +5,7 @@ import com.gsp26se114.chatbot_rag_be.entity.DocumentEntity;
 import com.gsp26se114.chatbot_rag_be.entity.DocumentTag;
 import com.gsp26se114.chatbot_rag_be.entity.DocumentVersion;
 import com.gsp26se114.chatbot_rag_be.entity.DocumentVisibility;
+import com.gsp26se114.chatbot_rag_be.entity.RoleEntity;
 import com.gsp26se114.chatbot_rag_be.payload.request.UpdateDocumentAccessRequest;
 import com.gsp26se114.chatbot_rag_be.payload.response.DeletedDocumentResponse;
 import com.gsp26se114.chatbot_rag_be.payload.response.DocumentResponse;
@@ -15,6 +16,8 @@ import com.gsp26se114.chatbot_rag_be.repository.DocumentChunkRepository;
 import com.gsp26se114.chatbot_rag_be.repository.DocumentRepository;
 import com.gsp26se114.chatbot_rag_be.repository.DocumentTagRepository;
 import com.gsp26se114.chatbot_rag_be.repository.DocumentVersionRepository;
+import com.gsp26se114.chatbot_rag_be.repository.DepartmentRepository;
+import com.gsp26se114.chatbot_rag_be.repository.RoleRepository;
 import com.gsp26se114.chatbot_rag_be.security.service.UserPrincipal;
 import com.gsp26se114.chatbot_rag_be.service.DocumentProcessingService;
 import com.gsp26se114.chatbot_rag_be.service.MinioService;
@@ -27,6 +30,9 @@ import io.swagger.v3.oas.annotations.tags.Tag;
 import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
+import org.springframework.http.ContentDisposition;
+import org.springframework.http.HttpHeaders;
+import org.springframework.http.MediaType;
 import org.springframework.http.ResponseEntity;
 import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.security.core.annotation.AuthenticationPrincipal;
@@ -40,6 +46,7 @@ import java.util.LinkedHashSet;
 import java.util.List;
 import java.util.Set;
 import java.util.UUID;
+import java.net.URLConnection;
 
 /**
  * Controller for document upload and management in Knowledge Base
@@ -57,6 +64,8 @@ public class DocumentController {
     private final DocumentChunkRepository documentChunkRepository;
     private final DocumentTagRepository documentTagRepository;
     private final DocumentVersionRepository documentVersionRepository;
+    private final DepartmentRepository departmentRepository;
+    private final RoleRepository roleRepository;
     private final DocumentProcessingService documentProcessingService;
     private final ObjectMapper objectMapper;
 
@@ -71,6 +80,71 @@ public class DocumentController {
     );
 
     private static final long MAX_FILE_SIZE = 50 * 1024 * 1024; // 50MB
+
+    private boolean isTenantAdmin(UserPrincipal userDetails) {
+        return userDetails.getAuthorities().stream()
+                .anyMatch(a -> "ROLE_TENANT_ADMIN".equals(a.getAuthority()));
+    }
+
+    private boolean canManageDocument(UserPrincipal userDetails, DocumentEntity document) {
+        if (isTenantAdmin(userDetails)) {
+            return true;
+        }
+        return document.getUploadedBy() != null && document.getUploadedBy().equals(userDetails.getId());
+    }
+
+    private boolean canReadDocument(UserPrincipal userDetails, DocumentEntity doc) {
+        if (isTenantAdmin(userDetails)) {
+            return true;
+        }
+        if (doc.getUploadedBy() != null && doc.getUploadedBy().equals(userDetails.getId())) {
+            return true;
+        }
+        if (doc.getVisibility() == DocumentVisibility.COMPANY_WIDE) {
+            return true;
+        }
+        if (doc.getVisibility() == DocumentVisibility.SPECIFIC_DEPARTMENTS) {
+            return doc.getAccessibleDepartments() != null
+                    && userDetails.getDepartmentId() != null
+                    && doc.getAccessibleDepartments().contains(userDetails.getDepartmentId());
+        }
+        if (doc.getVisibility() == DocumentVisibility.SPECIFIC_ROLES) {
+            return doc.getAccessibleRoles() != null
+                    && userDetails.getRoleId() != null
+                    && doc.getAccessibleRoles().contains(userDetails.getRoleId());
+        }
+        return false;
+    }
+
+    private String resolveContentType(String fileNameOrPath, String fallback) {
+        String guessed = URLConnection.guessContentTypeFromName(fileNameOrPath);
+        if (guessed != null && !guessed.isBlank()) {
+            return guessed;
+        }
+        if (fallback != null && !fallback.isBlank()) {
+            return fallback;
+        }
+        return MediaType.APPLICATION_OCTET_STREAM_VALUE;
+    }
+
+    private ResponseEntity<byte[]> buildFileResponse(
+            String storagePath,
+            String downloadFileName,
+            String contentType,
+            boolean inline
+    ) {
+        byte[] content = minioService.downloadDocument(storagePath);
+
+        HttpHeaders headers = new HttpHeaders();
+        headers.setContentType(MediaType.parseMediaType(resolveContentType(downloadFileName, contentType)));
+        headers.setContentLength(content.length);
+        headers.setContentDisposition(
+                ContentDisposition.builder(inline ? "inline" : "attachment")
+                        .filename(downloadFileName)
+                        .build()
+        );
+        return ResponseEntity.ok().headers(headers).body(content);
+    }
 
     /** Convert DocumentEntity → DocumentResponse (full fields). */
     private DocumentResponse toResponse(DocumentEntity doc) {
@@ -151,6 +225,8 @@ public class DocumentController {
             @RequestParam(value = "tagIds", required = false) List<UUID> tagIds,
             @Parameter(description = "Mô tả ngắn về tài liệu")
             @RequestParam(value = "description", required = false) String description,
+            @Parameter(description = "Ghi chú phiên bản đầu tiên (nếu bỏ trống sẽ mặc định là 'Initial upload')")
+            @RequestParam(value = "versionNote", required = false) String versionNote,
             @Parameter(description = "Phạm vi hiển thị: COMPANY_WIDE | SPECIFIC_DEPARTMENTS | SPECIFIC_ROLES")
             @RequestParam(value = "visibility", defaultValue = "COMPANY_WIDE") DocumentVisibility visibility,
             @Parameter(description = "Danh sách department ID được xem (bắt buộc khi visibility = SPECIFIC_DEPARTMENTS)")
@@ -267,7 +343,7 @@ public class DocumentController {
                     .tenantId(document.getTenantId())
                     .versionNumber(1)
                     .storagePath(document.getStoragePath())
-                    .versionNote("Initial upload")
+                    .versionNote((versionNote != null && !versionNote.isBlank()) ? versionNote : "Initial upload")
                     .createdBy(userDetails.getId())
                     .createdAt(LocalDateTime.now())
                     .build();
@@ -308,19 +384,7 @@ public class DocumentController {
         return documentRepository.findById(id)
                 .filter(doc -> doc.getTenantId().equals(userDetails.getTenantId()))
                 .filter(DocumentEntity::getIsActive)
-                .filter(doc -> {
-                    // Check access control
-                    if (doc.getVisibility() == DocumentVisibility.COMPANY_WIDE) {
-                        return true;
-                    } else if (doc.getVisibility() == DocumentVisibility.SPECIFIC_DEPARTMENTS) {
-                        return doc.getAccessibleDepartments() != null && 
-                               doc.getAccessibleDepartments().contains(userDetails.getDepartmentId());
-                    } else if (doc.getVisibility() == DocumentVisibility.SPECIFIC_ROLES) {
-                        return doc.getAccessibleRoles() != null && 
-                               doc.getAccessibleRoles().contains(userDetails.getRoleId());
-                    }
-                    return false;
-                })
+                .filter(doc -> canReadDocument(userDetails, doc))
                 .map(doc -> {
                     return ResponseEntity.ok(toResponse(doc));
                 })
@@ -344,13 +408,20 @@ public class DocumentController {
     public ResponseEntity<List<DocumentResponse>> listDocuments(
             @AuthenticationPrincipal UserPrincipal userDetails
     ) {
-        // Use access control query - only return documents user can access
-        List<DocumentEntity> documents = documentRepository.findAccessibleDocuments(
-                userDetails.getTenantId(),
-                userDetails.getId(),
-                userDetails.getDepartmentId(),
-                userDetails.getRoleId()
-        );
+        List<DocumentEntity> documents;
+        if (isTenantAdmin(userDetails)) {
+            documents = documentRepository.findByTenantIdAndIsActiveOrderByUploadedAtDesc(
+                    userDetails.getTenantId(), true
+            );
+        } else {
+            // Use access control query - only return documents user can access
+            documents = documentRepository.findAccessibleDocuments(
+                    userDetails.getTenantId(),
+                    userDetails.getId(),
+                    userDetails.getDepartmentId(),
+                    userDetails.getRoleId()
+            );
+        }
 
         List<DocumentResponse> responses = documents.stream()
                 .map(this::toResponse)
@@ -433,12 +504,37 @@ public class DocumentController {
                     "Khi chọn SPECIFIC_DEPARTMENTS, phải cung cấp danh sách accessibleDepartments"
                 );
             }
+            // Validate departments exist, active, and belong to current tenant
+            var allowedDepartmentIds = departmentRepository.findByTenantIdAndIsActive(userDetails.getTenantId(), true)
+                    .stream()
+                    .map(d -> d.getId())
+                    .collect(java.util.stream.Collectors.toSet());
+            boolean invalid = request.accessibleDepartments().stream()
+                    .anyMatch(deptId -> deptId == null || !allowedDepartmentIds.contains(deptId));
+            if (invalid) {
+                return ResponseEntity.badRequest().body(
+                    "accessibleDepartments chứa phòng ban không tồn tại, không active hoặc không thuộc tenant này"
+                );
+            }
         }
         
         if (request.visibility() == DocumentVisibility.SPECIFIC_ROLES) {
             if (request.accessibleRoles() == null || request.accessibleRoles().isEmpty()) {
                 return ResponseEntity.badRequest().body(
                     "Khi chọn SPECIFIC_ROLES, phải cung cấp danh sách accessibleRoles"
+                );
+            }
+            // Validate roles exist, active, and available for current tenant (fixed + custom tenant roles)
+            var allowedRoleIds = roleRepository.findAvailableRolesForTenant(userDetails.getTenantId())
+                    .stream()
+                    .filter(r -> Boolean.TRUE.equals(r.getIsActive()))
+                    .map(RoleEntity::getId)
+                    .collect(java.util.stream.Collectors.toSet());
+            boolean invalid = request.accessibleRoles().stream()
+                    .anyMatch(roleId -> roleId == null || !allowedRoleIds.contains(roleId));
+            if (invalid) {
+                return ResponseEntity.badRequest().body(
+                    "accessibleRoles chứa role không hợp lệ hoặc không thuộc phạm vi tenant hiện tại"
                 );
             }
         }
@@ -449,6 +545,10 @@ public class DocumentController {
 
         if (!document.getTenantId().equals(userDetails.getTenantId())) {
             return ResponseEntity.status(403).body("Bạn không có quyền cập nhật tài liệu này");
+        }
+
+        if (!canManageDocument(userDetails, document)) {
+            return ResponseEntity.status(403).body("Bạn chỉ có thể sửa tài liệu do chính mình upload");
         }
 
         if (!Boolean.TRUE.equals(document.getIsActive())) {
@@ -533,6 +633,10 @@ public class DocumentController {
             return ResponseEntity.status(403).body("Bạn không có quyền xóa tài liệu này");
         }
 
+        if (!canManageDocument(userDetails, document)) {
+            return ResponseEntity.status(403).body("Bạn chỉ có thể xóa tài liệu do chính mình upload");
+        }
+
         if (!Boolean.TRUE.equals(document.getIsActive())) {
             return ResponseEntity.ok("Tài liệu đã ở trạng thái xóa mềm trước đó");
         }
@@ -572,6 +676,10 @@ public class DocumentController {
 
         if (!document.getTenantId().equals(userDetails.getTenantId())) {
             return ResponseEntity.status(403).body("Bạn không có quyền khôi phục tài liệu này");
+        }
+
+        if (!canManageDocument(userDetails, document)) {
+            return ResponseEntity.status(403).body("Bạn chỉ có thể khôi phục tài liệu do chính mình upload");
         }
 
         if (Boolean.TRUE.equals(document.getIsActive())) {
@@ -649,6 +757,10 @@ public class DocumentController {
 
             if (!doc.getTenantId().equals(userDetails.getTenantId())) {
                 return ResponseEntity.status(403).body("Bạn không có quyền cập nhật tài liệu này");
+            }
+
+            if (!canManageDocument(userDetails, doc)) {
+                return ResponseEntity.status(403).body("Bạn chỉ có thể cập nhật phiên bản cho tài liệu do chính mình upload");
             }
 
             if (!Boolean.TRUE.equals(doc.getIsActive())) {
@@ -735,11 +847,12 @@ public class DocumentController {
             @Parameter(description = "ID của tài liệu", required = true) @PathVariable UUID id,
             @AuthenticationPrincipal UserPrincipal userDetails
     ) {
-        // Kiểm tra quyền tenant
-        boolean belongs = documentRepository.findById(id)
-            .map(d -> d.getTenantId().equals(userDetails.getTenantId()) && Boolean.TRUE.equals(d.getIsActive()))
-                .orElse(false);
-        if (!belongs) return ResponseEntity.notFound().build();
+        DocumentEntity doc = documentRepository.findById(id)
+                .filter(d -> d.getTenantId().equals(userDetails.getTenantId()) && Boolean.TRUE.equals(d.getIsActive()))
+                .orElse(null);
+        if (doc == null || !canReadDocument(userDetails, doc)) {
+            return ResponseEntity.notFound().build();
+        }
 
         List<DocumentVersionResponse> history = documentVersionRepository
                 .findByDocumentIdOrderByVersionNumberDesc(id)
@@ -754,6 +867,94 @@ public class DocumentController {
                 .toList();
 
         return ResponseEntity.ok(history);
+    }
+
+    @GetMapping("/{id}/content")
+    @PreAuthorize("hasAuthority('DOCUMENT_READ')")
+    @SecurityRequirement(name = "bearerAuth")
+    @Operation(summary = "Xem trực tiếp nội dung tài liệu", description = "Trả file ở chế độ inline để FE preview")
+    public ResponseEntity<?> viewDocumentContent(
+            @PathVariable UUID id,
+            @AuthenticationPrincipal UserPrincipal userDetails
+    ) {
+        DocumentEntity doc = documentRepository.findById(id)
+                .filter(d -> d.getTenantId().equals(userDetails.getTenantId()) && Boolean.TRUE.equals(d.getIsActive()))
+                .orElse(null);
+        if (doc == null || !canReadDocument(userDetails, doc)) {
+            return ResponseEntity.notFound().build();
+        }
+        return buildFileResponse(doc.getStoragePath(), doc.getOriginalFileName(), doc.getFileType(), true);
+    }
+
+    @GetMapping("/{id}/download")
+    @PreAuthorize("hasAuthority('DOCUMENT_READ')")
+    @SecurityRequirement(name = "bearerAuth")
+    @Operation(summary = "Tải tài liệu", description = "Trả file ở chế độ attachment để tải xuống")
+    public ResponseEntity<?> downloadDocument(
+            @PathVariable UUID id,
+            @AuthenticationPrincipal UserPrincipal userDetails
+    ) {
+        DocumentEntity doc = documentRepository.findById(id)
+                .filter(d -> d.getTenantId().equals(userDetails.getTenantId()) && Boolean.TRUE.equals(d.getIsActive()))
+                .orElse(null);
+        if (doc == null || !canReadDocument(userDetails, doc)) {
+            return ResponseEntity.notFound().build();
+        }
+        return buildFileResponse(doc.getStoragePath(), doc.getOriginalFileName(), doc.getFileType(), false);
+    }
+
+    @GetMapping("/{id}/versions/{versionId}/content")
+    @PreAuthorize("hasAuthority('DOCUMENT_READ')")
+    @SecurityRequirement(name = "bearerAuth")
+    @Operation(summary = "Xem trực tiếp phiên bản tài liệu", description = "Preview một phiên bản cụ thể của tài liệu")
+    public ResponseEntity<?> viewDocumentVersionContent(
+            @PathVariable UUID id,
+            @PathVariable UUID versionId,
+            @AuthenticationPrincipal UserPrincipal userDetails
+    ) {
+        DocumentEntity doc = documentRepository.findById(id)
+                .filter(d -> d.getTenantId().equals(userDetails.getTenantId()) && Boolean.TRUE.equals(d.getIsActive()))
+                .orElse(null);
+        if (doc == null || !canReadDocument(userDetails, doc)) {
+            return ResponseEntity.notFound().build();
+        }
+
+        DocumentVersion version = documentVersionRepository.findById(versionId)
+                .filter(v -> v.getDocumentId().equals(id) && v.getTenantId().equals(userDetails.getTenantId()))
+                .orElse(null);
+        if (version == null) {
+            return ResponseEntity.notFound().build();
+        }
+
+        String fileName = doc.getOriginalFileName() + ".v" + version.getVersionNumber();
+        return buildFileResponse(version.getStoragePath(), fileName, doc.getFileType(), true);
+    }
+
+    @GetMapping("/{id}/versions/{versionId}/download")
+    @PreAuthorize("hasAuthority('DOCUMENT_READ')")
+    @SecurityRequirement(name = "bearerAuth")
+    @Operation(summary = "Tải phiên bản tài liệu", description = "Download một phiên bản cụ thể của tài liệu")
+    public ResponseEntity<?> downloadDocumentVersion(
+            @PathVariable UUID id,
+            @PathVariable UUID versionId,
+            @AuthenticationPrincipal UserPrincipal userDetails
+    ) {
+        DocumentEntity doc = documentRepository.findById(id)
+                .filter(d -> d.getTenantId().equals(userDetails.getTenantId()) && Boolean.TRUE.equals(d.getIsActive()))
+                .orElse(null);
+        if (doc == null || !canReadDocument(userDetails, doc)) {
+            return ResponseEntity.notFound().build();
+        }
+
+        DocumentVersion version = documentVersionRepository.findById(versionId)
+                .filter(v -> v.getDocumentId().equals(id) && v.getTenantId().equals(userDetails.getTenantId()))
+                .orElse(null);
+        if (version == null) {
+            return ResponseEntity.notFound().build();
+        }
+
+        String fileName = doc.getOriginalFileName() + ".v" + version.getVersionNumber();
+        return buildFileResponse(version.getStoragePath(), fileName, doc.getFileType(), false);
     }
 
     private Set<DocumentTag> resolveTags(UUID tenantId, List<UUID> tagIds) {
