@@ -4,6 +4,7 @@ import com.gsp26se114.chatbot_rag_be.payload.request.CreateSubscriptionPlanReque
 import com.gsp26se114.chatbot_rag_be.payload.request.UpdateSubscriptionPlanRequest;
 import com.gsp26se114.chatbot_rag_be.payload.response.MessageResponse;
 import com.gsp26se114.chatbot_rag_be.payload.response.SubscriptionPlanResponse;
+import com.gsp26se114.chatbot_rag_be.payload.response.SubscriptionPlanTypeResponse;
 import com.gsp26se114.chatbot_rag_be.security.service.UserPrincipal;
 import com.gsp26se114.chatbot_rag_be.service.SubscriptionPlanService;
 import io.swagger.v3.oas.annotations.Operation;
@@ -54,6 +55,13 @@ public class AdminSubscriptionPlanController {
         List<SubscriptionPlanResponse> plans = planService.getActivePlans();
         return ResponseEntity.ok(plans);
     }
+
+    @GetMapping("/types")
+    @Operation(summary = "Lấy danh sách loại plan cố định",
+            description = "Trả về các code plan cố định cho dropdown FE: TRIAL, STARTER, STANDARD, ENTERPRISE")
+    public ResponseEntity<List<SubscriptionPlanTypeResponse>> getPlanTypes() {
+        return ResponseEntity.ok(planService.getPlanTypes());
+    }
     
     /**
      * Get plan by ID
@@ -76,7 +84,7 @@ public class AdminSubscriptionPlanController {
     public ResponseEntity<SubscriptionPlanResponse> createPlan(
             @Valid @RequestBody CreateSubscriptionPlanRequest request,
             @AuthenticationPrincipal UserPrincipal userPrincipal) {
-        log.info("Creating new subscription plan: {}", request.getCode());
+        log.info("Creating new subscription plan type: {}", request.getPlanType());
         SubscriptionPlanResponse plan = planService.createPlan(request, userPrincipal.getId());
         return ResponseEntity.ok(plan);
     }

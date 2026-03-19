@@ -296,6 +296,19 @@ CREATE TABLE subscription_plans (
     updated_by UUID
 );
 
+-- Enforce fixed plan types and avoid case-related duplicates
+UPDATE subscription_plans
+SET code = UPPER(code)
+WHERE code IS NOT NULL;
+
+ALTER TABLE subscription_plans
+    DROP CONSTRAINT IF EXISTS chk_subscription_plans_code_enum;
+ALTER TABLE subscription_plans
+    ADD CONSTRAINT chk_subscription_plans_code_enum
+    CHECK (code IN ('TRIAL', 'STARTER', 'STANDARD', 'ENTERPRISE'));
+CREATE UNIQUE INDEX IF NOT EXISTS uq_subscription_plans_code_upper
+    ON subscription_plans (UPPER(code));
+
 -- Tạo bảng Subscriptions (Actual tenant subscriptions, linked to a plan)
 CREATE TABLE subscriptions (
     subscription_id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),

@@ -1,5 +1,6 @@
 package com.gsp26se114.chatbot_rag_be.payload.request;
 
+import com.gsp26se114.chatbot_rag_be.entity.SubscriptionTier;
 import jakarta.validation.constraints.*;
 import lombok.AllArgsConstructor;
 import lombok.Data;
@@ -12,13 +13,11 @@ import java.math.BigDecimal;
 @AllArgsConstructor
 public class CreateSubscriptionPlanRequest {
     
-    @NotBlank(message = "Code không được để trống")
-    @Size(max = 50, message = "Code không được vượt quá 50 ký tự")
-    private String code; // TRIAL, STARTER, STANDARD, ENTERPRISE
+    @NotNull(message = "Plan type không được để trống")
+    private SubscriptionTier planType;
     
-    @NotBlank(message = "Tên plan không được để trống")
     @Size(max = 100, message = "Tên không được vượt quá 100 ký tự")
-    private String name;
+    private String name; // Optional, BE can assign default name by type
     
     @Size(max = 500, message = "Mô tả không được vượt quá 500 ký tự")
     private String description;

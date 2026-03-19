@@ -12,8 +12,10 @@ import java.util.UUID;
 public interface SubscriptionPlanRepository extends JpaRepository<SubscriptionPlan, UUID> {
     
     Optional<SubscriptionPlan> findByCode(String code);
+    Optional<SubscriptionPlan> findByCodeIgnoreCase(String code);
     
     List<SubscriptionPlan> findByIsActiveTrueOrderByDisplayOrderAsc();
     
     boolean existsByCode(String code);
+    boolean existsByCodeIgnoreCase(String code);
 }

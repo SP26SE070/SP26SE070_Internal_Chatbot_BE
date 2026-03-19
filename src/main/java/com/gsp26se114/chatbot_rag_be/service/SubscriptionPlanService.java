@@ -1,9 +1,11 @@
 package com.gsp26se114.chatbot_rag_be.service;
 
 import com.gsp26se114.chatbot_rag_be.entity.SubscriptionPlan;
+import com.gsp26se114.chatbot_rag_be.entity.SubscriptionTier;
 import com.gsp26se114.chatbot_rag_be.payload.request.CreateSubscriptionPlanRequest;
 import com.gsp26se114.chatbot_rag_be.payload.request.UpdateSubscriptionPlanRequest;
 import com.gsp26se114.chatbot_rag_be.payload.response.SubscriptionPlanResponse;
+import com.gsp26se114.chatbot_rag_be.payload.response.SubscriptionPlanTypeResponse;
 import com.gsp26se114.chatbot_rag_be.repository.SubscriptionPlanRepository;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
@@ -11,7 +13,9 @@ import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
 import java.time.LocalDateTime;
+import java.util.Arrays;
 import java.util.List;
+import java.util.Map;
 import java.util.UUID;
 import java.util.stream.Collectors;
 
@@ -21,6 +25,12 @@ import java.util.stream.Collectors;
 public class SubscriptionPlanService {
     
     private final SubscriptionPlanRepository planRepository;
+    private static final Map<SubscriptionTier, String> DEFAULT_PLAN_NAMES = Map.of(
+            SubscriptionTier.TRIAL, "Goi dung thu",
+            SubscriptionTier.STARTER, "Goi Khoi Dau",
+            SubscriptionTier.STANDARD, "Goi Tieu Chuan",
+            SubscriptionTier.ENTERPRISE, "Goi Doanh Nghiep"
+    );
     
     /**
      * Get all subscription plans (for admin)
@@ -56,8 +66,20 @@ public class SubscriptionPlanService {
      * Get plan by code
      */
     public SubscriptionPlan getPlanByCode(String code) {
-        return planRepository.findByCode(code)
+        return planRepository.findByCodeIgnoreCase(code)
                 .orElseThrow(() -> new RuntimeException("Plan not found: " + code));
+    }
+
+    /**
+     * Get available fixed plan types for frontend dropdown.
+     */
+    public List<SubscriptionPlanTypeResponse> getPlanTypes() {
+        return Arrays.stream(SubscriptionTier.values())
+                .map(tier -> SubscriptionPlanTypeResponse.builder()
+                        .code(tier.name())
+                        .defaultName(DEFAULT_PLAN_NAMES.get(tier))
+                        .build())
+                .toList();
     }
     
     /**
@@ -65,16 +87,22 @@ public class SubscriptionPlanService {
      */
     @Transactional
     public SubscriptionPlanResponse createPlan(CreateSubscriptionPlanRequest request, UUID adminId) {
-        log.info("Creating subscription plan: {}", request.getCode());
+        String normalizedCode = request.getPlanType().name();
+        log.info("Creating subscription plan with type: {}", normalizedCode);
         
         // Check duplicate code
-        if (planRepository.existsByCode(request.getCode())) {
-            throw new IllegalArgumentException("Plan code already exists: " + request.getCode());
+        if (planRepository.existsByCodeIgnoreCase(normalizedCode)) {
+            throw new IllegalArgumentException("Plan code already exists: " + normalizedCode);
         }
         
         SubscriptionPlan plan = new SubscriptionPlan();
-        plan.setCode(request.getCode().toUpperCase());
-        plan.setName(request.getName());
+        plan.setCode(normalizedCode);
+        String requestName = request.getName();
+        if (requestName == null || requestName.isBlank()) {
+            plan.setName(DEFAULT_PLAN_NAMES.get(request.getPlanType()));
+        } else {
+            plan.setName(requestName.trim());
+        }
         plan.setDescription(request.getDescription());
         
         // Pricing
