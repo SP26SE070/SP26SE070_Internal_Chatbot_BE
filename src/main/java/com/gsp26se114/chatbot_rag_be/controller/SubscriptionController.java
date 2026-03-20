@@ -125,7 +125,11 @@ public class SubscriptionController {
     @GetMapping("/api/v1/subscriptions/current")
     @PreAuthorize("hasRole('TENANT_ADMIN')")
     @Tag(name = "16. 💳 Tenant Admin - Subscription Plans", description = "Quản lý gói subscription (TENANT_ADMIN)")
-    @Operation(summary = "📋 Get Current Subscription")
+    @Operation(
+        summary = "📋 Get Current Subscription",
+        deprecated = true,
+        description = "Deprecated: Use GET /api/v1/tenant-subscription/my-subscription instead. This endpoint returns limited fields and will be removed in a future version."
+    )
     public ResponseEntity<Map<String, Object>> getCurrentSubscription(@AuthenticationPrincipal UserPrincipal userPrincipal) {
         try {
             Subscription sub = subscriptionService.getActiveSubscription(userPrincipal.getTenantId());
