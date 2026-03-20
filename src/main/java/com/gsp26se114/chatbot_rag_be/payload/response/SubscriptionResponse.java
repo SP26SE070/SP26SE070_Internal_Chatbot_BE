@@ -24,6 +24,9 @@ public class SubscriptionResponse {
     // Subscription Details
     private SubscriptionTier tier;
     private SubscriptionStatus status;
+
+    // AI Config
+    private String aiModel;
     
     // Billing Info
     private LocalDateTime startDate;
