@@ -108,6 +108,13 @@
             <artifactId>gson</artifactId>
         </dependency>
 
+        <!-- Load .env into JVM system properties before Spring starts (local dev) -->
+        <dependency>
+            <groupId>io.github.cdimascio</groupId>
+            <artifactId>dotenv-java</artifactId>
+            <version>3.0.0</version>
+        </dependency>
+
         <!-- PDF Text Extraction -->
         <dependency>
             <groupId>org.apache.pdfbox</groupId>
