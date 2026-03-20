@@ -38,7 +38,7 @@ public class EmbeddingService {
     private final Gson gson = new Gson();
 
     private static final int MAX_RETRIES = 3;
-    private static final long RETRY_DELAY_MS = 1000;
+    private static final long RETRY_DELAY_MS = 30000; // 30 seconds for rate limit reset
 
     /**
      * Tạo embedding cho một đoạn text với retry logic
@@ -58,7 +58,7 @@ public class EmbeddingService {
             try {
                 // Add small delay between retries to avoid rate limiting
                 if (retries > 0) {
-                    Thread.sleep(RETRY_DELAY_MS * retries);
+                    Thread.sleep(RETRY_DELAY_MS * retries); // 30s, 60s, 90s
                     log.info("Retrying embedding creation (attempt {}/{})", retries + 1, MAX_RETRIES);
                 }
 
