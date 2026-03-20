@@ -43,6 +43,10 @@ public class GeminiChatService {
      * @return Generated answer
      */
     public String generateAnswer(String context, String question) {
+        if (apiKey == null || apiKey.isBlank()) {
+            return "He thong chua cau hinh GEMINI_API_KEY, vui long lien he quan tri vien.";
+        }
+
         try {
             String prompt = buildPrompt(context, question);
             return callGeminiAPI(prompt);

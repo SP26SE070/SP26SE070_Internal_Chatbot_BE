@@ -47,6 +47,10 @@ public class EmbeddingService {
      * @return Vector embedding (outputDimensionality dimensions)
      */
     public float[] createEmbedding(String text) {
+        if (apiKey == null || apiKey.isBlank()) {
+            throw new RuntimeException("GEMINI_API_KEY is missing. Please configure it in environment or .env");
+        }
+
         int retries = 0;
         Exception lastException = null;
 

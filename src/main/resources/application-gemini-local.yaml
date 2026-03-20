@@ -5,7 +5,9 @@ spring:
   ai:
     google:
       genai:
-        api-key: ${GEMINI_API_KEY}
+        # Optional at startup: app can run without Gemini key.
+        # AI endpoints/features will return clear error when key is missing.
+        api-key: ${GEMINI_API_KEY:}
         chat:
           options:
             model: gemini-2.5-flash
