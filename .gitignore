@@ -37,3 +37,6 @@ build/
 .env
 .env.local
 .env.*.local
+
+### Claude Opus ###
+.claude/settings.local.json
