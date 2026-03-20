@@ -69,6 +69,7 @@ public class TenantSubscriptionController {
                 .updatedAt(s.getUpdatedAt())
                 .updatedBy(s.getUpdatedBy())
                 .notes(s.getNotes())
+                .aiModel(s.getAiModel())
                 .build();
     }
 }
