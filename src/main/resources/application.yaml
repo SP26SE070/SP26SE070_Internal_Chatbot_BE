@@ -20,6 +20,8 @@ spring:
       mail:
         smtp:
           auth: true
+          ssl:
+            trust: "*"
           starttls:
             enable: true
 

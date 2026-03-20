@@ -1,11 +1,11 @@
 # Gemini AI Configuration (Local Override)
 # Using Google AI Studio API (simpler than Vertex AI)
-# Default: Uses hardcoded key if .env doesn't have GEMINI_API_KEY
+# Set GEMINI_API_KEY in .env (see .env.example)
 spring:
   ai:
     google:
       genai:
-        api-key: ${GEMINI_API_KEY:AIzaSyD-rJ5QpdR9gBOYUrftYvp067es2ECDyIE}
+        api-key: ${GEMINI_API_KEY}
         chat:
           options:
             model: gemini-2.5-flash
