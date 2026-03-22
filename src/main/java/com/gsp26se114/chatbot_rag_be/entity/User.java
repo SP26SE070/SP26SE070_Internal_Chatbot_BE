@@ -57,6 +57,13 @@ public class User {
 
     private String resetPasswordToken;
     private LocalDateTime tokenExpiry;
+
+    /** One-time token issued after OTP is verified; required to call reset-password */
+    @Column(name = "password_reset_session_token", length = 255)
+    private String passwordResetSessionToken;
+
+    @Column(name = "password_reset_session_expiry")
+    private LocalDateTime passwordResetSessionExpiry;
     
     @Column(nullable = false)
     private Boolean mustChangePassword = false; // Bắt buộc đổi mật khẩu lần đầu login

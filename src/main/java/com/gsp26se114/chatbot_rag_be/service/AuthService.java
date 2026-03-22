@@ -6,6 +6,7 @@ import com.gsp26se114.chatbot_rag_be.entity.User;
 import com.gsp26se114.chatbot_rag_be.entity.RoleEntity;
 import com.gsp26se114.chatbot_rag_be.payload.request.*;
 import com.gsp26se114.chatbot_rag_be.payload.response.JwtResponse;
+import com.gsp26se114.chatbot_rag_be.payload.response.VerifyResetOtpResponse;
 import com.gsp26se114.chatbot_rag_be.repository.*;
 import com.gsp26se114.chatbot_rag_be.security.jwt.JwtUtils;
 import com.gsp26se114.chatbot_rag_be.security.service.UserPrincipal;
@@ -112,12 +113,19 @@ public class AuthService {
         }
     }
 
+    private static final int OTP_VALID_MINUTES = 15;
+    private static final int RESET_SESSION_VALID_MINUTES = 10;
+
+    @Transactional
     public void forgotPassword(String email) {
         User user = userRepository.findByEmail(email)
                 .orElseThrow(() -> new RuntimeException("Email không tồn tại!"));
         String otp = String.format("%06d", new Random().nextInt(999999));
         user.setResetPasswordToken(otp);
-        user.setTokenExpiry(LocalDateTime.now().plusMinutes(15));
+        user.setTokenExpiry(LocalDateTime.now().plusMinutes(OTP_VALID_MINUTES));
+        // New OTP flow: invalidate any previous verified session
+        user.setPasswordResetSessionToken(null);
+        user.setPasswordResetSessionExpiry(null);
         userRepository.save(user);
         
         // Gửi OTP đến email thật (contactEmail nếu có, không thì dùng email login)
@@ -141,12 +149,47 @@ public class AuthService {
         return user.getEmail();
     }
 
+    /**
+     * Bước 2: xác thực OTP đúng → cấp resetSessionToken (one-time) để gọi reset-password.
+     */
+    @Transactional
+    public VerifyResetOtpResponse verifyResetOtp(String email, String otp) {
+        User user = userRepository.findByEmail(email)
+                .orElseThrow(() -> new RuntimeException("Email không tồn tại!"));
+        if (user.getResetPasswordToken() == null || user.getTokenExpiry() == null) {
+            throw new RuntimeException("Chưa có mã OTP hợp lệ. Vui lòng gửi lại OTP.");
+        }
+        if (user.getTokenExpiry().isBefore(LocalDateTime.now())) {
+            throw new RuntimeException("OTP đã hết hạn!");
+        }
+        if (!user.getResetPasswordToken().equals(otp.trim())) {
+            throw new RuntimeException("Mã OTP không đúng!");
+        }
+
+        String sessionToken = UUID.randomUUID().toString();
+        user.setPasswordResetSessionToken(sessionToken);
+        user.setPasswordResetSessionExpiry(LocalDateTime.now().plusMinutes(RESET_SESSION_VALID_MINUTES));
+        user.setResetPasswordToken(null);
+        user.setTokenExpiry(null);
+        userRepository.save(user);
+
+        return new VerifyResetOtpResponse(
+                "Xác thực OTP thành công. Bạn có thể đặt lại mật khẩu.",
+                sessionToken
+        );
+    }
+
+    @Transactional
     public void resetPassword(ResetPasswordRequest request) {
-        User user = userRepository.findByResetPasswordToken(request.token())
-                .filter(u -> u.getTokenExpiry().isAfter(LocalDateTime.now()))
-                .orElseThrow(() -> new RuntimeException("OTP hết hạn!"));
+        User user = userRepository.findByPasswordResetSessionToken(request.resetSessionToken())
+                .filter(u -> u.getPasswordResetSessionExpiry() != null
+                        && u.getPasswordResetSessionExpiry().isAfter(LocalDateTime.now()))
+                .orElseThrow(() -> new RuntimeException("Phiên đặt lại mật khẩu hết hạn hoặc không hợp lệ!"));
         user.setPassword(passwordEncoder.encode(request.newPassword()));
         user.setResetPasswordToken(null);
+        user.setTokenExpiry(null);
+        user.setPasswordResetSessionToken(null);
+        user.setPasswordResetSessionExpiry(null);
         userRepository.save(user);
     }
 

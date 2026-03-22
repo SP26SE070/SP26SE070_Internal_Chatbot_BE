@@ -128,6 +128,8 @@ CREATE TABLE users (
     permissions JSONB DEFAULT '[]'::jsonb, -- Permissions bổ sung được TENANT_ADMIN cấp
     reset_password_token VARCHAR(255),
     token_expiry TIMESTAMP,
+    password_reset_session_token VARCHAR(255),
+    password_reset_session_expiry TIMESTAMP,
     must_change_password BOOLEAN DEFAULT FALSE NOT NULL,
     is_active BOOLEAN DEFAULT TRUE NOT NULL,
     created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP NOT NULL,
@@ -137,6 +139,13 @@ CREATE TABLE users (
 
 CREATE INDEX IF NOT EXISTS idx_users_tenant_department ON users(tenant_id, department_id);
 CREATE INDEX IF NOT EXISTS idx_users_tenant_active ON users(tenant_id, is_active);
+
+-- Forgot-password: session token after OTP verified (existing DBs)
+ALTER TABLE users ADD COLUMN IF NOT EXISTS password_reset_session_token VARCHAR(255);
+ALTER TABLE users ADD COLUMN IF NOT EXISTS password_reset_session_expiry TIMESTAMP;
+CREATE UNIQUE INDEX IF NOT EXISTS uq_users_password_reset_session_token
+    ON users (password_reset_session_token)
+    WHERE password_reset_session_token IS NOT NULL;
 
 -- Tạo sequence rõ ràng cho refresh_tokens & blacklisted_tokens
 -- (tránh lỗi khi schema cũ vẫn tham chiếu refresh_tokens_seq)

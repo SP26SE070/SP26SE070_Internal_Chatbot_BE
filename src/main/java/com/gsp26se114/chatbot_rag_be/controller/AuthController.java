@@ -1,7 +1,9 @@
 package com.gsp26se114.chatbot_rag_be.controller;
 
 import com.gsp26se114.chatbot_rag_be.payload.request.*;
-import com.gsp26se114.chatbot_rag_be.payload.response.*;
+import com.gsp26se114.chatbot_rag_be.payload.response.MessageResponse;
+import com.gsp26se114.chatbot_rag_be.payload.response.JwtResponse;
+import com.gsp26se114.chatbot_rag_be.payload.response.VerifyResetOtpResponse;
 import com.gsp26se114.chatbot_rag_be.service.AuthService;
 import com.gsp26se114.chatbot_rag_be.service.TenantRegistrationService;
 import io.swagger.v3.oas.annotations.Operation;
@@ -36,16 +38,25 @@ public class AuthController {
         return ResponseEntity.ok(new MessageResponse("Đăng xuất thành công!"));
     }
 
-    // 3. FORGOT PASSWORD
+    // 3. FORGOT PASSWORD (gửi OTP)
     @PostMapping("/forgot-password")
+    @Operation(summary = "Quên mật khẩu — gửi OTP", description = "Gửi mã OTP 6 số tới email liên hệ (hoặc email đăng nhập). Hết hạn sau 15 phút.")
     public ResponseEntity<MessageResponse> forgotPassword(@Valid @RequestBody ForgotPasswordRequest req) {
-        // Dùng req.email() vì đây là Record
         authService.forgotPassword(req.email());
         return ResponseEntity.ok(new MessageResponse("Mã OTP đã được gửi vào email của bạn."));
     }
 
-    // 4. ĐẶT LẠI MẬT KHẨU
+    // 3b. XÁC THỰC OTP (bắt buộc trước khi đổi mật khẩu)
+    @PostMapping("/verify-reset-otp")
+    @Operation(summary = "Xác thực OTP đặt lại mật khẩu",
+            description = "Sau khi nhận OTP từ email, gọi API này. Thành công trả về resetSessionToken (dùng cho bước reset-password, hết hạn sau 10 phút).")
+    public ResponseEntity<VerifyResetOtpResponse> verifyResetOtp(@Valid @RequestBody VerifyResetOtpRequest req) {
+        return ResponseEntity.ok(authService.verifyResetOtp(req.email(), req.otp()));
+    }
+
+    // 4. ĐẶT LẠI MẬT KHẨU (cần resetSessionToken từ verify-reset-otp)
     @PostMapping("/reset-password")
+    @Operation(summary = "Đặt lại mật khẩu", description = "Body gồm resetSessionToken (không phải OTP) và newPassword.")
     public ResponseEntity<MessageResponse> resetPassword(@Valid @RequestBody ResetPasswordRequest req) {
         authService.resetPassword(req);
         return ResponseEntity.ok(new MessageResponse("Mật khẩu đã được thay đổi thành công."));
