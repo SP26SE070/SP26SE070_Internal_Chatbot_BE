@@ -5,6 +5,9 @@ import java.time.LocalDateTime;
 import java.util.List;
 import java.util.UUID;
 
+/**
+ * Tenant user listing. Single primary role per user ({@code roleId} = {@code roles.role_id}).
+ */
 public record UserResponse(
         UUID id,
         String email,
@@ -13,6 +16,8 @@ public record UserResponse(
         String phoneNumber,
         LocalDate dateOfBirth,
         String address,
+        Integer roleId,
+        String roleCode,
         String roleName,
         String departmentName,
         String tenantName,

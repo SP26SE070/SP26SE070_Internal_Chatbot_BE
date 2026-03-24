@@ -34,8 +34,11 @@ public class RoleResponse {
     // Permissions
     private List<String> permissions; // ["USER_READ", "USER_WRITE", ...]
     
-    // Statistics
-    private Long usersCount; // Number of users assigned to this role
+    /**
+     * Số user trong tenant có {@code user.role_id} = {@code id} của role này (fixed + custom).
+     * Gồm ACTIVE và INACTIVE; không có soft-delete riêng ngoài {@code isActive}.
+     */
+    private Long usersCount;
     
     // Audit
     private UUID createdBy;

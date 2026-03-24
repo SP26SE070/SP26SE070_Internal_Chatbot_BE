@@ -127,12 +127,12 @@ public class TenantAdminService {
     /**
      * Get all users in tenant
      */
-    public List<UserResponse> getAllUsersInTenant(String tenantAdminEmail, String status) {
+    public List<UserResponse> getAllUsersInTenant(String tenantAdminEmail, String status, Integer roleId) {
         User tenantAdmin = getUserByEmail(tenantAdminEmail);
         UUID tenantId = tenantAdmin.getTenantId();
         StatusFilter filter = StatusFilter.from(status);
         
-        log.info("Fetching users for tenant: {}, status={}", tenantId, filter);
+        log.info("Fetching users for tenant: {}, status={}, roleId={}", tenantId, filter, roleId);
         List<User> users;
         if (isTenantAdmin(tenantAdmin)) {
             users = switch (filter) {
@@ -150,12 +150,18 @@ public class TenantAdminService {
                 case ALL -> userRepository.findByTenantIdAndDepartmentId(tenantId, tenantAdmin.getDepartmentId());
             };
         }
+
+        if (roleId != null) {
+            users = users.stream()
+                    .filter(u -> roleId.equals(u.getRoleId()))
+                    .collect(Collectors.toList());
+        }
         
         return users.stream()
                 .map(user -> {
-                    RoleEntity role = user.getRoleId() != null ? 
+                    RoleEntity role = user.getRoleId() != null ?
                         roleRepository.findById(user.getRoleId()).orElse(null) : null;
-                    Department department = user.getDepartmentId() != null ? 
+                    Department department = user.getDepartmentId() != null ?
                         departmentRepository.findById(user.getDepartmentId()).orElse(null) : null;
                     return mapToUserResponse(user, role, department);
                 })
@@ -675,6 +681,8 @@ public class TenantAdminService {
                 user.getPhoneNumber(),
                 user.getDateOfBirth(),
                 user.getAddress(),
+                user.getRoleId(),
+                role != null ? role.getCode() : null,
                 role != null ? role.getName() : null,
                 department != null ? department.getName() : null,
                 tenantName,

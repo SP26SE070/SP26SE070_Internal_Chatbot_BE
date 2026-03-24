@@ -8,6 +8,7 @@ import com.gsp26se114.chatbot_rag_be.payload.response.TenantAnalyticsResponse;
 import com.gsp26se114.chatbot_rag_be.payload.response.UserResponse;
 import com.gsp26se114.chatbot_rag_be.service.TenantAdminService;
 import io.swagger.v3.oas.annotations.Operation;
+import io.swagger.v3.oas.annotations.Parameter;
 import io.swagger.v3.oas.annotations.security.SecurityRequirement;
 import io.swagger.v3.oas.annotations.tags.Tag;
 import jakarta.validation.Valid;
@@ -49,12 +50,20 @@ public class TenantAdminController {
      */
     @GetMapping("/users")
     @PreAuthorize("hasRole('TENANT_ADMIN') or hasAuthority('USER_WRITE')")
-    @Operation(summary = "Lấy danh sách users trong tenant", 
-               description = "Lấy danh sách user theo trạng thái: ACTIVE | INACTIVE | ALL")
+    @Operation(summary = "Lấy danh sách users trong tenant",
+               description = """
+                   **status:** `ACTIVE` (mặc định) | `INACTIVE` | `ALL` (ACTIVE + INACTIVE, không trùng lặp).
+                   **roleId:** tuỳ chọn — lọc user có `roleId` khớp (cùng giá trị `id` trong GET /tenant-admin/roles).
+                   Mỗi user có đúng một `roleId` (không multi-role).
+                   """)
     public ResponseEntity<List<UserResponse>> getAllUsersInTenant(
             @AuthenticationPrincipal UserDetails userDetails,
-            @RequestParam(value = "status", defaultValue = "ACTIVE") String status) {
-        List<UserResponse> users = tenantAdminService.getAllUsersInTenant(userDetails.getUsername(), status);
+            @Parameter(description = "ACTIVE | INACTIVE | ALL")
+            @RequestParam(value = "status", defaultValue = "ACTIVE") String status,
+            @Parameter(description = "Lọc theo roles.role_id (optional)")
+            @RequestParam(value = "roleId", required = false) Integer roleId) {
+        List<UserResponse> users = tenantAdminService.getAllUsersInTenant(
+                userDetails.getUsername(), status, roleId);
         return ResponseEntity.ok(users);
     }
     

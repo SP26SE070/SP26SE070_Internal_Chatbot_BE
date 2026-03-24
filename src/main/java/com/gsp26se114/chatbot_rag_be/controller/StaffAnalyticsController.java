@@ -5,12 +5,18 @@ import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.security.SecurityRequirement;
 import io.swagger.v3.oas.annotations.tags.Tag;
 import lombok.RequiredArgsConstructor;
+import org.springframework.boot.actuate.health.HealthComponent;
+import org.springframework.boot.actuate.health.HealthEndpoint;
 import org.springframework.http.ResponseEntity;
 import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RestController;
 
+import java.lang.management.ManagementFactory;
+import java.lang.management.RuntimeMXBean;
+import java.time.Instant;
+import java.time.LocalDateTime;
 import java.util.HashMap;
 import java.util.Map;
 
@@ -23,15 +29,20 @@ import java.util.Map;
 public class StaffAnalyticsController {
 
     private final TenantRepository tenantRepository;
-    private final UserRepository userRepository;
     private final SubscriptionRepository subscriptionRepository;
     private final DocumentRepository documentRepository;
+    private final HealthEndpoint healthEndpoint;
 
     @GetMapping("/dashboard")
-    @Operation(summary = "Dashboard cho STAFF", 
-               description = "Tổng quan về tenants, users, subscriptions mà STAFF quản lý")
+    @Operation(summary = "Dashboard cho STAFF",
+               description = "Schema khớp admin ở system + tenants. "
+                   + "system: status (STABLE|DEGRADED), statusLabel, appUptimeSeconds, appStartedAt, checkedAt. "
+                   + "tenants: total, active, pending, suspended, activePercentage (tuỳ chọn hiển thị). "
+                   + "totalUsers luôn bằng tenants.active (số tổ chức ACTIVE; không phải tổng user toàn hệ thống). "
+                   + "subscriptions: { total }, totalDocuments.")
     public ResponseEntity<Map<String, Object>> getStaffDashboard() {
         Map<String, Object> dashboard = new HashMap<>();
+        dashboard.put("system", buildSystemStats());
         
         // Tenant statistics
         long totalTenants = tenantRepository.count();
@@ -39,17 +50,15 @@ public class StaffAnalyticsController {
         long pendingTenants = tenantRepository.countByStatus(com.gsp26se114.chatbot_rag_be.entity.TenantStatus.PENDING);
         long suspendedTenants = tenantRepository.countByStatus(com.gsp26se114.chatbot_rag_be.entity.TenantStatus.SUSPENDED);
         
-        Map<String, Long> tenantStats = new HashMap<>();
+        Map<String, Object> tenantStats = new HashMap<>();
         tenantStats.put("total", totalTenants);
         tenantStats.put("active", activeTenants);
         tenantStats.put("pending", pendingTenants);
         tenantStats.put("suspended", suspendedTenants);
-        tenantStats.put("activePercentage", totalTenants > 0 ? (activeTenants * 100 / totalTenants) : 0);
+        tenantStats.put("activePercentage", totalTenants > 0 ? (activeTenants * 100.0 / totalTenants) : 0.0);
         dashboard.put("tenants", tenantStats);
-        
-        // User statistics
-        long totalUsers = userRepository.count();
-        dashboard.put("totalUsers", totalUsers);
+
+        dashboard.put("totalUsers", activeTenants);
         
         // Subscription statistics
         long totalSubscriptions = subscriptionRepository.count();
@@ -62,6 +71,22 @@ public class StaffAnalyticsController {
         dashboard.put("totalDocuments", totalDocuments);
         
         return ResponseEntity.ok(dashboard);
+    }
+
+    private Map<String, Object> buildSystemStats() {
+        Map<String, Object> system = new HashMap<>();
+        HealthComponent health = healthEndpoint.health();
+        boolean up = health != null && "UP".equalsIgnoreCase(health.getStatus().getCode());
+        RuntimeMXBean runtime = ManagementFactory.getRuntimeMXBean();
+        long uptimeMs = runtime.getUptime();
+        long startedAtMs = runtime.getStartTime();
+
+        system.put("status", up ? "STABLE" : "DEGRADED");
+        system.put("statusLabel", up ? "Ổn định" : "Không ổn định");
+        system.put("appUptimeSeconds", uptimeMs / 1000);
+        system.put("appStartedAt", Instant.ofEpochMilli(startedAtMs).toString());
+        system.put("checkedAt", LocalDateTime.now());
+        return system;
     }
 
     @GetMapping("/tenants")

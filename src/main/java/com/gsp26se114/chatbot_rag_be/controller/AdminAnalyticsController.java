@@ -1,16 +1,22 @@
 package com.gsp26se114.chatbot_rag_be.controller;
 
+import com.gsp26se114.chatbot_rag_be.entity.RoleType;
 import com.gsp26se114.chatbot_rag_be.repository.*;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.security.SecurityRequirement;
 import io.swagger.v3.oas.annotations.tags.Tag;
 import lombok.RequiredArgsConstructor;
+import org.springframework.boot.actuate.health.HealthComponent;
+import org.springframework.boot.actuate.health.HealthEndpoint;
 import org.springframework.http.ResponseEntity;
 import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RestController;
 
+import java.lang.management.ManagementFactory;
+import java.lang.management.RuntimeMXBean;
+import java.time.Instant;
 import java.time.LocalDateTime;
 import java.util.HashMap;
 import java.util.Map;
@@ -30,11 +36,15 @@ public class AdminAnalyticsController {
     private final DocumentRepository documentRepository;
     private final DocumentChunkRepository documentChunkRepository;
     private final ChatMessageRepository chatMessageRepository;
+    private final HealthEndpoint healthEndpoint;
 
     @GetMapping("/dashboard")
-    @Operation(summary = "Lấy thống kê dashboard", description = "Lấy tổng quan toàn bộ hệ thống")
+    @Operation(summary = "Lấy thống kê dashboard",
+               description = "system + tenants (total, active, pending, suspended, activePercentage) cùng shape với staff dashboard. "
+                   + "totalUsers = tài khoản platform (role SYSTEM: SUPER_ADMIN, STAFF) đang active.")
     public ResponseEntity<Map<String, Object>> getDashboardStats() {
         Map<String, Object> stats = new HashMap<>();
+        stats.put("system", buildSystemStats());
         
         // Tenant statistics
         long totalTenants = tenantRepository.count();
@@ -42,16 +52,16 @@ public class AdminAnalyticsController {
         long pendingTenants = tenantRepository.countByStatus(com.gsp26se114.chatbot_rag_be.entity.TenantStatus.PENDING);
         long suspendedTenants = tenantRepository.countByStatus(com.gsp26se114.chatbot_rag_be.entity.TenantStatus.SUSPENDED);
         
-        Map<String, Long> tenantStats = new HashMap<>();
+        Map<String, Object> tenantStats = new HashMap<>();
         tenantStats.put("total", totalTenants);
         tenantStats.put("active", activeTenants);
         tenantStats.put("pending", pendingTenants);
         tenantStats.put("suspended", suspendedTenants);
+        tenantStats.put("activePercentage", totalTenants > 0 ? (activeTenants * 100.0 / totalTenants) : 0.0);
         stats.put("tenants", tenantStats);
         
-        // User statistics
-        long totalUsers = userRepository.count();
-        stats.put("totalUsers", totalUsers);
+        long platformUsers = userRepository.countActiveUsersWithRoleType(RoleType.SYSTEM);
+        stats.put("totalUsers", platformUsers);
         
         // Subscription statistics
         long totalSubscriptions = subscriptionRepository.count();
@@ -86,6 +96,22 @@ public class AdminAnalyticsController {
         stats.put("llmUsage", llmStats);
         
         return ResponseEntity.ok(stats);
+    }
+
+    private Map<String, Object> buildSystemStats() {
+        Map<String, Object> system = new HashMap<>();
+        HealthComponent health = healthEndpoint.health();
+        boolean up = health != null && "UP".equalsIgnoreCase(health.getStatus().getCode());
+        RuntimeMXBean runtime = ManagementFactory.getRuntimeMXBean();
+        long uptimeMs = runtime.getUptime();
+        long startedAtMs = runtime.getStartTime();
+
+        system.put("status", up ? "STABLE" : "DEGRADED");
+        system.put("statusLabel", up ? "Ổn định" : "Không ổn định");
+        system.put("appUptimeSeconds", uptimeMs / 1000);
+        system.put("appStartedAt", Instant.ofEpochMilli(startedAtMs).toString());
+        system.put("checkedAt", LocalDateTime.now());
+        return system;
     }
 
     @GetMapping("/llm-usage")

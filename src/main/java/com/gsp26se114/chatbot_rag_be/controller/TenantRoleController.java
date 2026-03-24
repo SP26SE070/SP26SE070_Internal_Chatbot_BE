@@ -5,9 +5,9 @@ import com.gsp26se114.chatbot_rag_be.payload.request.UpdateRoleRequest;
 import com.gsp26se114.chatbot_rag_be.payload.response.MessageResponse;
 import com.gsp26se114.chatbot_rag_be.payload.response.PermissionCategoryResponse;
 import com.gsp26se114.chatbot_rag_be.payload.response.RoleResponse;
+import com.gsp26se114.chatbot_rag_be.security.service.UserPrincipal;
 import com.gsp26se114.chatbot_rag_be.service.PermissionService;
 import com.gsp26se114.chatbot_rag_be.service.TenantRoleService;
-import com.gsp26se114.chatbot_rag_be.security.service.UserPrincipal;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.security.SecurityRequirement;
 import io.swagger.v3.oas.annotations.tags.Tag;
@@ -80,7 +80,8 @@ public class TenantRoleController {
                    - Custom roles: Roles do TENANT_ADMIN tạo
                    
                    **Response:**
-                   - Mỗi role có: id, code, name, permissions[], usersCount
+                   - Mỗi role có: id (khớp `user.roleId`), code, name, permissions[], **usersCount** (≥0)
+                   - **usersCount**: số user **trong tenant** đang có `role_id` = id role; gồm cả ACTIVE và INACTIVE (xóa mềm = `isActive=false`, vẫn tính nếu chưa đổi role).
                    - isFixed = true → không thể sửa/xóa
                    - isCustom = true → có thể sửa/xóa
                    """)
@@ -100,7 +101,7 @@ public class TenantRoleController {
                    
                    **Use case:**
                    - Quản lý custom roles đã tạo
-                   - Xem số lượng users được gán mỗi role
+                   - **usersCount** theo tenant (cùng rule như GET /roles)
                    - Kiểm tra permissions của từng role
                    """)
     public ResponseEntity<List<RoleResponse>> getCustomRoles(
@@ -121,9 +122,11 @@ public class TenantRoleController {
                    - Không thể sửa/xóa
                    - Có sẵn cho tất cả tenants
                    - Permissions được định nghĩa sẵn
+                   - **usersCount** theo tenant đang đăng nhập (bắt buộc có, cùng rule GET /roles)
                    """)
-    public ResponseEntity<List<RoleResponse>> getFixedRoles() {
-        List<RoleResponse> roles = tenantRoleService.getTenantFixedRoles();
+    public ResponseEntity<List<RoleResponse>> getFixedRoles(
+            @AuthenticationPrincipal UserPrincipal principal) {
+        List<RoleResponse> roles = tenantRoleService.getTenantFixedRoles(principal.getTenantId());
         return ResponseEntity.ok(roles);
     }
     
@@ -139,7 +142,7 @@ public class TenantRoleController {
                    - id, code, name, description
                    - roleType: FIXED hoặc CUSTOM
                    - permissions[]: Danh sách permissions
-                   - usersCount: Số users được gán role này (chỉ có với custom roles)
+                   - **usersCount**: số user trong tenant có `roleId` = id role (fixed & custom; cùng rule GET /roles)
                    
                    **Security:**
                    - Custom roles phải thuộc về tenant của user

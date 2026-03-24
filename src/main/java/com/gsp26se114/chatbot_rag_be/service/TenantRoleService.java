@@ -8,6 +8,7 @@ import com.gsp26se114.chatbot_rag_be.payload.request.UpdateRoleRequest;
 import com.gsp26se114.chatbot_rag_be.payload.response.RoleResponse;
 import com.gsp26se114.chatbot_rag_be.repository.RoleRepository;
 import com.gsp26se114.chatbot_rag_be.repository.TenantRepository;
+import com.gsp26se114.chatbot_rag_be.repository.UserRepository;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Service;
@@ -28,6 +29,7 @@ public class TenantRoleService {
     
     private final RoleRepository roleRepository;
     private final TenantRepository tenantRepository;
+    private final UserRepository userRepository;
     private final PermissionService permissionService;
     
     /**
@@ -53,13 +55,13 @@ public class TenantRoleService {
     }
     
     /**
-     * Get only fixed roles (available to all tenants)
+     * Get only fixed roles (available to all tenants), with per-tenant {@code usersCount}.
      */
-    public List<RoleResponse> getTenantFixedRoles() {
-        log.info("Fetching tenant fixed roles");
+    public List<RoleResponse> getTenantFixedRoles(UUID tenantId) {
+        log.info("Fetching tenant fixed roles for tenant {}", tenantId);
         List<RoleEntity> roles = roleRepository.findTenantFixedRoles();
         return roles.stream()
-                .map(role -> mapToResponse(role, null))
+                .map(role -> mapToResponse(role, tenantId))
                 .collect(Collectors.toList());
     }
     
@@ -178,8 +180,7 @@ public class TenantRoleService {
             throw new RuntimeException("Role này thuộc về tenant khác");
         }
         
-        // Check if any users have this role
-        long usersCount = roleRepository.countUsersWithRole(roleId);
+        long usersCount = userRepository.countByTenantIdAndRoleId(tenantId, roleId);
         if (usersCount > 0) {
             throw new RuntimeException("Không thể xóa role - " + usersCount + " users đang được gán role này");
         }
@@ -199,12 +200,8 @@ public class TenantRoleService {
                     .orElse(null);
         }
         
-        // Count users with this role (only for custom roles of the requesting tenant)
-        Long usersCount = null;
-        if (role.isCustomRole() && role.belongsToTenant(requestingTenantId)) {
-            usersCount = roleRepository.countUsersWithRole(role.getId());
-        }
-        
+        long usersCount = resolveUsersCountForTenant(role, requestingTenantId);
+
         return RoleResponse.builder()
                 .id(role.getId())
                 .code(role.getCode())
@@ -217,10 +214,28 @@ public class TenantRoleService {
                 .isFixed(role.isTenantFixedRole())
                 .isCustom(role.isCustomRole())
                 .permissions(role.getPermissions())
-                .usersCount(usersCount)
+                .usersCount(usersCount) // always set; see resolveUsersCountForTenant
                 .createdBy(role.getCreatedBy())
                 .createdAt(role.getCreatedAt())
                 .updatedAt(role.getUpdatedAt())
                 .build();
+    }
+
+    /**
+     * Users assigned to this role within the tenant (same {@code user.roleId} as {@code role.id}).
+     * Includes ACTIVE and INACTIVE users; “soft delete” in this app is {@code isActive=false}, still counted until role changes.
+     * No separate soft-delete column on User.
+     */
+    private long resolveUsersCountForTenant(RoleEntity role, UUID requestingTenantId) {
+        if (requestingTenantId == null || role.isSystemRole()) {
+            return 0L;
+        }
+        if (role.isTenantFixedRole()) {
+            return userRepository.countByTenantIdAndRoleId(requestingTenantId, role.getId());
+        }
+        if (role.isCustomRole() && role.belongsToTenant(requestingTenantId)) {
+            return userRepository.countByTenantIdAndRoleId(requestingTenantId, role.getId());
+        }
+        return 0L;
     }
 }

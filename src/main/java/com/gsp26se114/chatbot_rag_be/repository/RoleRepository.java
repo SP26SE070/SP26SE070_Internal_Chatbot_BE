@@ -58,7 +58,7 @@ public interface RoleRepository extends JpaRepository<RoleEntity, Integer> {
     Optional<RoleEntity> findByCodeAndTenantId(String code, UUID tenantId);
     
     /**
-     * Count users assigned to role (for deletion check)
+     * Count users with this role globally (all tenants). For tenant UI use {@link com.gsp26se114.chatbot_rag_be.repository.UserRepository#countByTenantIdAndRoleId}.
      */
     @Query("SELECT COUNT(u) FROM User u WHERE u.roleId = :roleId")
     long countUsersWithRole(@Param("roleId") Integer roleId);
