@@ -40,3 +40,4 @@ build/
 
 ### Claude Opus ###
 .claude/settings.local.json
+.claude/
