@@ -23,6 +23,7 @@ import java.util.UUID;
 @Data
 @AllArgsConstructor
 @NoArgsConstructor
+@Builder
 public class ChatMessage {
 
     @Id
@@ -57,6 +58,7 @@ public class ChatMessage {
     private List<Object> sourceChunks;
 
     @Column(name = "tokens_used")
+    @Builder.Default
     private Integer tokensUsed = 0;
 
     /** Đánh giá câu trả lời ASSISTANT (1-5 sao) */
@@ -70,5 +72,12 @@ public class ChatMessage {
     private LocalDateTime ratedAt;
 
     @Column(name = "created_at", nullable = false, updatable = false)
-    private LocalDateTime createdAt = LocalDateTime.now();
+    private LocalDateTime createdAt;
+
+    @PrePersist
+    protected void onCreate() {
+        if (createdAt == null) {
+            createdAt = LocalDateTime.now();
+        }
+    }
 }

@@ -21,6 +21,7 @@ import org.springframework.transaction.annotation.Transactional;
 import java.time.LocalDateTime;
 import java.util.Comparator;
 import java.util.List;
+import java.util.Objects;
 import java.util.UUID;
 import java.util.stream.Collectors;
 
@@ -99,8 +100,11 @@ public class ChatHistoryService {
     @Transactional
     public void updateSessionCounters(UUID sessionId, Integer tokensUsed) {
         sessionRepository.findById(sessionId).ifPresent(session -> {
-            session.setTotalMessages(session.getTotalMessages() + 2); // user + assistant
-            session.setTotalTokensUsed(session.getTotalTokensUsed() + tokensUsed);
+            session.setTotalMessages(Integer.sum(
+                    Objects.requireNonNullElse(session.getTotalMessages(), 0), 2));
+            session.setTotalTokensUsed(Integer.sum(
+                    Objects.requireNonNullElse(session.getTotalTokensUsed(), 0),
+                    Objects.requireNonNullElse(tokensUsed, 0)));
             session.setLastMessageAt(LocalDateTime.now());
             sessionRepository.save(session);
         });
