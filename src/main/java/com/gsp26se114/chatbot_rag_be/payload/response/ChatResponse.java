@@ -6,6 +6,7 @@ import lombok.Data;
 import lombok.NoArgsConstructor;
 
 import java.util.List;
+import java.util.UUID;
 
 /**
  * Response DTO for chatbot answer with source documents
@@ -17,7 +18,12 @@ import java.util.List;
 public class ChatResponse {
     
     private String answer;
-    
+
+    /**
+     * ID of the stored assistant message (for rating purposes).
+     */
+    private UUID messageId;
+
     private String conversationId;
     
     private List<SourceDocument> sources;

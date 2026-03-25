@@ -1,13 +1,20 @@
 package com.gsp26se114.chatbot_rag_be.controller;
 
 import com.fasterxml.jackson.databind.ObjectMapper;
+import com.gsp26se114.chatbot_rag_be.entity.ChatMessage;
+import com.gsp26se114.chatbot_rag_be.entity.ChatSession;
 import com.gsp26se114.chatbot_rag_be.entity.DocumentChunkEntity;
 import com.gsp26se114.chatbot_rag_be.entity.DocumentEntity;
 import com.gsp26se114.chatbot_rag_be.payload.request.ChatRequest;
+import com.gsp26se114.chatbot_rag_be.payload.request.RateMessageRequest;
+import com.gsp26se114.chatbot_rag_be.payload.response.ChatHistoryResponse;
+import com.gsp26se114.chatbot_rag_be.payload.response.ChatMessageResponse;
 import com.gsp26se114.chatbot_rag_be.payload.response.ChatResponse;
+import com.gsp26se114.chatbot_rag_be.payload.response.ConversationSummaryResponse;
 import com.gsp26se114.chatbot_rag_be.repository.DocumentChunkRepository;
 import com.gsp26se114.chatbot_rag_be.repository.DocumentRepository;
 import com.gsp26se114.chatbot_rag_be.security.service.UserPrincipal;
+import com.gsp26se114.chatbot_rag_be.service.ChatHistoryService;
 import com.gsp26se114.chatbot_rag_be.service.EmbeddingService;
 import com.gsp26se114.chatbot_rag_be.service.GeminiChatService;
 import io.swagger.v3.oas.annotations.Operation;
@@ -15,6 +22,7 @@ import io.swagger.v3.oas.annotations.tags.Tag;
 import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
+import org.springframework.data.domain.Page;
 import org.springframework.http.ResponseEntity;
 import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.security.core.annotation.AuthenticationPrincipal;
@@ -24,9 +32,6 @@ import java.util.List;
 import java.util.UUID;
 import java.util.stream.Collectors;
 
-/**
- * Controller for RAG-powered chatbot queries
- */
 @RestController
 @RequestMapping("/api/v1/chatbot")
 @RequiredArgsConstructor
@@ -38,6 +43,7 @@ public class ChatbotController {
     private final GeminiChatService geminiChatService;
     private final DocumentChunkRepository chunkRepository;
     private final DocumentRepository documentRepository;
+    private final ChatHistoryService chatHistoryService;
     private final ObjectMapper objectMapper;
 
     @PostMapping("/chat")
@@ -48,7 +54,7 @@ public class ChatbotController {
             @AuthenticationPrincipal UserPrincipal userDetails
     ) {
         long startTime = System.currentTimeMillis();
-        
+
         try {
             log.info("User {} asking: {}", userDetails.getEmail(), request.getMessage());
 
@@ -59,13 +65,13 @@ public class ChatbotController {
 
             // Step 2: Find similar chunks with access control
             int topK = request.getTopK() != null ? request.getTopK() : 3;
-            double maxDistance = 0.35; // Only retrieve chunks with cosine distance < 0.35 (similarity > 65%)
-                String tagIdsJson = null;
+            double maxDistance = 0.35;
+            String tagIdsJson = null;
 
-                if (request.getTagIds() != null && !request.getTagIds().isEmpty()) {
+            if (request.getTagIds() != null && !request.getTagIds().isEmpty()) {
                 tagIdsJson = objectMapper.writeValueAsString(request.getTagIds().stream().distinct().toList());
-                }
-            
+            }
+
             List<DocumentChunkEntity> similarChunks = chunkRepository.findSimilarChunksWithAccessControl(
                     userDetails.getTenantId(),
                     userDetails.getId(),
@@ -83,53 +89,38 @@ public class ChatbotController {
             // Step 3: Build context from chunks (if any)
             String context;
             List<ChatResponse.SourceDocument> sources;
-            
+
             if (similarChunks.isEmpty()) {
-                // Check if there are documents in tenant but user has no access
                 long totalDocsInTenant = documentRepository.countByTenantIdAndIsActive(
                     userDetails.getTenantId(), true
                 );
-                
+
                 if (totalDocsInTenant > 0) {
-                    // Documents exist but user cannot access them
                     log.warn("User {} tried to access documents outside their permission scope", userDetails.getEmail());
-                    
-                    ChatResponse restrictedResponse = ChatResponse.builder()
-                            .answer("Xin lỗi, bạn không có quyền truy cập các tài liệu liên quan đến câu hỏi này. " +
-                                   "Tài liệu này có thể chỉ dành cho các phòng ban hoặc vai trò cụ thể khác. " +
-                                   "Vui lòng liên hệ quản trị viên nếu bạn cần quyền truy cập.")
-                            .conversationId(request.getConversationId() != null ? request.getConversationId() : UUID.randomUUID().toString())
-                            .sources(List.of())
-                            .responseTimeMs(System.currentTimeMillis() - startTime)
-                            .build();
-                    
-                    return ResponseEntity.ok(restrictedResponse);
+
+                    // Still save the user message and bot response for restricted access
+                    return handleAndSaveRestrictedResponse(request, userDetails, startTime);
                 }
-                
-                // No documents uploaded - chatbot can still answer using general knowledge
+
                 context = "";
                 sources = List.of();
                 log.info("No relevant documents found - answering with general knowledge");
             } else {
-                // Build context from relevant chunks (deduplicate by content to avoid repetition)
                 context = similarChunks.stream()
                         .map(DocumentChunkEntity::getContent)
-                        .distinct() // Remove duplicate content
+                        .distinct()
                         .collect(Collectors.joining("\n\n---\n\n"));
-                log.info("Context built: {} characters from {} unique chunks - Content preview: {}", 
+                log.info("Context built: {} characters from {} unique chunks",
                          context.length(),
-                         similarChunks.stream().map(DocumentChunkEntity::getContent).distinct().count(),
-                         context.substring(0, Math.min(300, context.length())) + "...");
-                
-                // Build source references from relevant chunks
+                         similarChunks.stream().map(DocumentChunkEntity::getContent).distinct().count());
+
                 sources = similarChunks.stream()
                         .map(chunk -> {
                             DocumentEntity doc = documentRepository.findById(chunk.getDocumentId()).orElse(null);
-                            // Calculate cosine distance and convert to similarity score
                             float[] chunkEmbedding = embeddingService.parseVector(chunk.getEmbedding());
                             double distance = embeddingService.cosineDistance(queryEmbedding, chunkEmbedding);
-                            double similarity = Math.round((1.0 - distance) * 100.0) / 100.0; // Round to 2 decimals
-                            
+                            double similarity = Math.round((1.0 - distance) * 100.0) / 100.0;
+
                             return ChatResponse.SourceDocument.builder()
                                     .documentId(chunk.getDocumentId().toString())
                                     .fileName(doc != null ? doc.getOriginalFileName() : "Unknown")
@@ -138,29 +129,74 @@ public class ChatbotController {
                                     .relevanceScore(similarity)
                                     .build();
                         })
-                        .filter(source -> source.getRelevanceScore() >= 0.80) // Only keep highly relevant sources (≥80% similarity)
+                        .filter(source -> source.getRelevanceScore() >= 0.80)
                         .collect(Collectors.toMap(
-                                ChatResponse.SourceDocument::getChunkContent, // Key: chunk content
-                                source -> source,                              // Value: source itself
-                                (existing, replacement) -> existing.getRelevanceScore() >= replacement.getRelevanceScore() 
-                                        ? existing : replacement               // Keep higher score if duplicate
+                                ChatResponse.SourceDocument::getChunkContent,
+                                source -> source,
+                                (existing, replacement) -> existing.getRelevanceScore() >= replacement.getRelevanceScore()
+                                        ? existing : replacement
                         ))
                         .values()
                         .stream()
-                        .sorted((s1, s2) -> Double.compare(s2.getRelevanceScore(), s1.getRelevanceScore())) // Sort by score descending
+                        .sorted((s1, s2) -> Double.compare(s2.getRelevanceScore(), s1.getRelevanceScore()))
                         .toList();
-                
-                log.info("Filtered to {} unique highly relevant sources (≥80% similarity)", sources.size());
+
+                log.info("Filtered to {} unique highly relevant sources (>=80% similarity)", sources.size());
             }
 
-            // Step 4: Generate answer with Gemini (works with or without context)
+            // Step 4: Generate answer with Gemini
             String answer = geminiChatService.generateAnswer(context, request.getMessage());
             log.info("Answer generated: {} characters", answer.length());
 
-            // Step 5: Build response
+            // Step 5: Persist conversation
+            UUID conversationId = null;
+            UUID assistantMessageId = null;
+            try {
+                UUID existingSessionId = parseConversationId(request.getConversationId());
+                ChatSession session = chatHistoryService.getOrCreateSession(
+                        existingSessionId,
+                        userDetails.getTenantId(),
+                        userDetails.getId(),
+                        request.getMessage()
+                );
+                conversationId = session.getId();
+
+                // Save user message
+                List<Object> sourceChunksForUser = sources.stream()
+                        .map(s -> (Object) s)
+                        .collect(Collectors.toList());
+                chatHistoryService.saveUserMessage(
+                        session.getId(),
+                        userDetails.getTenantId(),
+                        userDetails.getId(),
+                        request.getMessage(),
+                        sourceChunksForUser
+                );
+
+                // Save assistant response
+                ChatMessage savedAssistant = chatHistoryService.saveAssistantMessage(
+                        session.getId(),
+                        userDetails.getTenantId(),
+                        userDetails.getId(),
+                        answer,
+                        sourceChunksForUser,
+                        0 // tokens tracking not available from GeminiChatService
+                );
+                assistantMessageId = savedAssistant.getId();
+
+                // Update session counters
+                chatHistoryService.updateSessionCounters(session.getId(), 0);
+
+            } catch (Exception persistError) {
+                log.error("Failed to persist chat history, continuing with response", persistError);
+                // Non-fatal: still return the answer
+            }
+
+            // Step 6: Build response
             ChatResponse response = ChatResponse.builder()
                     .answer(answer)
-                    .conversationId(request.getConversationId() != null ? request.getConversationId() : UUID.randomUUID().toString())
+                    .messageId(assistantMessageId)
+                    .conversationId(conversationId != null ? conversationId.toString() : null)
                     .sources(sources)
                     .responseTimeMs(System.currentTimeMillis() - startTime)
                     .build();
@@ -178,6 +214,118 @@ public class ChatbotController {
                             .build()
             );
         }
+    }
+
+    private ResponseEntity<ChatResponse> handleAndSaveRestrictedResponse(
+            ChatRequest request, UserPrincipal userDetails, long startTime) {
+
+        String answer = "Xin lỗi, bạn không có quyền truy cập các tài liệu liên quan đến câu hỏi này. " +
+                        "Tài liệu này có thể chỉ dành cho các phòng ban hoặc vai trò cụ thể khác. " +
+                        "Vui lòng liên hệ quản trị viên nếu bạn cần quyền truy cập.";
+
+        UUID conversationId = null;
+        UUID assistantMessageId = null;
+        try {
+            UUID existingSessionId = parseConversationId(request.getConversationId());
+            ChatSession session = chatHistoryService.getOrCreateSession(
+                    existingSessionId,
+                    userDetails.getTenantId(),
+                    userDetails.getId(),
+                    request.getMessage()
+            );
+            conversationId = session.getId();
+
+            chatHistoryService.saveUserMessage(
+                    session.getId(),
+                    userDetails.getTenantId(),
+                    userDetails.getId(),
+                    request.getMessage(),
+                    List.of()
+            );
+
+            ChatMessage savedAssistant = chatHistoryService.saveAssistantMessage(
+                    session.getId(),
+                    userDetails.getTenantId(),
+                    userDetails.getId(),
+                    answer,
+                    List.of(),
+                    0
+            );
+            assistantMessageId = savedAssistant.getId();
+
+            chatHistoryService.updateSessionCounters(session.getId(), 0);
+
+        } catch (Exception persistError) {
+            log.error("Failed to persist restricted response", persistError);
+        }
+
+        ChatResponse response = ChatResponse.builder()
+                .answer(answer)
+                .messageId(assistantMessageId)
+                .conversationId(conversationId != null ? conversationId.toString() : null)
+                .sources(List.of())
+                .responseTimeMs(System.currentTimeMillis() - startTime)
+                .build();
+
+        return ResponseEntity.ok(response);
+    }
+
+    private UUID parseConversationId(String conversationIdStr) {
+        if (conversationIdStr == null || conversationIdStr.isBlank()) {
+            return null;
+        }
+        try {
+            return UUID.fromString(conversationIdStr);
+        } catch (IllegalArgumentException e) {
+            return null;
+        }
+    }
+
+    @GetMapping("/history")
+    @PreAuthorize("isAuthenticated()")
+    @Operation(summary = "List chat conversations", description = "User sees own conversations; admin sees all tenant conversations")
+    public ResponseEntity<Page<ConversationSummaryResponse>> getHistory(
+            @AuthenticationPrincipal UserPrincipal userDetails,
+            @RequestParam(defaultValue = "0") int page,
+            @RequestParam(defaultValue = "20") int size
+    ) {
+        Page<ConversationSummaryResponse> conversations =
+                chatHistoryService.getConversations(userDetails, page, size);
+        return ResponseEntity.ok(conversations);
+    }
+
+    @GetMapping("/history/{conversationId}")
+    @PreAuthorize("isAuthenticated()")
+    @Operation(summary = "Get full conversation with messages", description = "User sees own conversations; admin sees any in tenant")
+    public ResponseEntity<ChatHistoryResponse> getConversation(
+            @PathVariable UUID conversationId,
+            @AuthenticationPrincipal UserPrincipal userDetails
+    ) {
+        ChatHistoryResponse conversation = chatHistoryService.getConversation(conversationId, userDetails);
+        return ResponseEntity.ok(conversation);
+    }
+
+    @PutMapping("/history/{conversationId}/end")
+    @PreAuthorize("isAuthenticated()")
+    @Operation(summary = "End a conversation", description = "Mark a conversation as ENDED")
+    public ResponseEntity<ConversationSummaryResponse> endConversation(
+            @PathVariable UUID conversationId,
+            @AuthenticationPrincipal UserPrincipal userDetails
+    ) {
+        ConversationSummaryResponse result = chatHistoryService.endConversation(conversationId, userDetails);
+        return ResponseEntity.ok(result);
+    }
+
+    @PostMapping("/messages/{messageId}/rate")
+    @PreAuthorize("isAuthenticated()")
+    @Operation(summary = "Rate an assistant message", description = "Rate a chatbot response (1-5 stars) with optional feedback")
+    public ResponseEntity<ChatMessageResponse> rateMessage(
+            @PathVariable UUID messageId,
+            @Valid @RequestBody RateMessageRequest request,
+            @AuthenticationPrincipal UserPrincipal userDetails
+    ) {
+        ChatMessageResponse result = chatHistoryService.rateMessage(messageId, request, userDetails);
+        return ResponseEntity.ok(result);
     }
 
     @GetMapping("/health")
