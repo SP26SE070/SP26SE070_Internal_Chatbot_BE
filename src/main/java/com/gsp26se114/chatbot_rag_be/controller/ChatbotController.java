@@ -94,17 +94,22 @@ public class ChatbotController {
                 long totalDocsInTenant = documentRepository.countByTenantIdAndIsActive(
                     userDetails.getTenantId(), true
                 );
+                long totalChunksInTenant = chunkRepository.countByTenantId(
+                    userDetails.getTenantId()
+                );
 
-                if (totalDocsInTenant > 0) {
-                    log.warn("User {} tried to access documents outside their permission scope", userDetails.getEmail());
-
+                if (totalChunksInTenant == 0) {
+                    // No documents have been indexed yet
+                    context = "";
+                    sources = List.of();
+                    log.info("No chunks indexed in tenant {} - answering with general knowledge", userDetails.getTenantId());
+                } else {
+                    // Chunks exist but none matched the query or user can't access them
+                    log.warn("User {} queried but no accessible chunks matched (total chunks: {})",
+                             userDetails.getEmail(), totalChunksInTenant);
                     // Still save the user message and bot response for restricted access
-                    return handleAndSaveRestrictedResponse(request, userDetails, startTime);
+                    return handleAndSaveRestrictedResponse(request, userDetails, startTime, "no_access");
                 }
-
-                context = "";
-                sources = List.of();
-                log.info("No relevant documents found - answering with general knowledge");
             } else {
                 context = similarChunks.stream()
                         .map(DocumentChunkEntity::getContent)
@@ -217,11 +222,16 @@ public class ChatbotController {
     }
 
     private ResponseEntity<ChatResponse> handleAndSaveRestrictedResponse(
-            ChatRequest request, UserPrincipal userDetails, long startTime) {
+            ChatRequest request, UserPrincipal userDetails, long startTime, String reason) {
 
-        String answer = "Xin lỗi, bạn không có quyền truy cập các tài liệu liên quan đến câu hỏi này. " +
-                        "Tài liệu này có thể chỉ dành cho các phòng ban hoặc vai trò cụ thể khác. " +
-                        "Vui lòng liên hệ quản trị viên nếu bạn cần quyền truy cập.";
+        String answer;
+        if ("no_match".equals(reason)) {
+            answer = "Xin lỗi, tôi không tìm thấy thông tin liên quan đến câu hỏi của bạn trong tài liệu nội bộ.";
+        } else {
+            answer = "Xin lỗi, bạn không có quyền truy cập các tài liệu liên quan đến câu hỏi này. " +
+                     "Tài liệu này có thể chỉ dành cho các phòng ban hoặc vai trò cụ thể khác. " +
+                     "Vui lòng liên hệ quản trị viên nếu bạn cần quyền truy cập.";
+        }
 
         UUID conversationId = null;
         UUID assistantMessageId = null;
