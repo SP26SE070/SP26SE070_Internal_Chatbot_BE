@@ -39,6 +39,11 @@ public class TenantRoleService {
         log.info("Fetching available roles for tenant: {}", tenantId);
         List<RoleEntity> roles = roleRepository.findAvailableRolesForTenant(tenantId);
         return roles.stream()
+                .filter(role -> {
+                    String code = role.getCode();
+                    return code != null && !code.equals("TENANT_ADMIN")
+                            && !code.equals("SUPER_ADMIN") && !code.equals("STAFF");
+                })
                 .map(role -> mapToResponse(role, tenantId))
                 .collect(Collectors.toList());
     }
