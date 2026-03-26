@@ -76,13 +76,6 @@ public class ChatbotController {
                     userDetails.getTenantId(), userDetails.getId(),
                     userDetails.getDepartmentId(), userDetails.getRoleId());
 
-            log.info("[PARAM] tenantId={}", userDetails.getTenantId());
-            log.info("[PARAM] userId={}", userDetails.getId());
-            log.info("[PARAM] userDepartmentId={}", userDetails.getDepartmentId());
-            log.info("[PARAM] userRoleId={}", userDetails.getRoleId());
-            log.info("[PARAM] queryEmbedding length={}", vectorString != null ? vectorString.length() : "NULL");
-            log.info("[PARAM] maxDistance={}", maxDistance);
-
             List<DocumentChunkEntity> similarChunks = chunkRepository.findSimilarChunksWithAccessControl(
                     userDetails.getTenantId(),
                     userDetails.getId(),
@@ -95,7 +88,6 @@ public class ChatbotController {
                     topK
             );
 
-            log.info("[RESULT] chunks returned={}", similarChunks.size());
             log.info("Found {} similar chunks (similarity threshold: > 30%)", similarChunks.size());
 
             // Step 3: Build context from chunks (if any)
