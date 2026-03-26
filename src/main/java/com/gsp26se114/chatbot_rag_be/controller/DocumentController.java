@@ -299,6 +299,15 @@ public class DocumentController {
             }
             document.setFileName(fileName);
             document.setOriginalFileName(file.getOriginalFilename());
+            // Auto-set document_title from original filename (strip extension)
+            String titleFromFile = file.getOriginalFilename();
+            if (titleFromFile != null && !titleFromFile.isBlank()) {
+                int dot = titleFromFile.lastIndexOf('.');
+                if (dot > 0) {
+                    titleFromFile = titleFromFile.substring(0, dot);
+                }
+                document.setDocumentTitle(titleFromFile);
+            }
             document.setFileType(contentType);
             document.setFileSize(file.getSize());
             document.setStoragePath(storagePath);
