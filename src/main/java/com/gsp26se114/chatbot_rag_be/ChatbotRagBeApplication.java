@@ -3,8 +3,12 @@ package com.gsp26se114.chatbot_rag_be;
 import io.github.cdimascio.dotenv.Dotenv;
 import org.springframework.boot.SpringApplication;
 import org.springframework.boot.autoconfigure.SpringBootApplication;
+import org.springframework.context.annotation.Bean;
 import org.springframework.scheduling.annotation.EnableAsync;
 import org.springframework.scheduling.annotation.EnableScheduling;
+import org.springframework.scheduling.concurrent.ThreadPoolTaskExecutor;
+
+import java.util.concurrent.Executor;
 
 // Dùng excludeName thay vì exclude để không bị lỗi Import
 @SpringBootApplication(excludeName = {
@@ -40,5 +44,16 @@ public class ChatbotRagBeApplication {
     public static void main(String[] args) {
         loadDotEnv();
         SpringApplication.run(ChatbotRagBeApplication.class, args);
+    }
+
+    @Bean(name = "taskExecutor")
+    public Executor taskExecutor() {
+        ThreadPoolTaskExecutor executor = new ThreadPoolTaskExecutor();
+        executor.setCorePoolSize(2);
+        executor.setMaxPoolSize(5);
+        executor.setQueueCapacity(100);
+        executor.setThreadNamePrefix("DocProcess-");
+        executor.initialize();
+        return executor;
     }
 }
