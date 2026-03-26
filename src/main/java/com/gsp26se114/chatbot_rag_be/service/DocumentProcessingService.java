@@ -80,129 +80,126 @@ public class DocumentProcessingService {
     }
     
     /**
-     * Core processing logic with detailed step-by-step logging
+     * Core processing logic with detailed step-by-step logging.
+     * Chunk saves use separate commits via flush() to ensure errors surface
+     * before status is set to COMPLETED.
      */
     @Transactional
     private void processDocument(UUID documentId) {
         log.info("[PROCESSING START] Document: {}", documentId);
-        
+
         DocumentEntity document = documentRepository.findById(documentId)
                 .orElseThrow(() -> new RuntimeException("Document not found: " + documentId));
-        
+
         try {
             // 1. Update status
             log.info("[STEP 1] Updating document status to PROCESSING");
             document.setEmbeddingStatus("PROCESSING");
             documentRepository.save(document);
             log.info("[STEP 1] ✓ Status updated successfully");
-            
+
             // 2. Download file from MinIO
             log.info("[STEP 2] Downloading file from MinIO: {}", document.getStoragePath());
             byte[] fileContent = minioService.downloadDocument(document.getStoragePath());
             log.info("[STEP 2] ✓ Downloaded {} bytes", fileContent.length);
-            
+
             // 3. Extract text
             log.info("[STEP 3] Extracting text from {} file", document.getFileType());
             String text = textExtractor.extractText(fileContent, document.getFileType());
             log.info("[STEP 3] ✓ Extracted {} characters", text.length());
-            
+
             if (text.isBlank()) {
                 throw new RuntimeException("No text extracted from document");
             }
-            
+
             // 4. Split into chunks
             log.info("[STEP 4] Splitting text into chunks");
             List<String> chunks = chunkingService.splitText(text);
             log.info("[STEP 4] ✓ Created {} chunks", chunks.size());
-            
+
             if (chunks.isEmpty()) {
                 throw new RuntimeException("No chunks created from text");
             }
-            
-            // 5. Create embeddings for each chunk
+
+            // 5. Create embeddings and persist chunks
             log.info("[STEP 5] Generating embeddings for {} chunks", chunks.size());
-            List<DocumentChunkEntity> chunkEntities = new ArrayList<>();
-            
+            int savedCount = 0;
+            int failedCount = 0;
+
             for (int i = 0; i < chunks.size(); i++) {
                 String chunkText = chunks.get(i);
-                
-                // Create embedding
-                float[] embedding = embeddingService.createEmbedding(chunkText);
-                String embeddingVector = embeddingService.toVectorString(embedding);
-                
-                // Create chunk entity
-                DocumentChunkEntity chunk = DocumentChunkEntity.builder()
-                        .id(UUID.randomUUID())
-                        .documentId(document.getId())
-                        .versionId(document.getActiveVersionId())
-                        .tenantId(document.getTenantId())
-                        .chunkIndex(i)
-                        .content(chunkText)
-                        .embedding(embeddingVector)
-                        .embeddingModel("gemini-embedding-001")
-                        .tokenCount(chunkText.length() / 4) // Rough estimate
-                        // Copy access control from parent document
-                        .visibility(document.getVisibility().toString())
-                        .accessibleDepartments(document.getAccessibleDepartments())
-                        .accessibleRoles(document.getAccessibleRoles())
-                        .ownerDepartmentId(document.getOwnerDepartmentId())
-                        .categoryId(document.getCategoryId())
-                        .tagIds(extractTagIds(document))
-                        .createdAt(java.time.LocalDateTime.now())
-                        .build();
-                
-                chunkEntities.add(chunk);
-                
-                // Batch save every 10 chunks using custom insert with vector cast
-                if (chunkEntities.size() >= 10) {
-                    for (DocumentChunkEntity c : chunkEntities) {
-                        chunkRepository.insertChunkWithVectorCast(
-                            c.getId(), c.getDocumentId(), c.getTenantId(), c.getChunkIndex(),
-                            c.getContent(), c.getEmbedding(), c.getEmbeddingModel(), c.getTokenCount(),
-                            c.getVisibility(), 
-                            gson.toJson(c.getAccessibleDepartments()),  // Convert List to JSON
-                            gson.toJson(c.getAccessibleRoles()),         // Convert List to JSON
-                            c.getCategoryId(),
-                            gson.toJson(c.getTagIds()),
-                            c.getVersionId(),
-                            c.getOwnerDepartmentId(), c.getCreatedAt()
-                        );
-                    }
-                    chunkEntities.clear();
-                    log.info("[STEP 5] ✓ Saved batch, progress: {}/{}", i + 1, chunks.size());
-                }
-            }
-            
-            // Save remaining chunks
-            log.info("[STEP 5] Saving remaining {} chunks", chunkEntities.size());
-            if (!chunkEntities.isEmpty()) {
-                for (DocumentChunkEntity c : chunkEntities) {
+
+                try {
+                    // Create embedding
+                    float[] embedding = embeddingService.createEmbedding(chunkText);
+                    String embeddingVector = embeddingService.toVectorString(embedding);
+
+                    // Create chunk entity
+                    DocumentChunkEntity chunk = DocumentChunkEntity.builder()
+                            .id(UUID.randomUUID())
+                            .documentId(document.getId())
+                            .versionId(document.getActiveVersionId())
+                            .tenantId(document.getTenantId())
+                            .chunkIndex(i)
+                            .content(chunkText)
+                            .embedding(embeddingVector)
+                            .embeddingModel("gemini-embedding-001")
+                            .tokenCount(chunkText.length() / 4) // Rough estimate
+                            // Copy access control from parent document
+                            .visibility(document.getVisibility().toString())
+                            .accessibleDepartments(document.getAccessibleDepartments())
+                            .accessibleRoles(document.getAccessibleRoles())
+                            .ownerDepartmentId(document.getOwnerDepartmentId())
+                            .categoryId(document.getCategoryId())
+                            .tagIds(extractTagIds(document))
+                            .createdAt(java.time.LocalDateTime.now())
+                            .build();
+
+                    // Persist immediately — flush to surface errors before setting COMPLETED
+                    log.debug("[STEP 5] Saving chunk {}/{}: id={}", i + 1, chunks.size(), chunk.getId());
                     chunkRepository.insertChunkWithVectorCast(
-                        c.getId(), c.getDocumentId(), c.getTenantId(), c.getChunkIndex(),
-                        c.getContent(), c.getEmbedding(), c.getEmbeddingModel(), c.getTokenCount(),
-                        c.getVisibility(), 
-                        gson.toJson(c.getAccessibleDepartments()),  // Convert List to JSON
-                        gson.toJson(c.getAccessibleRoles()),         // Convert List to JSON
-                        c.getCategoryId(),
-                        gson.toJson(c.getTagIds()),
-                        c.getVersionId(),
-                        c.getOwnerDepartmentId(), c.getCreatedAt()
+                            chunk.getId(), chunk.getDocumentId(), chunk.getTenantId(), chunk.getChunkIndex(),
+                            chunk.getContent(), chunk.getEmbedding(), chunk.getEmbeddingModel(), chunk.getTokenCount(),
+                            chunk.getVisibility(),
+                            gson.toJson(chunk.getAccessibleDepartments()),
+                            gson.toJson(chunk.getAccessibleRoles()),
+                            chunk.getCategoryId(),
+                            gson.toJson(chunk.getTagIds()),
+                            chunk.getVersionId(),
+                            chunk.getOwnerDepartmentId(), chunk.getCreatedAt()
                     );
+                    chunkRepository.flush();
+                    savedCount++;
+
+                    if ((i + 1) % 10 == 0 || i == chunks.size() - 1) {
+                        log.info("[STEP 5] ✓ Progress: {}/{} chunks saved", i + 1, chunks.size());
+                    }
+
+                } catch (Exception chunkEx) {
+                    failedCount++;
+                    log.error("[STEP 5] ✗ Failed to save chunk {}/{}: {}", i + 1, chunks.size(), chunkEx.getMessage());
+                    // Continue with remaining chunks — don't kill entire document for one bad chunk
+                    if (failedCount >= 5) {
+                        log.error("[STEP 5] Too many chunk failures ({}), aborting document {}", failedCount, documentId);
+                        throw new RuntimeException("Too many chunk failures: " + chunkEx.getMessage(), chunkEx);
+                    }
                 }
-                log.info("[STEP 5] ✓ All chunks saved successfully");
             }
-            
-            // 6. Update document status
-            log.info("[STEP 6] Updating document status to COMPLETED");
-            document.setEmbeddingStatus("COMPLETED");
-            document.setChunkCount(chunks.size());
-            document.setEmbeddingModel("gemini-embedding-001");
-            document.setEmbeddingError(null);
-            documentRepository.save(document);
-            
-            log.info("[PROCESSING SUCCESS] ✓✓✓ Document {} completed: {} chunks created ✓✓✓", 
-                    documentId, chunks.size());
-            
+
+            log.info("[STEP 5] ✓ Chunk embedding complete: {} saved, {} failed", savedCount, failedCount);
+
+            if (savedCount == 0) {
+                throw new RuntimeException("No chunks were successfully saved");
+            }
+
+            // 6. Update document status — use REQUIRES_NEW so it commits independently
+            // This ensures COMPLETED only shows if chunks actually persisted
+            log.info("[STEP 6] Marking document COMPLETED ({} chunks)", savedCount);
+            updateDocumentCompleteStatus(documentId, savedCount, "gemini-embedding-001");
+
+            log.info("[PROCESSING SUCCESS] ✓✓✓ Document {} completed: {} chunks created ✓✓✓",
+                    documentId, savedCount);
+
         } catch (Exception e) {
             log.error("[PROCESSING FAILED] Document: {}", documentId, e);
             System.err.println("====== PROCESSING ERROR ======");
@@ -211,10 +208,28 @@ public class DocumentProcessingService {
             System.err.println("Error Message: " + e.getMessage());
             e.printStackTrace();
             System.err.println("==============================");
-            
+
             // Rethrow exception to trigger rollback and propagate to caller
             throw new RuntimeException("Document processing failed: " + e.getMessage(), e);
         }
+    }
+
+    /**
+     * Update document to COMPLETED in a separate transaction.
+     * Uses REQUIRES_NEW so the COMPLETED status is only persisted if this
+     * method's transaction commits successfully — which only happens after
+     * all chunk inserts have flushed without error.
+     */
+    @Transactional(propagation = Propagation.REQUIRES_NEW)
+    public void updateDocumentCompleteStatus(UUID documentId, int chunkCount, String embeddingModel) {
+        DocumentEntity document = documentRepository.findById(documentId)
+                .orElseThrow(() -> new RuntimeException("Document not found: " + documentId));
+        document.setEmbeddingStatus("COMPLETED");
+        document.setChunkCount(chunkCount);
+        document.setEmbeddingModel(embeddingModel);
+        document.setEmbeddingError(null);
+        documentRepository.save(document);
+        log.info("[STEP 6] ✓ Document {} marked COMPLETED with {} chunks", documentId, chunkCount);
     }
 
     /**

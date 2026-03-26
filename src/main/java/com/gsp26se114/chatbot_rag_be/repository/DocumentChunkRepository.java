@@ -6,6 +6,7 @@ import org.springframework.data.jpa.repository.Modifying;
 import org.springframework.data.jpa.repository.Query;
 import org.springframework.data.repository.query.Param;
 import org.springframework.stereotype.Repository;
+import org.springframework.transaction.annotation.Transactional;
 
 import java.util.List;
 import java.util.UUID;
@@ -104,6 +105,7 @@ public interface DocumentChunkRepository extends JpaRepository<DocumentChunkEnti
      * Required because JPA doesn't handle String to vector type conversion
      */
     @Modifying
+    @Transactional
     @Query(value = """
         INSERT INTO document_chunks (
             document_chunk_id, document_id, tenant_id, chunk_index, content,
@@ -113,7 +115,7 @@ public interface DocumentChunkRepository extends JpaRepository<DocumentChunkEnti
             created_at
         ) VALUES (
             :id, :documentId, :tenantId, :chunkIndex, :content,
-            CAST(:embedding AS vector), :embeddingModel, :tokenCount,
+            CAST(:embedding AS vector(3072)), :embeddingModel, :tokenCount,
             :visibility, CAST(:accessibleDepartments AS jsonb), CAST(:accessibleRoles AS jsonb), :ownerDepartmentId,
             :categoryId, CAST(:tagIds AS jsonb), :versionId,
             :createdAt

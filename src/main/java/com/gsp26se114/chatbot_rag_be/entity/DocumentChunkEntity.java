@@ -49,7 +49,7 @@ public class DocumentChunkEntity {
      * Vector embedding stored as PostgreSQL vector type (pgvector extension).
      * gemini-embedding-001 produces 3072 dimensions
      */
-    @Column(name = "embedding", columnDefinition = "vector(768)")
+    @Column(name = "embedding", columnDefinition = "vector(3072)")
     private String embedding;
 
     @Column(name = "embedding_model", length = 100)
