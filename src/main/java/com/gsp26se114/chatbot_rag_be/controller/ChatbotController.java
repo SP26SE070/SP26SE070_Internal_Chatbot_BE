@@ -72,6 +72,10 @@ public class ChatbotController {
                 tagIdsJson = objectMapper.writeValueAsString(request.getTagIds().stream().distinct().toList());
             }
 
+            log.info("[DEBUG] tenantId={}, userId={}, deptId={}, roleId={}",
+                    userDetails.getTenantId(), userDetails.getId(),
+                    userDetails.getDepartmentId(), userDetails.getRoleId());
+
             List<DocumentChunkEntity> similarChunks = chunkRepository.findSimilarChunksWithAccessControl(
                     userDetails.getTenantId(),
                     userDetails.getId(),
