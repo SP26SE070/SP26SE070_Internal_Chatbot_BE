@@ -27,7 +27,7 @@ public interface DocumentChunkRepository extends JpaRepository<DocumentChunkEnti
      * @param queryEmbedding    Query vector in format '[0.1,0.2,0.3,...]'
      * @param userDepartmentId  User's department for access control
      * @param userRoleId        User's role for access control
-     * @param maxDistance       Maximum cosine distance (0.35 = 65% similarity)
+     * @param maxDistance       Maximum cosine distance (0.7 = 30% similarity)
      * @param limit             Number of chunks to return
      * @return List of similar chunks ordered by relevance
      */

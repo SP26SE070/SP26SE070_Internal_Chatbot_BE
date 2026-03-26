@@ -65,7 +65,7 @@ public class ChatbotController {
 
             // Step 2: Find similar chunks with access control
             int topK = request.getTopK() != null ? request.getTopK() : 3;
-            double maxDistance = 0.35;
+            double maxDistance = 0.7;
             String tagIdsJson = null;
 
             if (request.getTagIds() != null && !request.getTagIds().isEmpty()) {
@@ -75,6 +75,13 @@ public class ChatbotController {
             log.info("[DEBUG] tenantId={}, userId={}, deptId={}, roleId={}",
                     userDetails.getTenantId(), userDetails.getId(),
                     userDetails.getDepartmentId(), userDetails.getRoleId());
+
+            log.info("[PARAM] tenantId={}", userDetails.getTenantId());
+            log.info("[PARAM] userId={}", userDetails.getId());
+            log.info("[PARAM] userDepartmentId={}", userDetails.getDepartmentId());
+            log.info("[PARAM] userRoleId={}", userDetails.getRoleId());
+            log.info("[PARAM] queryEmbedding length={}", vectorString != null ? vectorString.length() : "NULL");
+            log.info("[PARAM] maxDistance={}", maxDistance);
 
             List<DocumentChunkEntity> similarChunks = chunkRepository.findSimilarChunksWithAccessControl(
                     userDetails.getTenantId(),
@@ -88,7 +95,8 @@ public class ChatbotController {
                     topK
             );
 
-            log.info("Found {} similar chunks (similarity threshold: > 65%)", similarChunks.size());
+            log.info("[RESULT] chunks returned={}", similarChunks.size());
+            log.info("Found {} similar chunks (similarity threshold: > 30%)", similarChunks.size());
 
             // Step 3: Build context from chunks (if any)
             String context;
