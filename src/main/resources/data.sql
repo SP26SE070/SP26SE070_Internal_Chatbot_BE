@@ -1355,7 +1355,7 @@ INSERT INTO documents (
  NULL, '[]'::jsonb, '[]'::jsonb,
  (SELECT user_id FROM users WHERE email = 'admin@fpt.com'),
  CURRENT_TIMESTAMP - interval '8 days',
- 'COMPLETED', TRUE,
+ 'PENDING', TRUE,
  'c1200000-0000-0000-0000-000000000012', 'Nội quy công ty 2026'),
 
 -- 2. Hướng dẫn onboarding - COMPANY_WIDE
@@ -1368,7 +1368,7 @@ INSERT INTO documents (
  NULL, '[]'::jsonb, '[]'::jsonb,
  (SELECT user_id FROM users WHERE email = 'admin@fpt.com'),
  CURRENT_TIMESTAMP - interval '7 days',
- 'COMPLETED', TRUE,
+ 'PENDING', TRUE,
  'c3100000-0000-0000-0000-000000000031', 'Hướng dẫn Onboarding nhân viên mới'),
 
 -- 3. Chính sách nghỉ phép - COMPANY_WIDE
@@ -1381,7 +1381,7 @@ INSERT INTO documents (
  NULL, '[]'::jsonb, '[]'::jsonb,
  (SELECT user_id FROM users WHERE email = 'admin@fpt.com'),
  CURRENT_TIMESTAMP - interval '6 days',
- 'COMPLETED', TRUE,
+ 'PENDING', TRUE,
  'c1100000-0000-0000-0000-000000000011', 'Chính sách nghỉ phép 2026'),
 
 -- 4. Kiến trúc hệ thống nội bộ - chỉ DEV department
@@ -1396,7 +1396,7 @@ INSERT INTO documents (
  '[]'::jsonb,
  (SELECT user_id FROM users WHERE email = 'admin@fpt.com'),
  CURRENT_TIMESTAMP - interval '5 days',
- 'COMPLETED', TRUE,
+ 'PENDING', TRUE,
  'c2100000-0000-0000-0000-000000000021', 'System Architecture v2.0'),
 
 -- 5. Coding Standards - COMPANY_WIDE
@@ -1413,62 +1413,11 @@ INSERT INTO documents (
  'c2200000-0000-0000-0000-000000000022', 'Coding Standards - Java & Spring Boot');
 
 -------------------------------------------------------
--- 10. SEED DATA: RAG CHUNKS + CHAT (FPT Software)
--- Mục tiêu: SUPER_ADMIN dashboard có số liệu document chunks + LLM usage.
+-- 10. SEED DATA: CHAT SESSIONS + MESSAGES (FPT Software)
+-- Note: document_chunks are intentionally not seeded here — they have null embeddings
+-- and would never match similarity search. Documents above have embedding_status = PENDING
+-- and will be processed when real files are uploaded.
 -------------------------------------------------------
-INSERT INTO document_chunks (
-    document_chunk_id, document_id, tenant_id, chunk_index, content, token_count,
-    embedding_model, visibility, accessible_departments, accessible_roles, owner_department_id, created_at
-) VALUES
-('f1000000-0000-0000-0000-000000000001', 'd1000000-0000-0000-0000-000000000001', '550e8400-e29b-41d4-a716-446655440000', 0,
- 'Nội quy công ty: toàn bộ nhân sự làm việc từ 08:30 đến 17:30, từ thứ Hai đến thứ Sáu.', 120,
- 'text-embedding-004', 'COMPANY_WIDE', '[]'::jsonb, '[]'::jsonb, NULL, CURRENT_TIMESTAMP - interval '8 days'),
-('f1000000-0000-0000-0000-000000000002', 'd1000000-0000-0000-0000-000000000001', '550e8400-e29b-41d4-a716-446655440000', 1,
- 'Nhân sự cần tuân thủ quy tắc bảo mật thông tin nội bộ và không chia sẻ tài liệu nhạy cảm ra bên ngoài.', 135,
- 'text-embedding-004', 'COMPANY_WIDE', '[]'::jsonb, '[]'::jsonb, NULL, CURRENT_TIMESTAMP - interval '8 days'),
-('f1000000-0000-0000-0000-000000000003', 'd2000000-0000-0000-0000-000000000002', '550e8400-e29b-41d4-a716-446655440000', 0,
- 'Onboarding tuần đầu: hoàn tất tài khoản email công ty, Jira, GitLab và hệ thống chấm công.', 118,
- 'text-embedding-004', 'COMPANY_WIDE', '[]'::jsonb, '[]'::jsonb, NULL, CURRENT_TIMESTAMP - interval '7 days'),
-('f1000000-0000-0000-0000-000000000004', 'd2000000-0000-0000-0000-000000000002', '550e8400-e29b-41d4-a716-446655440000', 1,
- 'Nhân viên mới cần tham gia buổi orientation và hoàn tất checklist trong vòng 05 ngày làm việc.', 124,
- 'text-embedding-004', 'COMPANY_WIDE', '[]'::jsonb, '[]'::jsonb, NULL, CURRENT_TIMESTAMP - interval '7 days'),
-('f1000000-0000-0000-0000-000000000005', 'd3000000-0000-0000-0000-000000000003', '550e8400-e29b-41d4-a716-446655440000', 0,
- 'Chính sách nghỉ phép: nhân viên chính thức có 12 ngày phép năm, cộng thêm ngày phép thâm niên.', 122,
- 'text-embedding-004', 'COMPANY_WIDE', '[]'::jsonb, '[]'::jsonb, NULL, CURRENT_TIMESTAMP - interval '6 days'),
-('f1000000-0000-0000-0000-000000000006', 'd3000000-0000-0000-0000-000000000003', '550e8400-e29b-41d4-a716-446655440000', 1,
- 'Nghỉ ốm trên 02 ngày cần nộp giấy xác nhận y tế và gửi thông báo cho quản lý trực tiếp.', 116,
- 'text-embedding-004', 'COMPANY_WIDE', '[]'::jsonb, '[]'::jsonb, NULL, CURRENT_TIMESTAMP - interval '6 days'),
-('f1000000-0000-0000-0000-000000000007', 'd4000000-0000-0000-0000-000000000004', '550e8400-e29b-41d4-a716-446655440000', 0,
- 'System Architecture v2: dịch vụ được tách theo microservice với API Gateway và event bus nội bộ.', 145,
- 'text-embedding-004', 'SPECIFIC_DEPARTMENTS',
- (SELECT jsonb_agg(department_id) FROM departments WHERE tenant_id = '550e8400-e29b-41d4-a716-446655440000' AND code = 'DEV'),
- '[]'::jsonb,
- (SELECT department_id FROM departments WHERE tenant_id = '550e8400-e29b-41d4-a716-446655440000' AND code = 'DEV'),
- CURRENT_TIMESTAMP - interval '5 days'),
-('f1000000-0000-0000-0000-000000000008', 'd4000000-0000-0000-0000-000000000004', '550e8400-e29b-41d4-a716-446655440000', 1,
- 'Tầng dữ liệu sử dụng PostgreSQL, Redis cache, MinIO object storage và cơ chế backup định kỳ.', 140,
- 'text-embedding-004', 'SPECIFIC_DEPARTMENTS',
- (SELECT jsonb_agg(department_id) FROM departments WHERE tenant_id = '550e8400-e29b-41d4-a716-446655440000' AND code = 'DEV'),
- '[]'::jsonb,
- (SELECT department_id FROM departments WHERE tenant_id = '550e8400-e29b-41d4-a716-446655440000' AND code = 'DEV'),
- CURRENT_TIMESTAMP - interval '5 days'),
-('f1000000-0000-0000-0000-000000000009', 'd5000000-0000-0000-0000-000000000005', '550e8400-e29b-41d4-a716-446655440000', 0,
- 'Coding standards: ưu tiên clean architecture, đặt tên rõ nghĩa, tách service và repository.', 132,
- 'text-embedding-004', 'COMPANY_WIDE', '[]'::jsonb, '[]'::jsonb, NULL, CURRENT_TIMESTAMP - interval '4 days'),
-('f1000000-0000-0000-0000-00000000000a', 'd5000000-0000-0000-0000-000000000005', '550e8400-e29b-41d4-a716-446655440000', 1,
- 'Mọi API public cần chuẩn hóa response object, mã lỗi và log correlation-id để trace.', 128,
- 'text-embedding-004', 'COMPANY_WIDE', '[]'::jsonb, '[]'::jsonb, NULL, CURRENT_TIMESTAMP - interval '4 days');
-
-UPDATE documents d
-SET chunk_count = c.cnt,
-    embedding_status = CASE WHEN c.cnt > 0 THEN 'COMPLETED' ELSE d.embedding_status END
-FROM (
-    SELECT document_id, COUNT(*) AS cnt
-    FROM document_chunks
-    WHERE tenant_id = '550e8400-e29b-41d4-a716-446655440000'
-    GROUP BY document_id
-) c
-WHERE d.document_id = c.document_id;
 
 INSERT INTO chat_sessions (
     session_id, tenant_id, user_id, title, status, started_at, ended_at, last_message_at,
@@ -1511,33 +1460,33 @@ INSERT INTO chat_messages (
  'USER', 'Mỗi năm em được bao nhiêu ngày phép?', '[]'::jsonb, 90, NULL, NULL, NULL, CURRENT_TIMESTAMP - interval '3 days' + interval '1 minutes'),
 ('c2000000-0000-0000-0000-000000000002', 'c1000000-0000-0000-0000-000000000001', '550e8400-e29b-41d4-a716-446655440000',
  NULL,
- 'ASSISTANT', 'Theo chính sách hiện tại, nhân viên chính thức có 12 ngày phép năm.', '[{"chunkId":"f1000000-0000-0000-0000-000000000005"}]'::jsonb, 290,
+ 'ASSISTANT', 'Theo chính sách hiện tại, nhân viên chính thức có 12 ngày phép năm.', '[]'::jsonb, 290,
  5, 'Rất rõ ràng', CURRENT_TIMESTAMP - interval '3 days' + interval '3 minutes', CURRENT_TIMESTAMP - interval '3 days' + interval '3 minutes'),
 ('c2000000-0000-0000-0000-000000000003', 'c1000000-0000-0000-0000-000000000001', '550e8400-e29b-41d4-a716-446655440000',
  (SELECT user_id FROM users WHERE email = 'employee1@fpt.com'),
  'USER', 'Nghỉ ốm cần thủ tục gì?', '[]'::jsonb, 95, NULL, NULL, NULL, CURRENT_TIMESTAMP - interval '3 days' + interval '5 minutes'),
 ('c2000000-0000-0000-0000-000000000004', 'c1000000-0000-0000-0000-000000000001', '550e8400-e29b-41d4-a716-446655440000',
  NULL,
- 'ASSISTANT', 'Nghỉ ốm trên 2 ngày cần nộp giấy xác nhận y tế cho quản lý.', '[{"chunkId":"f1000000-0000-0000-0000-000000000006"}]'::jsonb, 305,
+ 'ASSISTANT', 'Nghỉ ốm trên 2 ngày cần nộp giấy xác nhận y tế cho quản lý.', '[]'::jsonb, 305,
  NULL, NULL, NULL, CURRENT_TIMESTAMP - interval '3 days' + interval '7 minutes'),
 ('c2000000-0000-0000-0000-000000000005', 'c1000000-0000-0000-0000-000000000002', '550e8400-e29b-41d4-a716-446655440000',
  (SELECT user_id FROM users WHERE email = 'employee2@fpt.com'),
  'USER', 'Onboarding tuần đầu cần làm gì?', '[]'::jsonb, 82, NULL, NULL, NULL, CURRENT_TIMESTAMP - interval '2 days' + interval '1 minutes'),
 ('c2000000-0000-0000-0000-000000000006', 'c1000000-0000-0000-0000-000000000002', '550e8400-e29b-41d4-a716-446655440000',
  NULL,
- 'ASSISTANT', 'Bạn cần hoàn tất tài khoản Jira, GitLab, email công ty và chấm công.', '[{"chunkId":"f1000000-0000-0000-0000-000000000003"}]'::jsonb, 260,
+ 'ASSISTANT', 'Bạn cần hoàn tất tài khoản Jira, GitLab, email công ty và chấm công.', '[]'::jsonb, 260,
  4, 'Hữu ích', CURRENT_TIMESTAMP - interval '2 days' + interval '4 minutes', CURRENT_TIMESTAMP - interval '2 days' + interval '4 minutes'),
 ('c2000000-0000-0000-0000-000000000007', 'c1000000-0000-0000-0000-000000000002', '550e8400-e29b-41d4-a716-446655440000',
  (SELECT user_id FROM users WHERE email = 'employee2@fpt.com'),
  'USER', 'Checklist phải xong trong bao lâu?', '[]'::jsonb, 74, NULL, NULL, NULL, CURRENT_TIMESTAMP - interval '2 days' + interval '7 minutes'),
 ('c2000000-0000-0000-0000-000000000008', 'c1000000-0000-0000-0000-000000000002', '550e8400-e29b-41d4-a716-446655440000',
  NULL,
- 'ASSISTANT', 'Checklist onboarding cần hoàn tất trong 5 ngày làm việc.', '[{"chunkId":"f1000000-0000-0000-0000-000000000004"}]'::jsonb, 245,
+ 'ASSISTANT', 'Checklist onboarding cần hoàn tất trong 5 ngày làm việc.', '[]'::jsonb, 245,
  NULL, NULL, NULL, CURRENT_TIMESTAMP - interval '2 days' + interval '9 minutes'),
 ('c2000000-0000-0000-0000-000000000009', 'c1000000-0000-0000-0000-000000000003', '550e8400-e29b-41d4-a716-446655440000',
  (SELECT user_id FROM users WHERE email = 'admin@fpt.com'),
  'USER', 'Cho tôi tiêu chuẩn code backend chính?', '[]'::jsonb, 88, NULL, NULL, NULL, CURRENT_TIMESTAMP - interval '8 hours' + interval '3 minutes'),
 ('c2000000-0000-0000-0000-00000000000a', 'c1000000-0000-0000-0000-000000000003', '550e8400-e29b-41d4-a716-446655440000',
  NULL,
- 'ASSISTANT', 'Ưu tiên clean architecture, response chuẩn hóa và log correlation-id.', '[{"chunkId":"f1000000-0000-0000-0000-00000000000a"}]'::jsonb, 280,
+ 'ASSISTANT', 'Ưu tiên clean architecture, response chuẩn hóa và log correlation-id.', '[]'::jsonb, 280,
  NULL, NULL, NULL, CURRENT_TIMESTAMP - interval '7 hours');
