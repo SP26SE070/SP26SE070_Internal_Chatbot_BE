@@ -23,7 +23,7 @@ import java.util.Map;
 @RestController
 @RequestMapping("/api/v1/staff/analytics")
 @RequiredArgsConstructor
-@Tag(name = "09. 📊 Staff - Tenant Analytics", description = "Thống kê về tenants, subscriptions (STAFF)")
+@Tag(name = "09. 📊 Staff - Tenant Analytics", description = "Dashboard thống kê platform (cùng shape với admin/analytics/dashboard, trừ semantics totalUsers)")
 @SecurityRequirement(name = "bearerAuth")
 @PreAuthorize("hasRole('STAFF')")
 public class StaffAnalyticsController {
@@ -31,31 +31,36 @@ public class StaffAnalyticsController {
     private final TenantRepository tenantRepository;
     private final SubscriptionRepository subscriptionRepository;
     private final DocumentRepository documentRepository;
+    private final DocumentChunkRepository documentChunkRepository;
+    private final ChatMessageRepository chatMessageRepository;
     private final HealthEndpoint healthEndpoint;
 
     @GetMapping("/dashboard")
     @Operation(summary = "Dashboard cho STAFF",
                description = "Schema khớp admin ở system + tenants. "
                    + "system: status (STABLE|DEGRADED), statusLabel, appUptimeSeconds, appStartedAt, checkedAt. "
-                   + "tenants: total, active, pending, suspended, activePercentage (tuỳ chọn hiển thị). "
-                   + "totalUsers luôn bằng tenants.active (số tổ chức ACTIVE; không phải tổng user toàn hệ thống). "
-                   + "subscriptions: { total }, totalDocuments.")
+                   + "tenants: total = số tổ chức đã phê duyệt (ACTIVE + SUSPENDED); pending/rejected không cộng vào total. "
+                   + "active, pending, suspended, rejected; activePercentage = active / total (đã duyệt). "
+                   + "totalUsers = tenants.active (số tổ chức ACTIVE; không phải user platform). "
+                   + "documents + llmUsage cùng cấu trúc với admin dashboard.")
     public ResponseEntity<Map<String, Object>> getStaffDashboard() {
         Map<String, Object> dashboard = new HashMap<>();
         dashboard.put("system", buildSystemStats());
         
         // Tenant statistics
-        long totalTenants = tenantRepository.count();
         long activeTenants = tenantRepository.countByStatus(com.gsp26se114.chatbot_rag_be.entity.TenantStatus.ACTIVE);
         long pendingTenants = tenantRepository.countByStatus(com.gsp26se114.chatbot_rag_be.entity.TenantStatus.PENDING);
         long suspendedTenants = tenantRepository.countByStatus(com.gsp26se114.chatbot_rag_be.entity.TenantStatus.SUSPENDED);
-        
+        long rejectedTenants = tenantRepository.countByStatus(com.gsp26se114.chatbot_rag_be.entity.TenantStatus.REJECTED);
+        long approvedTenants = activeTenants + suspendedTenants;
+
         Map<String, Object> tenantStats = new HashMap<>();
-        tenantStats.put("total", totalTenants);
+        tenantStats.put("total", approvedTenants);
         tenantStats.put("active", activeTenants);
         tenantStats.put("pending", pendingTenants);
         tenantStats.put("suspended", suspendedTenants);
-        tenantStats.put("activePercentage", totalTenants > 0 ? (activeTenants * 100.0 / totalTenants) : 0.0);
+        tenantStats.put("rejected", rejectedTenants);
+        tenantStats.put("activePercentage", approvedTenants > 0 ? (activeTenants * 100.0 / approvedTenants) : 0.0);
         dashboard.put("tenants", tenantStats);
 
         dashboard.put("totalUsers", activeTenants);
@@ -66,10 +71,28 @@ public class StaffAnalyticsController {
         subscriptionStats.put("total", totalSubscriptions);
         dashboard.put("subscriptions", subscriptionStats);
         
-        // Document statistics
         long totalDocuments = documentRepository.count();
+        long totalChunks = documentChunkRepository.count();
+        Map<String, Long> documentStats = new HashMap<>();
+        documentStats.put("totalDocuments", totalDocuments);
+        documentStats.put("totalChunks", totalChunks);
+        documentStats.put("averageChunksPerDocument", totalDocuments > 0 ? (totalChunks / totalDocuments) : 0);
+        dashboard.put("documents", documentStats);
         dashboard.put("totalDocuments", totalDocuments);
-        
+
+        LocalDateTime startOfMonth = LocalDateTime.now().withDayOfMonth(1).withHour(0).withMinute(0).withSecond(0).withNano(0);
+        long totalTokens = chatMessageRepository.sumAllTokens();
+        long totalRequests = chatMessageRepository.countAllRequests();
+        long tokensMonth = chatMessageRepository.sumAllTokensSince(startOfMonth);
+        long requestsMonth = chatMessageRepository.countAllRequestsSince(startOfMonth);
+        Map<String, Object> llmStats = new HashMap<>();
+        llmStats.put("totalTokensUsed", totalTokens);
+        llmStats.put("totalRequests", totalRequests);
+        llmStats.put("tokensThisMonth", tokensMonth);
+        llmStats.put("requestsThisMonth", requestsMonth);
+        llmStats.put("averageTokensPerRequest", totalRequests > 0 ? totalTokens / totalRequests : 0);
+        dashboard.put("llmUsage", llmStats);
+
         return ResponseEntity.ok(dashboard);
     }
 
@@ -90,21 +113,23 @@ public class StaffAnalyticsController {
     }
 
     @GetMapping("/tenants")
-    @Operation(summary = "Thống kê chi tiết tenants", 
-               description = "Chi tiết về các tenant trong hệ thống")
+    @Operation(summary = "Thống kê chi tiết tenants",
+               description = "total = ACTIVE + SUSPENDED (đã phê duyệt); rejected/pending không vào total.")
     public ResponseEntity<Map<String, Object>> getTenantStatistics() {
         Map<String, Object> stats = new HashMap<>();
         
-        long total = tenantRepository.count();
         long active = tenantRepository.countByStatus(com.gsp26se114.chatbot_rag_be.entity.TenantStatus.ACTIVE);
         long pending = tenantRepository.countByStatus(com.gsp26se114.chatbot_rag_be.entity.TenantStatus.PENDING);
         long suspended = tenantRepository.countByStatus(com.gsp26se114.chatbot_rag_be.entity.TenantStatus.SUSPENDED);
-        
-        stats.put("total", total);
+        long rejected = tenantRepository.countByStatus(com.gsp26se114.chatbot_rag_be.entity.TenantStatus.REJECTED);
+        long approved = active + suspended;
+
+        stats.put("total", approved);
         stats.put("active", active);
         stats.put("pending", pending);
         stats.put("suspended", suspended);
-        stats.put("activePercentage", total > 0 ? (active * 100.0 / total) : 0);
+        stats.put("rejected", rejected);
+        stats.put("activePercentage", approved > 0 ? (active * 100.0 / approved) : 0);
         stats.put("pendingForApproval", pending);
         
         return ResponseEntity.ok(stats);

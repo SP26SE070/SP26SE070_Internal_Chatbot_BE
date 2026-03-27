@@ -4,6 +4,8 @@ import com.gsp26se114.chatbot_rag_be.entity.Subscription;
 import com.gsp26se114.chatbot_rag_be.entity.SubscriptionStatus;
 import org.springframework.data.jpa.repository.JpaRepository;
 import org.springframework.data.jpa.repository.Query;
+import org.springframework.data.domain.Pageable;
+import org.springframework.data.repository.query.Param;
 import org.springframework.stereotype.Repository;
 
 import java.time.LocalDateTime;
@@ -44,4 +46,12 @@ public interface SubscriptionRepository extends JpaRepository<Subscription, UUID
     
     // Kiểm tra tenant có subscription active không
     boolean existsByTenantIdAndStatus(UUID tenantId, SubscriptionStatus status);
+
+    @Query("""
+            SELECT s
+            FROM Subscription s
+            WHERE s.createdAt < :beforeTime
+            ORDER BY s.createdAt DESC, s.id DESC
+            """)
+    List<Subscription> findRecentForStaff(@Param("beforeTime") LocalDateTime beforeTime, Pageable pageable);
 }

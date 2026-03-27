@@ -1061,6 +1061,175 @@ WHERE c.document_id = d.document_id
   AND d.active_version_id IS NOT NULL;
 
 -------------------------------------------------------
+-- 7.1 SEED DATA: PAYMENT TRANSACTIONS (for Admin Revenue Chart)
+-- Rule test:
+--   - SUCCESS transactions MUST be counted in /admin/analytics/revenue
+--   - FAILED/CANCELLED must NOT be counted
+-------------------------------------------------------
+INSERT INTO payment_transactions (
+    payment_transaction_id, subscription_id, tenant_id, amount, currency, transaction_code, tier, gateway,
+    gateway_transaction_id, status, created_at, paid_at, created_by, notes, is_auto_renewal
+) VALUES
+(
+    'd1000000-0000-0000-0000-000000000001',
+    'b0000000-0000-0000-0000-000000000001',
+    '550e8400-e29b-41d4-a716-446655440000',
+    45000.00, 'USD', 'TXN-202601-001', 'ENTERPRISE', 'SEPAY',
+    'GW-202601-001', 'SUCCESS',
+    '2026-01-05 09:00:00', '2026-01-05 09:10:00',
+    (SELECT user_id FROM users WHERE email = 'superadmin@system.com'),
+    'Revenue seed Jan #1', FALSE
+),
+(
+    'd1000000-0000-0000-0000-000000000002',
+    'b0000000-0000-0000-0000-000000000001',
+    '550e8400-e29b-41d4-a716-446655440000',
+    52000.00, 'USD', 'TXN-202602-001', 'ENTERPRISE', 'SEPAY',
+    'GW-202602-001', 'SUCCESS',
+    '2026-02-10 10:00:00', '2026-02-10 10:20:00',
+    (SELECT user_id FROM users WHERE email = 'superadmin@system.com'),
+    'Revenue seed Feb #1', FALSE
+),
+(
+    'd1000000-0000-0000-0000-000000000003',
+    'b0000000-0000-0000-0000-000000000001',
+    '550e8400-e29b-41d4-a716-446655440000',
+    61000.00, 'USD', 'TXN-202603-001', 'ENTERPRISE', 'SEPAY',
+    'GW-202603-001', 'SUCCESS',
+    '2026-03-15 14:00:00', '2026-03-15 14:35:00',
+    (SELECT user_id FROM users WHERE email = 'superadmin@system.com'),
+    'Revenue seed Mar #1', FALSE
+),
+(
+    'd1000000-0000-0000-0000-000000000004',
+    'b0000000-0000-0000-0000-000000000001',
+    '550e8400-e29b-41d4-a716-446655440000',
+    30000.00, 'USD', 'TXN-202603-FAILED', 'ENTERPRISE', 'SEPAY',
+    'GW-202603-FAILED', 'FAILED',
+    '2026-03-18 11:00:00', NULL,
+    (SELECT user_id FROM users WHERE email = 'staff@system.com'),
+    'Should not be counted in revenue', FALSE
+),
+(
+    'd1000000-0000-0000-0000-000000000005',
+    'b0000000-0000-0000-0000-000000000001',
+    '550e8400-e29b-41d4-a716-446655440000',
+    70000.00, 'USD', 'TXN-202604-001', 'ENTERPRISE', 'SEPAY',
+    'GW-202604-001', 'SUCCESS',
+    '2026-04-02 08:00:00', '2026-04-02 08:05:00',
+    (SELECT user_id FROM users WHERE email = 'superadmin@system.com'),
+    'Revenue seed Apr #1', TRUE
+),
+(
+    'd1000000-0000-0000-0000-000000000006',
+    'b0000000-0000-0000-0000-000000000001',
+    '550e8400-e29b-41d4-a716-446655440000',
+    40000.00, 'USD', 'TXN-202605-CANCEL', 'ENTERPRISE', 'SEPAY',
+    'GW-202605-CANCEL', 'CANCELLED',
+    '2026-05-01 08:00:00', NULL,
+    (SELECT user_id FROM users WHERE email = 'staff@system.com'),
+    'Cancelled payment test row', FALSE
+),
+(
+    'd1000000-0000-0000-0000-000000000007',
+    'b0000000-0000-0000-0000-000000000001',
+    '550e8400-e29b-41d4-a716-446655440000',
+    38000.00, 'USD', 'TXN-202510-001', 'ENTERPRISE', 'SEPAY',
+    'GW-202510-001', 'SUCCESS',
+    '2025-10-10 09:00:00', '2025-10-10 09:05:00',
+    (SELECT user_id FROM users WHERE email = 'superadmin@system.com'),
+    'Revenue seed Oct 2025', FALSE
+),
+(
+    'd1000000-0000-0000-0000-000000000008',
+    'b0000000-0000-0000-0000-000000000001',
+    '550e8400-e29b-41d4-a716-446655440000',
+    41000.00, 'USD', 'TXN-202511-001', 'ENTERPRISE', 'SEPAY',
+    'GW-202511-001', 'SUCCESS',
+    '2025-11-12 10:00:00', '2025-11-12 10:15:00',
+    (SELECT user_id FROM users WHERE email = 'superadmin@system.com'),
+    'Revenue seed Nov 2025', FALSE
+),
+(
+    'd1000000-0000-0000-0000-000000000009',
+    'b0000000-0000-0000-0000-000000000001',
+    '550e8400-e29b-41d4-a716-446655440000',
+    39500.00, 'USD', 'TXN-202512-001', 'ENTERPRISE', 'SEPAY',
+    'GW-202512-001', 'SUCCESS',
+    '2025-12-05 14:00:00', '2025-12-05 14:20:00',
+    (SELECT user_id FROM users WHERE email = 'superadmin@system.com'),
+    'Revenue seed Dec 2025', FALSE
+);
+
+-------------------------------------------------------
+-- 7.2 SEED DATA: AUDIT LOGS (for Admin Recent Activity)
+-- Newest first should appear in /admin/analytics/recent-activities
+-------------------------------------------------------
+INSERT INTO audit_logs (
+    audit_log_id, tenant_id, user_id, user_email, user_role,
+    action, entity_type, entity_id, old_value, new_value, description,
+    ip_address, user_agent, status, created_at
+) VALUES
+(
+    'e1000000-0000-0000-0000-000000000001',
+    '550e8400-e29b-41d4-a716-446655440000',
+    (SELECT user_id FROM users WHERE email = 'superadmin@system.com'),
+    'superadmin@system.com', 'SUPER_ADMIN',
+    'TENANT_CREATED', 'Tenant', '550e8400-e29b-41d4-a716-446655440000',
+    '{}'::jsonb, '{"tenantName":"FPT Software"}'::jsonb,
+    'Company ABC has been added to the platform',
+    '1.2.3.4', 'seed-script', 'SUCCESS', CURRENT_TIMESTAMP - interval '10 minutes'
+),
+(
+    'e1000000-0000-0000-0000-000000000002',
+    '550e8400-e29b-41d4-a716-446655440000',
+    (SELECT user_id FROM users WHERE email = 'staff@system.com'),
+    'staff@system.com', 'STAFF',
+    'TENANT_STATUS_CHANGED', 'Tenant', '550e8400-e29b-41d4-a716-446655440000',
+    '{"status":"PENDING"}'::jsonb, '{"status":"ACTIVE"}'::jsonb,
+    'Tenant FPT Software has been approved',
+    '1.2.3.5', 'seed-script', 'SUCCESS', CURRENT_TIMESTAMP - interval '30 minutes'
+),
+(
+    'e1000000-0000-0000-0000-000000000003',
+    NULL, NULL, NULL, NULL,
+    'SYSTEM_WARNING', 'System', 'server-3',
+    '{}'::jsonb, '{"cpuPercent":92}'::jsonb,
+    'High CPU usage on server 3',
+    NULL, 'monitor-agent', 'SUCCESS', CURRENT_TIMESTAMP - interval '60 minutes'
+),
+(
+    'e1000000-0000-0000-0000-000000000004',
+    '550e8400-e29b-41d4-a716-446655440000',
+    (SELECT user_id FROM users WHERE email = 'superadmin@system.com'),
+    'superadmin@system.com', 'SUPER_ADMIN',
+    'SUBSCRIPTION_RENEWED', 'Subscription', 'b0000000-0000-0000-0000-000000000001',
+    '{"tier":"STANDARD"}'::jsonb, '{"tier":"ENTERPRISE"}'::jsonb,
+    'Subscription upgraded to ENTERPRISE',
+    '1.2.3.4', 'seed-script', 'SUCCESS', CURRENT_TIMESTAMP - interval '2 hours'
+),
+(
+    'e1000000-0000-0000-0000-000000000005',
+    '550e8400-e29b-41d4-a716-446655440000',
+    (SELECT user_id FROM users WHERE email = 'staff@system.com'),
+    'staff@system.com', 'STAFF',
+    'PAYMENT_FAILED', 'PaymentTransaction', 'd1000000-0000-0000-0000-000000000004',
+    '{}'::jsonb, '{"transactionCode":"TXN-202603-FAILED"}'::jsonb,
+    'Payment TXN-202603-FAILED failed verification',
+    '1.2.3.6', 'seed-script', 'FAILED', CURRENT_TIMESTAMP - interval '3 hours'
+),
+(
+    'e1000000-0000-0000-0000-000000000006',
+    '550e8400-e29b-41d4-a716-446655440000',
+    (SELECT user_id FROM users WHERE email = 'admin@fpt.com'),
+    'admin@fpt.com', 'TENANT_ADMIN',
+    'DOCUMENT_UPLOADED', 'Document', 'doc-seed-001',
+    '{}'::jsonb, '{"fileName":"employee-handbook.pdf"}'::jsonb,
+    'Document employee-handbook.pdf uploaded',
+    '1.2.3.7', 'seed-script', 'SUCCESS', CURRENT_TIMESTAMP - interval '5 hours'
+);
+
+-------------------------------------------------------
 -- 8. SEED DATA: DOCUMENT CATEGORIES (FPT Software)
 -- Tenant: 550e8400-e29b-41d4-a716-446655440000
 -- Created by: admin@fpt.com
@@ -1242,3 +1411,133 @@ INSERT INTO documents (
  CURRENT_TIMESTAMP - interval '4 days',
  'PENDING', TRUE,
  'c2200000-0000-0000-0000-000000000022', 'Coding Standards - Java & Spring Boot');
+
+-------------------------------------------------------
+-- 10. SEED DATA: RAG CHUNKS + CHAT (FPT Software)
+-- Mục tiêu: SUPER_ADMIN dashboard có số liệu document chunks + LLM usage.
+-------------------------------------------------------
+INSERT INTO document_chunks (
+    document_chunk_id, document_id, tenant_id, chunk_index, content, token_count,
+    embedding_model, visibility, accessible_departments, accessible_roles, owner_department_id, created_at
+) VALUES
+('f1000000-0000-0000-0000-000000000001', 'd1000000-0000-0000-0000-000000000001', '550e8400-e29b-41d4-a716-446655440000', 0,
+ 'Nội quy công ty: toàn bộ nhân sự làm việc từ 08:30 đến 17:30, từ thứ Hai đến thứ Sáu.', 120,
+ 'text-embedding-004', 'COMPANY_WIDE', '[]'::jsonb, '[]'::jsonb, NULL, CURRENT_TIMESTAMP - interval '8 days'),
+('f1000000-0000-0000-0000-000000000002', 'd1000000-0000-0000-0000-000000000001', '550e8400-e29b-41d4-a716-446655440000', 1,
+ 'Nhân sự cần tuân thủ quy tắc bảo mật thông tin nội bộ và không chia sẻ tài liệu nhạy cảm ra bên ngoài.', 135,
+ 'text-embedding-004', 'COMPANY_WIDE', '[]'::jsonb, '[]'::jsonb, NULL, CURRENT_TIMESTAMP - interval '8 days'),
+('f1000000-0000-0000-0000-000000000003', 'd2000000-0000-0000-0000-000000000002', '550e8400-e29b-41d4-a716-446655440000', 0,
+ 'Onboarding tuần đầu: hoàn tất tài khoản email công ty, Jira, GitLab và hệ thống chấm công.', 118,
+ 'text-embedding-004', 'COMPANY_WIDE', '[]'::jsonb, '[]'::jsonb, NULL, CURRENT_TIMESTAMP - interval '7 days'),
+('f1000000-0000-0000-0000-000000000004', 'd2000000-0000-0000-0000-000000000002', '550e8400-e29b-41d4-a716-446655440000', 1,
+ 'Nhân viên mới cần tham gia buổi orientation và hoàn tất checklist trong vòng 05 ngày làm việc.', 124,
+ 'text-embedding-004', 'COMPANY_WIDE', '[]'::jsonb, '[]'::jsonb, NULL, CURRENT_TIMESTAMP - interval '7 days'),
+('f1000000-0000-0000-0000-000000000005', 'd3000000-0000-0000-0000-000000000003', '550e8400-e29b-41d4-a716-446655440000', 0,
+ 'Chính sách nghỉ phép: nhân viên chính thức có 12 ngày phép năm, cộng thêm ngày phép thâm niên.', 122,
+ 'text-embedding-004', 'COMPANY_WIDE', '[]'::jsonb, '[]'::jsonb, NULL, CURRENT_TIMESTAMP - interval '6 days'),
+('f1000000-0000-0000-0000-000000000006', 'd3000000-0000-0000-0000-000000000003', '550e8400-e29b-41d4-a716-446655440000', 1,
+ 'Nghỉ ốm trên 02 ngày cần nộp giấy xác nhận y tế và gửi thông báo cho quản lý trực tiếp.', 116,
+ 'text-embedding-004', 'COMPANY_WIDE', '[]'::jsonb, '[]'::jsonb, NULL, CURRENT_TIMESTAMP - interval '6 days'),
+('f1000000-0000-0000-0000-000000000007', 'd4000000-0000-0000-0000-000000000004', '550e8400-e29b-41d4-a716-446655440000', 0,
+ 'System Architecture v2: dịch vụ được tách theo microservice với API Gateway và event bus nội bộ.', 145,
+ 'text-embedding-004', 'SPECIFIC_DEPARTMENTS',
+ (SELECT jsonb_agg(department_id) FROM departments WHERE tenant_id = '550e8400-e29b-41d4-a716-446655440000' AND code = 'DEV'),
+ '[]'::jsonb,
+ (SELECT department_id FROM departments WHERE tenant_id = '550e8400-e29b-41d4-a716-446655440000' AND code = 'DEV'),
+ CURRENT_TIMESTAMP - interval '5 days'),
+('f1000000-0000-0000-0000-000000000008', 'd4000000-0000-0000-0000-000000000004', '550e8400-e29b-41d4-a716-446655440000', 1,
+ 'Tầng dữ liệu sử dụng PostgreSQL, Redis cache, MinIO object storage và cơ chế backup định kỳ.', 140,
+ 'text-embedding-004', 'SPECIFIC_DEPARTMENTS',
+ (SELECT jsonb_agg(department_id) FROM departments WHERE tenant_id = '550e8400-e29b-41d4-a716-446655440000' AND code = 'DEV'),
+ '[]'::jsonb,
+ (SELECT department_id FROM departments WHERE tenant_id = '550e8400-e29b-41d4-a716-446655440000' AND code = 'DEV'),
+ CURRENT_TIMESTAMP - interval '5 days'),
+('f1000000-0000-0000-0000-000000000009', 'd5000000-0000-0000-0000-000000000005', '550e8400-e29b-41d4-a716-446655440000', 0,
+ 'Coding standards: ưu tiên clean architecture, đặt tên rõ nghĩa, tách service và repository.', 132,
+ 'text-embedding-004', 'COMPANY_WIDE', '[]'::jsonb, '[]'::jsonb, NULL, CURRENT_TIMESTAMP - interval '4 days'),
+('f1000000-0000-0000-0000-00000000000a', 'd5000000-0000-0000-0000-000000000005', '550e8400-e29b-41d4-a716-446655440000', 1,
+ 'Mọi API public cần chuẩn hóa response object, mã lỗi và log correlation-id để trace.', 128,
+ 'text-embedding-004', 'COMPANY_WIDE', '[]'::jsonb, '[]'::jsonb, NULL, CURRENT_TIMESTAMP - interval '4 days');
+
+UPDATE documents d
+SET chunk_count = c.cnt,
+    embedding_status = CASE WHEN c.cnt > 0 THEN 'COMPLETED' ELSE d.embedding_status END
+FROM (
+    SELECT document_id, COUNT(*) AS cnt
+    FROM document_chunks
+    WHERE tenant_id = '550e8400-e29b-41d4-a716-446655440000'
+    GROUP BY document_id
+) c
+WHERE d.document_id = c.document_id;
+
+INSERT INTO chat_sessions (
+    session_id, tenant_id, user_id, title, status, started_at, ended_at, last_message_at,
+    total_messages, total_tokens_used, created_at, updated_at
+) VALUES
+('c1000000-0000-0000-0000-000000000001',
+ '550e8400-e29b-41d4-a716-446655440000',
+ (SELECT user_id FROM users WHERE email = 'employee1@fpt.com'),
+ 'Hỏi về quy định nghỉ phép',
+ 'ENDED',
+ CURRENT_TIMESTAMP - interval '3 days',
+ CURRENT_TIMESTAMP - interval '3 days' + interval '20 minutes',
+ CURRENT_TIMESTAMP - interval '3 days' + interval '20 minutes',
+ 4, 1180, CURRENT_TIMESTAMP - interval '3 days', CURRENT_TIMESTAMP - interval '3 days'),
+('c1000000-0000-0000-0000-000000000002',
+ '550e8400-e29b-41d4-a716-446655440000',
+ (SELECT user_id FROM users WHERE email = 'employee2@fpt.com'),
+ 'Onboarding checklist',
+ 'ENDED',
+ CURRENT_TIMESTAMP - interval '2 days',
+ CURRENT_TIMESTAMP - interval '2 days' + interval '18 minutes',
+ CURRENT_TIMESTAMP - interval '2 days' + interval '18 minutes',
+ 4, 980, CURRENT_TIMESTAMP - interval '2 days', CURRENT_TIMESTAMP - interval '2 days'),
+('c1000000-0000-0000-0000-000000000003',
+ '550e8400-e29b-41d4-a716-446655440000',
+ (SELECT user_id FROM users WHERE email = 'admin@fpt.com'),
+ 'Coding standards cho dự án mới',
+ 'ACTIVE',
+ CURRENT_TIMESTAMP - interval '8 hours',
+ NULL,
+ CURRENT_TIMESTAMP - interval '7 hours',
+ 2, 620, CURRENT_TIMESTAMP - interval '8 hours', CURRENT_TIMESTAMP - interval '7 hours');
+
+INSERT INTO chat_messages (
+    message_id, session_id, tenant_id, user_id, role, content, source_chunks, tokens_used,
+    rating, feedback_text, rated_at, created_at
+) VALUES
+('c2000000-0000-0000-0000-000000000001', 'c1000000-0000-0000-0000-000000000001', '550e8400-e29b-41d4-a716-446655440000',
+ (SELECT user_id FROM users WHERE email = 'employee1@fpt.com'),
+ 'USER', 'Mỗi năm em được bao nhiêu ngày phép?', '[]'::jsonb, 90, NULL, NULL, NULL, CURRENT_TIMESTAMP - interval '3 days' + interval '1 minutes'),
+('c2000000-0000-0000-0000-000000000002', 'c1000000-0000-0000-0000-000000000001', '550e8400-e29b-41d4-a716-446655440000',
+ NULL,
+ 'ASSISTANT', 'Theo chính sách hiện tại, nhân viên chính thức có 12 ngày phép năm.', '[{"chunkId":"f1000000-0000-0000-0000-000000000005"}]'::jsonb, 290,
+ 5, 'Rất rõ ràng', CURRENT_TIMESTAMP - interval '3 days' + interval '3 minutes', CURRENT_TIMESTAMP - interval '3 days' + interval '3 minutes'),
+('c2000000-0000-0000-0000-000000000003', 'c1000000-0000-0000-0000-000000000001', '550e8400-e29b-41d4-a716-446655440000',
+ (SELECT user_id FROM users WHERE email = 'employee1@fpt.com'),
+ 'USER', 'Nghỉ ốm cần thủ tục gì?', '[]'::jsonb, 95, NULL, NULL, NULL, CURRENT_TIMESTAMP - interval '3 days' + interval '5 minutes'),
+('c2000000-0000-0000-0000-000000000004', 'c1000000-0000-0000-0000-000000000001', '550e8400-e29b-41d4-a716-446655440000',
+ NULL,
+ 'ASSISTANT', 'Nghỉ ốm trên 2 ngày cần nộp giấy xác nhận y tế cho quản lý.', '[{"chunkId":"f1000000-0000-0000-0000-000000000006"}]'::jsonb, 305,
+ NULL, NULL, NULL, CURRENT_TIMESTAMP - interval '3 days' + interval '7 minutes'),
+('c2000000-0000-0000-0000-000000000005', 'c1000000-0000-0000-0000-000000000002', '550e8400-e29b-41d4-a716-446655440000',
+ (SELECT user_id FROM users WHERE email = 'employee2@fpt.com'),
+ 'USER', 'Onboarding tuần đầu cần làm gì?', '[]'::jsonb, 82, NULL, NULL, NULL, CURRENT_TIMESTAMP - interval '2 days' + interval '1 minutes'),
+('c2000000-0000-0000-0000-000000000006', 'c1000000-0000-0000-0000-000000000002', '550e8400-e29b-41d4-a716-446655440000',
+ NULL,
+ 'ASSISTANT', 'Bạn cần hoàn tất tài khoản Jira, GitLab, email công ty và chấm công.', '[{"chunkId":"f1000000-0000-0000-0000-000000000003"}]'::jsonb, 260,
+ 4, 'Hữu ích', CURRENT_TIMESTAMP - interval '2 days' + interval '4 minutes', CURRENT_TIMESTAMP - interval '2 days' + interval '4 minutes'),
+('c2000000-0000-0000-0000-000000000007', 'c1000000-0000-0000-0000-000000000002', '550e8400-e29b-41d4-a716-446655440000',
+ (SELECT user_id FROM users WHERE email = 'employee2@fpt.com'),
+ 'USER', 'Checklist phải xong trong bao lâu?', '[]'::jsonb, 74, NULL, NULL, NULL, CURRENT_TIMESTAMP - interval '2 days' + interval '7 minutes'),
+('c2000000-0000-0000-0000-000000000008', 'c1000000-0000-0000-0000-000000000002', '550e8400-e29b-41d4-a716-446655440000',
+ NULL,
+ 'ASSISTANT', 'Checklist onboarding cần hoàn tất trong 5 ngày làm việc.', '[{"chunkId":"f1000000-0000-0000-0000-000000000004"}]'::jsonb, 245,
+ NULL, NULL, NULL, CURRENT_TIMESTAMP - interval '2 days' + interval '9 minutes'),
+('c2000000-0000-0000-0000-000000000009', 'c1000000-0000-0000-0000-000000000003', '550e8400-e29b-41d4-a716-446655440000',
+ (SELECT user_id FROM users WHERE email = 'admin@fpt.com'),
+ 'USER', 'Cho tôi tiêu chuẩn code backend chính?', '[]'::jsonb, 88, NULL, NULL, NULL, CURRENT_TIMESTAMP - interval '8 hours' + interval '3 minutes'),
+('c2000000-0000-0000-0000-00000000000a', 'c1000000-0000-0000-0000-000000000003', '550e8400-e29b-41d4-a716-446655440000',
+ NULL,
+ 'ASSISTANT', 'Ưu tiên clean architecture, response chuẩn hóa và log correlation-id.', '[{"chunkId":"f1000000-0000-0000-0000-00000000000a"}]'::jsonb, 280,
+ NULL, NULL, NULL, CURRENT_TIMESTAMP - interval '7 hours');

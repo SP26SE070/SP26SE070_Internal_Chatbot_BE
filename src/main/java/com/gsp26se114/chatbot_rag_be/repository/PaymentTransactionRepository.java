@@ -94,6 +94,19 @@ public interface PaymentTransactionRepository extends JpaRepository<PaymentTrans
     @Query("SELECT COUNT(pt) FROM PaymentTransaction pt WHERE pt.tenantId = :tenantId AND pt.status = 'SUCCESS'")
     long countSuccessfulPaymentsByTenant(@Param("tenantId") UUID tenantId);
 
+    @Query("""
+            SELECT pt
+            FROM PaymentTransaction pt
+            WHERE pt.status = 'SUCCESS'
+              AND COALESCE(pt.paidAt, pt.createdAt) >= :fromTime
+              AND COALESCE(pt.paidAt, pt.createdAt) <= :toTime
+            ORDER BY COALESCE(pt.paidAt, pt.createdAt) ASC
+            """)
+    List<PaymentTransaction> findSuccessfulInRange(
+            @Param("fromTime") LocalDateTime fromTime,
+            @Param("toTime") LocalDateTime toTime
+    );
+
     /**
      * Find auto-renewal payments that are pending
      */
