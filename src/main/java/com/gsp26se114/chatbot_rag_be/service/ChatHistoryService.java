@@ -111,19 +111,12 @@ public class ChatHistoryService {
     }
 
     /**
-     * Get paginated conversation list. Admin sees all tenant sessions; regular user sees own.
+     * Get paginated conversation list for the current user.
      */
     @Transactional(readOnly = true)
     public Page<ConversationSummaryResponse> getConversations(UserPrincipal user, int page, int size) {
         PageRequest pageable = PageRequest.of(page, size);
-
-        Page<ChatSession> sessions;
-        if (isAdmin(user)) {
-            sessions = sessionRepository.findByTenantIdOrderByLastMessageAtDesc(user.getTenantId(), pageable);
-        } else {
-            sessions = sessionRepository.findByUserIdOrderByLastMessageAtDesc(user.getId(), pageable);
-        }
-
+        Page<ChatSession> sessions = sessionRepository.findByUserIdOrderByLastMessageAtDesc(user.getId(), pageable);
         return sessions.map(this::toSummary);
     }
 
