@@ -101,7 +101,7 @@ public class ChatbotController {
                 long similarIgnoringAccess = chunkRepository.countSimilarChunksIgnoringAccess(
                     userDetails.getTenantId(),
                     vectorString,
-                    maxDistance * 0.7,  // stricter threshold for permission check
+                    maxDistance * 0.5,  // 0.35 — only truly relevant chunks trigger no-permission
                     request.getCategoryId(),
                     tagIdsJson
                 );
