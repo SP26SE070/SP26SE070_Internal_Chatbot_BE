@@ -95,29 +95,8 @@ public class ChatbotController {
             List<ChatResponse.SourceDocument> sources;
 
             if (similarChunks.isEmpty()) {
-                // Count chunks matching the query WITHOUT access control to distinguish:
-                // - count == 0: no semantically relevant chunks exist → general knowledge
-                // - count > 0: relevant chunks exist but user cannot access them → no permission
-                long similarIgnoringAccess = chunkRepository.countSimilarChunksIgnoringAccess(
-                    userDetails.getTenantId(),
-                    vectorString,
-                    maxDistance * 0.5,  // 0.35 — only truly relevant chunks trigger no-permission
-                    request.getCategoryId(),
-                    tagIdsJson
-                );
-
-                if (similarIgnoringAccess == 0) {
-                    // No semantically relevant chunks exist for this query
-                    context = "";
-                    sources = List.of();
-                    log.info("No relevant chunks for query in tenant {} - answering with general knowledge",
-                             userDetails.getTenantId());
-                } else {
-                    // Relevant chunks exist but user cannot access them → no permission
-                    log.warn("User {} queried and found {} relevant chunks but has no access",
-                             userDetails.getEmail(), similarIgnoringAccess);
-                    return handleAndSaveRestrictedResponse(request, userDetails, startTime, "no_access");
-                }
+                context = "";
+                sources = List.of();
             } else {
                 context = similarChunks.stream()
                         .map(DocumentChunkEntity::getContent)

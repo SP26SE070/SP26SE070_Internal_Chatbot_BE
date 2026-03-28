@@ -149,24 +149,4 @@ public interface DocumentChunkRepository extends JpaRepository<DocumentChunkEnti
            nativeQuery = true)
     long countByTenantId(@Param("tenantId") UUID tenantId);
 
-    /**
-     * Count chunks that pass the similarity threshold, ignoring access control.
-     * Used to distinguish "no relevant chunks" from "relevant but inaccessible".
-     */
-    @Query(value = """
-        SELECT COUNT(*)
-        FROM document_chunks c
-        JOIN documents d ON c.document_id = d.document_id
-        WHERE c.tenant_id = :tenantId
-          AND (:categoryId IS NULL OR c.category_id = :categoryId)
-          AND (:tagIds IS NULL OR c.tag_ids @> CAST(:tagIds AS jsonb))
-          AND (c.embedding <=> CAST(:queryEmbedding AS vector)) < :maxDistance
-        """, nativeQuery = true)
-    long countSimilarChunksIgnoringAccess(
-        @Param("tenantId") UUID tenantId,
-        @Param("queryEmbedding") String queryEmbedding,
-        @Param("maxDistance") double maxDistance,
-        @Param("categoryId") UUID categoryId,
-        @Param("tagIds") String tagIds
-    );
 }
