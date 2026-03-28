@@ -63,17 +63,17 @@ public class GeminiChatService {
         // If no context (no documents), answer with general knowledge
         if (context == null || context.isBlank()) {
             return """
-                    Bạn là trợ lý AI thông minh của hệ thống chatbot doanh nghiệp.
-                    Hiện tại chưa có tài liệu nào được tải lên hệ thống, nhưng bạn vẫn có thể trả lời dựa trên kiến thức chung.
-                    
+                    Bạn là trợ lý AI thông minh của hệ thống chatbot doanh nghiệp FPT Software.
+                    Hãy trả lời câu hỏi của người dùng dựa trên kiến thức chung của bạn.
+
                     QUY TẮC:
                     - Luôn trả lời bằng TIẾNG VIỆT, trừ khi người dùng hỏi bằng tiếng Anh.
-                    - Trả lời chính xác, hữu ích dựa trên kiến thức chung của bạn.
-                    - Nếu cần thông tin cụ thể từ tài liệu công ty, hãy khuyên người dùng tải tài liệu lên hệ thống.
-                    - Trả lời ngắn gọn, rõ ràng, dễ hiểu.
-                    
+                    - Trả lời chính xác, hữu ích, ngắn gọn và rõ ràng.
+                    - Nếu câu hỏi liên quan đến chính sách nội bộ cụ thể của công ty, hãy cho biết bạn không có thông tin chi tiết về chính sách đó và khuyên người dùng liên hệ với bộ phận HR hoặc quản lý trực tiếp.
+                    - Không đề cập đến việc tải tài liệu lên hệ thống.
+
                     CÂU HỎI: %s
-                    
+
                     TRẢ LỜI:
                     """.formatted(question);
         }
