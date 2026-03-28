@@ -113,6 +113,14 @@ public class DocumentController {
                     && userDetails.getRoleId() != null
                     && doc.getAccessibleRoles().contains(userDetails.getRoleId());
         }
+        if (doc.getVisibility() == DocumentVisibility.SPECIFIC_DEPARTMENTS_AND_ROLES) {
+            return doc.getAccessibleDepartments() != null
+                    && doc.getAccessibleRoles() != null
+                    && userDetails.getDepartmentId() != null
+                    && userDetails.getRoleId() != null
+                    && doc.getAccessibleDepartments().contains(userDetails.getDepartmentId())
+                    && doc.getAccessibleRoles().contains(userDetails.getRoleId());
+        }
         return false;
     }
 
@@ -278,6 +286,19 @@ public class DocumentController {
                 }
             }
 
+            if (visibility == DocumentVisibility.SPECIFIC_DEPARTMENTS_AND_ROLES) {
+                if (accessibleDepartments == null || accessibleDepartments.isEmpty()) {
+                    return ResponseEntity.badRequest().body(
+                        "Khi chọn SPECIFIC_DEPARTMENTS_AND_ROLES, bạn phải chỉ định ít nhất 1 phòng ban trong accessibleDepartments"
+                    );
+                }
+                if (accessibleRoles == null || accessibleRoles.isEmpty()) {
+                    return ResponseEntity.badRequest().body(
+                        "Khi chọn SPECIFIC_DEPARTMENTS_AND_ROLES, bạn phải chỉ định ít nhất 1 role trong accessibleRoles"
+                    );
+                }
+            }
+
             log.info("Uploading document: {} ({})", file.getOriginalFilename(), contentType);
 
             // Upload to MinIO
@@ -335,8 +356,11 @@ public class DocumentController {
             } else if (visibility == DocumentVisibility.SPECIFIC_ROLES) {
                 document.setAccessibleDepartments(null);
                 document.setAccessibleRoles(accessibleRoles);
+            } else if (visibility == DocumentVisibility.SPECIFIC_DEPARTMENTS_AND_ROLES) {
+                document.setAccessibleDepartments(accessibleDepartments);
+                document.setAccessibleRoles(accessibleRoles);
             }
-            
+
             document.setOwnerDepartmentId(userDetails.getDepartmentId());
             document.setUploadedBy(userDetails.getId());
             document.setUploadedAt(LocalDateTime.now());
@@ -552,6 +576,44 @@ public class DocumentController {
             }
         }
 
+        if (request.visibility() == DocumentVisibility.SPECIFIC_DEPARTMENTS_AND_ROLES) {
+            if (request.accessibleDepartments() == null || request.accessibleDepartments().isEmpty()) {
+                return ResponseEntity.badRequest().body(
+                    "Khi chọn SPECIFIC_DEPARTMENTS_AND_ROLES, phải cung cấp danh sách accessibleDepartments"
+                );
+            }
+            if (request.accessibleRoles() == null || request.accessibleRoles().isEmpty()) {
+                return ResponseEntity.badRequest().body(
+                    "Khi chọn SPECIFIC_DEPARTMENTS_AND_ROLES, phải cung cấp danh sách accessibleRoles"
+                );
+            }
+            // Validate departments
+            var allowedDepartmentIds = departmentRepository.findByTenantIdAndIsActive(userDetails.getTenantId(), true)
+                    .stream()
+                    .map(d -> d.getId())
+                    .collect(java.util.stream.Collectors.toSet());
+            boolean invalidDepts = request.accessibleDepartments().stream()
+                    .anyMatch(deptId -> deptId == null || !allowedDepartmentIds.contains(deptId));
+            if (invalidDepts) {
+                return ResponseEntity.badRequest().body(
+                    "accessibleDepartments chứa phòng ban không tồn tại, không active hoặc không thuộc tenant này"
+                );
+            }
+            // Validate roles
+            var allowedRoleIds = roleRepository.findAvailableRolesForTenant(userDetails.getTenantId())
+                    .stream()
+                    .filter(r -> Boolean.TRUE.equals(r.getIsActive()))
+                    .map(RoleEntity::getId)
+                    .collect(java.util.stream.Collectors.toSet());
+            boolean invalidRoles = request.accessibleRoles().stream()
+                    .anyMatch(roleId -> roleId == null || !allowedRoleIds.contains(roleId));
+            if (invalidRoles) {
+                return ResponseEntity.badRequest().body(
+                    "accessibleRoles chứa role không hợp lệ hoặc không thuộc phạm vi tenant hiện tại"
+                );
+            }
+        }
+
         // Find document and verify ownership
         DocumentEntity document = documentRepository.findById(id)
                 .orElseThrow(() -> new RuntimeException("Không tìm thấy tài liệu"));
@@ -581,8 +643,11 @@ public class DocumentController {
         } else if (request.visibility() == DocumentVisibility.SPECIFIC_ROLES) {
             document.setAccessibleDepartments(null);
             document.setAccessibleRoles(request.accessibleRoles());
+        } else if (request.visibility() == DocumentVisibility.SPECIFIC_DEPARTMENTS_AND_ROLES) {
+            document.setAccessibleDepartments(request.accessibleDepartments());
+            document.setAccessibleRoles(request.accessibleRoles());
         }
-        
+
         documentRepository.save(document);
 
         // Update all chunks associated with this document

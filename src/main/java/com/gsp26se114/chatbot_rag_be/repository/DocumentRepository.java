@@ -35,9 +35,12 @@ public interface DocumentRepository extends JpaRepository<DocumentEntity, UUID> 
         AND (
             uploaded_by = CAST(:userId AS uuid)
             OR visibility = 'COMPANY_WIDE'
-            OR (visibility = 'SPECIFIC_DEPARTMENTS' 
+            OR (visibility = 'SPECIFIC_DEPARTMENTS'
                 AND accessible_departments @> CAST(CONCAT('[', :userDepartmentId, ']') AS jsonb))
-            OR (visibility = 'SPECIFIC_ROLES' 
+            OR (visibility = 'SPECIFIC_ROLES'
+                AND accessible_roles @> CAST(CONCAT('[', :userRoleId, ']') AS jsonb))
+            OR (visibility = 'SPECIFIC_DEPARTMENTS_AND_ROLES'
+                AND accessible_departments @> CAST(CONCAT('[', :userDepartmentId, ']') AS jsonb)
                 AND accessible_roles @> CAST(CONCAT('[', :userRoleId, ']') AS jsonb))
         )
         ORDER BY uploaded_at DESC

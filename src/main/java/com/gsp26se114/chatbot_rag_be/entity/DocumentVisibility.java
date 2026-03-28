@@ -17,5 +17,10 @@ public enum DocumentVisibility {
     /**
      * Chỉ specific roles - User chọn roles nào được xem (bao gồm custom roles)
      */
-    SPECIFIC_ROLES
+    SPECIFIC_ROLES,
+
+    /**
+     * Cả department VÀ role phải khớp - User chọn departments VÀ roles nào được xem
+     */
+    SPECIFIC_DEPARTMENTS_AND_ROLES
 }

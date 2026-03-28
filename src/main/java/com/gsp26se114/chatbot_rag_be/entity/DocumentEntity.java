@@ -162,9 +162,15 @@ public class DocumentEntity {
                        accessibleDepartments.contains(userDepartmentId);
                        
             case SPECIFIC_ROLES:
-                return accessibleRoles != null && 
+                return accessibleRoles != null &&
                        accessibleRoles.contains(userRoleId);
-                       
+
+            case SPECIFIC_DEPARTMENTS_AND_ROLES:
+                return accessibleDepartments != null &&
+                       accessibleRoles != null &&
+                       accessibleDepartments.contains(userDepartmentId) &&
+                       accessibleRoles.contains(userRoleId);
+
             default:
                 return false;
         }

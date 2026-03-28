@@ -49,6 +49,9 @@ public interface DocumentChunkRepository extends JpaRepository<DocumentChunkEnti
                        AND c.accessible_departments @> CAST(CONCAT('[', :userDepartmentId, ']') AS jsonb))
                       OR (c.visibility = 'SPECIFIC_ROLES'
                        AND c.accessible_roles @> CAST(CONCAT('[', :userRoleId, ']') AS jsonb))
+                      OR (c.visibility = 'SPECIFIC_DEPARTMENTS_AND_ROLES'
+                       AND c.accessible_departments @> CAST(CONCAT('[', :userDepartmentId, ']') AS jsonb)
+                       AND c.accessible_roles @> CAST(CONCAT('[', :userRoleId, ']') AS jsonb))
                   )
               )
           )
