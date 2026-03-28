@@ -95,23 +95,27 @@ public class ChatbotController {
             List<ChatResponse.SourceDocument> sources;
 
             if (similarChunks.isEmpty()) {
-                long totalDocsInTenant = documentRepository.countByTenantIdAndIsActive(
-                    userDetails.getTenantId(), true
-                );
-                long totalChunksInTenant = chunkRepository.countByTenantId(
-                    userDetails.getTenantId()
+                // Count chunks matching the query WITHOUT access control to distinguish:
+                // - count == 0: no semantically relevant chunks exist → general knowledge
+                // - count > 0: relevant chunks exist but user cannot access them → no permission
+                long similarIgnoringAccess = chunkRepository.countSimilarChunksIgnoringAccess(
+                    userDetails.getTenantId(),
+                    vectorString,
+                    maxDistance,
+                    request.getCategoryId(),
+                    tagIdsJson
                 );
 
-                if (totalChunksInTenant == 0) {
-                    // No documents have been indexed yet
+                if (similarIgnoringAccess == 0) {
+                    // No semantically relevant chunks exist for this query
                     context = "";
                     sources = List.of();
-                    log.info("No chunks indexed in tenant {} - answering with general knowledge", userDetails.getTenantId());
+                    log.info("No relevant chunks for query in tenant {} - answering with general knowledge",
+                             userDetails.getTenantId());
                 } else {
-                    // Chunks exist but none matched the query or user can't access them
-                    log.warn("User {} queried but no accessible chunks matched (total chunks: {})",
-                             userDetails.getEmail(), totalChunksInTenant);
-                    // Still save the user message and bot response for restricted access
+                    // Relevant chunks exist but user cannot access them → no permission
+                    log.warn("User {} queried and found {} relevant chunks but has no access",
+                             userDetails.getEmail(), similarIgnoringAccess);
                     return handleAndSaveRestrictedResponse(request, userDetails, startTime, "no_access");
                 }
             } else {
