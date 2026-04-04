@@ -1,6 +1,8 @@
 package com.gsp26se114.chatbot_rag_be.controller;
 
 import com.fasterxml.jackson.databind.ObjectMapper;
+import com.gsp26se114.chatbot_rag_be.exception.PreviewRenderException;
+import com.gsp26se114.chatbot_rag_be.exception.PreviewUnsupportedFormatException;
 import com.gsp26se114.chatbot_rag_be.entity.DocumentEntity;
 import com.gsp26se114.chatbot_rag_be.entity.DocumentTag;
 import com.gsp26se114.chatbot_rag_be.entity.DocumentVersion;
@@ -11,6 +13,7 @@ import com.gsp26se114.chatbot_rag_be.payload.response.DeletedDocumentResponse;
 import com.gsp26se114.chatbot_rag_be.payload.response.DocumentResponse;
 import com.gsp26se114.chatbot_rag_be.payload.response.DocumentTagResponse;
 import com.gsp26se114.chatbot_rag_be.payload.response.DocumentVersionResponse;
+import com.gsp26se114.chatbot_rag_be.payload.response.PreviewErrorResponse;
 import com.gsp26se114.chatbot_rag_be.repository.DocumentCategoryRepository;
 import com.gsp26se114.chatbot_rag_be.repository.DocumentChunkRepository;
 import com.gsp26se114.chatbot_rag_be.repository.DocumentRepository;
@@ -18,6 +21,7 @@ import com.gsp26se114.chatbot_rag_be.repository.DocumentTagRepository;
 import com.gsp26se114.chatbot_rag_be.repository.DocumentVersionRepository;
 import com.gsp26se114.chatbot_rag_be.repository.DepartmentRepository;
 import com.gsp26se114.chatbot_rag_be.repository.RoleRepository;
+import com.gsp26se114.chatbot_rag_be.service.DocumentPreviewService;
 import com.gsp26se114.chatbot_rag_be.security.service.UserPrincipal;
 import com.gsp26se114.chatbot_rag_be.service.DocumentProcessingService;
 import com.gsp26se114.chatbot_rag_be.service.MinioService;
@@ -30,8 +34,10 @@ import io.swagger.v3.oas.annotations.tags.Tag;
 import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
+import org.springframework.http.CacheControl;
 import org.springframework.http.ContentDisposition;
 import org.springframework.http.HttpHeaders;
+import org.springframework.http.HttpStatus;
 import org.springframework.http.MediaType;
 import org.springframework.http.ResponseEntity;
 import org.springframework.security.access.prepost.PreAuthorize;
@@ -67,6 +73,7 @@ public class DocumentController {
     private final DepartmentRepository departmentRepository;
     private final RoleRepository roleRepository;
     private final DocumentProcessingService documentProcessingService;
+    private final DocumentPreviewService documentPreviewService;
     private final ObjectMapper objectMapper;
 
     private static final List<String> ALLOWED_CONTENT_TYPES = Arrays.asList(
@@ -152,6 +159,99 @@ public class DocumentController {
                         .build()
         );
         return ResponseEntity.ok().headers(headers).body(content);
+    }
+
+    private boolean isPreviewMode(String mode) {
+        return mode != null && "preview".equalsIgnoreCase(mode.trim());
+    }
+
+    private ResponseEntity<PreviewErrorResponse> buildPreviewError(
+            HttpStatus status,
+            String code,
+            String message,
+            Throwable ex
+    ) {
+        String traceId = UUID.randomUUID().toString();
+        if (ex == null) {
+            log.warn("Preview error: code={}, traceId={}, message={}", code, traceId, message);
+        } else {
+            log.error("Preview error: code={}, traceId={}, message={}", code, traceId, message, ex);
+        }
+
+        return ResponseEntity.status(status)
+                .header("X-Trace-Id", traceId)
+                .body(new PreviewErrorResponse(code, message, traceId));
+    }
+
+    private ResponseEntity<?> buildPreviewOrInlineResponse(
+            UUID documentId,
+            UUID versionId,
+            String storagePath,
+            String sourceFileName,
+            String sourceContentType,
+            String mode,
+            String ifNoneMatch
+    ) {
+        if (!isPreviewMode(mode)) {
+            return buildFileResponse(storagePath, sourceFileName, sourceContentType, true);
+        }
+
+        String resolvedSourceType = resolveContentType(sourceFileName, sourceContentType);
+        String cacheKey = versionId == null
+                ? "document:" + documentId + ":active"
+                : "document:" + documentId + ":version:" + versionId;
+
+        try {
+            byte[] sourceContent = minioService.downloadDocument(storagePath);
+            DocumentPreviewService.PreviewResult previewResult = documentPreviewService.buildPreview(
+                    cacheKey,
+                    sourceFileName,
+                    resolvedSourceType,
+                    sourceContent,
+                    ifNoneMatch
+            );
+
+            HttpHeaders headers = new HttpHeaders();
+            headers.set(HttpHeaders.CACHE_CONTROL, CacheControl.noCache().cachePrivate().mustRevalidate().getHeaderValue());
+            headers.set(HttpHeaders.ETAG, previewResult.etag());
+            headers.set("X-Preview-Mode", previewResult.previewMode());
+            headers.set("X-Source-Content-Type", previewResult.sourceContentType());
+
+            if (previewResult.notModified()) {
+                return ResponseEntity.status(HttpStatus.NOT_MODIFIED).headers(headers).build();
+            }
+
+            headers.setContentType(MediaType.parseMediaType(previewResult.contentType()));
+            headers.setContentLength(previewResult.content().length);
+            headers.setContentDisposition(
+                    ContentDisposition.builder("inline")
+                            .filename(previewResult.fileName())
+                            .build()
+            );
+
+            return ResponseEntity.ok().headers(headers).body(previewResult.content());
+        } catch (PreviewUnsupportedFormatException ex) {
+            return buildPreviewError(
+                    HttpStatus.UNSUPPORTED_MEDIA_TYPE,
+                    "PREVIEW_UNSUPPORTED",
+                    ex.getMessage(),
+                    null
+            );
+        } catch (PreviewRenderException ex) {
+            return buildPreviewError(
+                    HttpStatus.INTERNAL_SERVER_ERROR,
+                    "PREVIEW_RENDER_FAILED",
+                    ex.getMessage(),
+                    ex
+            );
+        } catch (RuntimeException ex) {
+            return buildPreviewError(
+                    HttpStatus.INTERNAL_SERVER_ERROR,
+                    "PREVIEW_SOURCE_READ_FAILED",
+                    "Failed to read document content from object storage",
+                    ex
+            );
+        }
     }
 
     /** Convert DocumentEntity → DocumentResponse (full fields). */
@@ -1041,15 +1141,29 @@ public class DocumentController {
     @Operation(summary = "Xem trực tiếp nội dung tài liệu", description = "Trả file ở chế độ inline để FE preview")
     public ResponseEntity<?> viewDocumentContent(
             @PathVariable UUID id,
+            @RequestParam(value = "mode", defaultValue = "preview") String mode,
+            @RequestHeader(value = HttpHeaders.IF_NONE_MATCH, required = false) String ifNoneMatch,
             @AuthenticationPrincipal UserPrincipal userDetails
     ) {
         DocumentEntity doc = documentRepository.findById(id)
                 .filter(d -> d.getTenantId().equals(userDetails.getTenantId()) && Boolean.TRUE.equals(d.getIsActive()))
                 .orElse(null);
         if (doc == null || !canReadDocument(userDetails, doc)) {
+            if (isPreviewMode(mode)) {
+                return buildPreviewError(HttpStatus.NOT_FOUND, "PREVIEW_NOT_FOUND", "Document was not found", null);
+            }
             return ResponseEntity.notFound().build();
         }
-        return buildFileResponse(doc.getStoragePath(), doc.getOriginalFileName(), doc.getFileType(), true);
+
+        return buildPreviewOrInlineResponse(
+                doc.getId(),
+                null,
+                doc.getStoragePath(),
+                doc.getOriginalFileName(),
+                doc.getFileType(),
+                mode,
+                ifNoneMatch
+        );
     }
 
     @GetMapping("/{id}/download")
@@ -1076,12 +1190,17 @@ public class DocumentController {
     public ResponseEntity<?> viewDocumentVersionContent(
             @PathVariable UUID id,
             @PathVariable UUID versionId,
+            @RequestParam(value = "mode", defaultValue = "preview") String mode,
+            @RequestHeader(value = HttpHeaders.IF_NONE_MATCH, required = false) String ifNoneMatch,
             @AuthenticationPrincipal UserPrincipal userDetails
     ) {
         DocumentEntity doc = documentRepository.findById(id)
                 .filter(d -> d.getTenantId().equals(userDetails.getTenantId()) && Boolean.TRUE.equals(d.getIsActive()))
                 .orElse(null);
         if (doc == null || !canReadDocument(userDetails, doc)) {
+            if (isPreviewMode(mode)) {
+                return buildPreviewError(HttpStatus.NOT_FOUND, "PREVIEW_NOT_FOUND", "Document was not found", null);
+            }
             return ResponseEntity.notFound().build();
         }
 
@@ -1089,11 +1208,25 @@ public class DocumentController {
                 .filter(v -> v.getDocumentId().equals(id) && v.getTenantId().equals(userDetails.getTenantId()))
                 .orElse(null);
         if (version == null) {
+            if (isPreviewMode(mode)) {
+                return buildPreviewError(HttpStatus.NOT_FOUND, "PREVIEW_NOT_FOUND", "Document version was not found", null);
+            }
             return ResponseEntity.notFound().build();
         }
 
-        String fileName = doc.getOriginalFileName() + ".v" + version.getVersionNumber();
-        return buildFileResponse(version.getStoragePath(), fileName, doc.getFileType(), true);
+        String fileName = isPreviewMode(mode)
+                ? doc.getOriginalFileName()
+                : doc.getOriginalFileName() + ".v" + version.getVersionNumber();
+
+        return buildPreviewOrInlineResponse(
+                id,
+                versionId,
+                version.getStoragePath(),
+                fileName,
+                doc.getFileType(),
+                mode,
+                ifNoneMatch
+        );
     }
 
     @GetMapping("/{id}/versions/{versionId}/download")

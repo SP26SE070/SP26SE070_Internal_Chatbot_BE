@@ -45,7 +45,10 @@ public class RequestLoggingFilter implements Filter {
             httpResponse.setHeader("Access-Control-Allow-Methods", "GET, POST, PUT, DELETE, OPTIONS, PATCH, HEAD");
             httpResponse.setHeader("Access-Control-Allow-Headers", "*, ngrok-skip-browser-warning");
             httpResponse.setHeader("Access-Control-Max-Age", "3600");
-            httpResponse.setHeader("Access-Control-Expose-Headers", "Authorization, Content-Type, X-Total-Count");
+            httpResponse.setHeader(
+                    "Access-Control-Expose-Headers",
+                    "Authorization, Content-Type, X-Total-Count, ETag, X-Preview-Mode, X-Source-Content-Type, X-Trace-Id"
+            );
         }
         
         // Always add ngrok-skip-browser-warning to response to prevent ngrok interstitial page

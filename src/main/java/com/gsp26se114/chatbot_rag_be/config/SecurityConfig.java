@@ -4,6 +4,7 @@ import com.gsp26se114.chatbot_rag_be.security.jwt.JwtAuthenticationFilter;
 import jakarta.servlet.http.HttpServletResponse;
 import lombok.RequiredArgsConstructor;
 import org.springframework.context.annotation.*;
+import org.springframework.http.MediaType;
 import org.springframework.security.authentication.AuthenticationManager;
 import org.springframework.security.config.annotation.authentication.configuration.AuthenticationConfiguration;
 import org.springframework.security.config.annotation.method.configuration.EnableMethodSecurity;
@@ -19,7 +20,9 @@ import org.springframework.web.cors.CorsConfiguration;
 import org.springframework.web.cors.CorsConfigurationSource;
 import org.springframework.web.cors.UrlBasedCorsConfigurationSource;
 
+import java.nio.charset.StandardCharsets;
 import java.util.List;
+import java.util.UUID;
 
 @Configuration
 @EnableWebSecurity
@@ -51,7 +54,16 @@ public class SecurityConfig {
             // 3. Xử lý Exception để trả về 401 thay vì 403 gây lú
             .exceptionHandling(exception -> exception
                 .authenticationEntryPoint((request, response, authException) -> {
-                    response.sendError(HttpServletResponse.SC_UNAUTHORIZED, "Error: Unauthorized");
+                    String traceId = UUID.randomUUID().toString();
+                    response.setStatus(HttpServletResponse.SC_UNAUTHORIZED);
+                    response.setCharacterEncoding(StandardCharsets.UTF_8.name());
+                    response.setContentType(MediaType.APPLICATION_JSON_VALUE);
+                    response.setHeader("X-Trace-Id", traceId);
+                    response.getWriter().write(
+                            "{\"code\":\"UNAUTHORIZED\",\"message\":\"Missing or invalid token\",\"traceId\":\""
+                                    + traceId
+                                    + "\"}"
+                    );
                 })
             )
 
@@ -103,7 +115,11 @@ public class SecurityConfig {
             "Content-Type", 
             "X-Total-Count",
             "Access-Control-Allow-Origin",
-            "Access-Control-Allow-Credentials"
+            "Access-Control-Allow-Credentials",
+            "ETag",
+            "X-Preview-Mode",
+            "X-Source-Content-Type",
+            "X-Trace-Id"
         ));
         
         // Allow credentials (JWT tokens, cookies)
