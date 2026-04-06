@@ -22,10 +22,10 @@ public class RoleEntity {
     private Integer id;
 
     @Column(unique = true, nullable = false, length = 50)
-    private String code; // SUPER_ADMIN, STAFF, TENANT_ADMIN, CONTENT_MANAGER, EMPLOYEE, CUSTOM_*
+    private String code; // SUPER_ADMIN, STAFF, TENANT_ADMIN, EMPLOYEE, CUSTOM_*
 
     @Column(nullable = false, length = 100)
-    private String name; // Super Admin, Platform Staff, Tenant Admin, Content Manager, Employee
+    private String name; // Super Admin, Platform Staff, Tenant Admin, Employee
 
     @Column(length = 500)
     private String description;

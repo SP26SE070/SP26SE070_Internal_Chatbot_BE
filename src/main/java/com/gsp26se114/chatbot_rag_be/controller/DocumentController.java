@@ -55,13 +55,13 @@ import java.util.UUID;
 import java.net.URLConnection;
 
 /**
- * Controller for document upload and management in Knowledge Base
+ * Controller for document upload and management in Document Dashboard
  */
 @RestController
 @RequestMapping("/api/v1/knowledge/documents")
 @RequiredArgsConstructor
 @Slf4j
-@Tag(name = "18. 📚 Knowledge Base", description = "Document upload and management APIs")
+@Tag(name = "18. 📚 Document Dashboard", description = "Document upload and management APIs")
 public class DocumentController {
 
     private final MinioService minioService;
@@ -305,7 +305,7 @@ public class DocumentController {
     @PreAuthorize("hasAuthority('DOCUMENT_WRITE')")
     @SecurityRequirement(name = "bearerAuth")
     @Operation(
-        summary = "Upload tài liệu vào Knowledge Base",
+        summary = "Upload tài liệu vào Document Dashboard",
         description = """
             Upload file lên MinIO và kích hoạt embedding tự động (async).
 

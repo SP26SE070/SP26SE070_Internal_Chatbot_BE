@@ -13,6 +13,7 @@ import org.springframework.stereotype.Service;
 
 import java.util.ArrayList;
 import java.util.Arrays;
+import java.util.LinkedHashSet;
 import java.util.List;
 import java.util.Set;
 
@@ -40,22 +41,26 @@ public class PermissionService {
             return false;
         }
         
-        List<String> basicPermissions = RolePermissionConstants.getBasicPermissions(role.getCode());
+        Set<String> effectiveRolePermissions = new LinkedHashSet<>(
+                RolePermissionConstants.getBasicPermissions(role.getCode()));
+        if (role.getPermissions() != null) {
+            effectiveRolePermissions.addAll(role.getPermissions());
+        }
         
         // Check for ALL permission (SUPER_ADMIN)
-        if (basicPermissions.contains(PermissionConstants.ALL)) {
+        if (effectiveRolePermissions.contains(PermissionConstants.ALL)) {
             return true;
         }
         
         // Check direct permission
-        if (basicPermissions.contains(requiredPermission)) {
+        if (effectiveRolePermissions.contains(requiredPermission)) {
             return true;
         }
         
         // Check wildcard permission (e.g., USER_ALL includes USER_READ, USER_WRITE, USER_DELETE)
         if (requiredPermission.contains("_")) {
             String category = requiredPermission.split("_")[0];
-            if (basicPermissions.contains(category + "_ALL")) {
+            if (effectiveRolePermissions.contains(category + "_ALL")) {
                 return true;
             }
         }
@@ -160,6 +165,15 @@ public class PermissionService {
                 ))
                 .build());
 
+        // Analytics
+        categories.add(PermissionCategoryResponse.builder()
+            .category("Analytics")
+            .permissions(Arrays.asList(
+                new PermissionResponse(PermissionConstants.ANALYTICS_VIEW,
+                    "View analytics", "Xem thống kê và dashboard")
+            ))
+            .build());
+
         return categories;
     }
     
@@ -177,6 +191,9 @@ public class PermissionService {
         RoleEntity role = roleRepository.findById(user.getRoleId()).orElse(null);
         if (role != null) {
             allPermissions.addAll(RolePermissionConstants.getBasicPermissions(role.getCode()));
+            if (role.getPermissions() != null) {
+                allPermissions.addAll(role.getPermissions());
+            }
         }
         
         // 2. Add user-specific permissions

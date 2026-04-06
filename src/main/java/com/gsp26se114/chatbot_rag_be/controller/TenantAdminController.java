@@ -82,12 +82,12 @@ public class TenantAdminController {
     }
     
     /**
-     * Create new user (CONTENT_MANAGER or EMPLOYEE)
+     * Create new user (EMPLOYEE or custom role)
      */
     @PostMapping("/users")
     @PreAuthorize("hasRole('TENANT_ADMIN')")
     @Operation(summary = "Tạo user mới", 
-               description = "Tạo CONTENT_MANAGER hoặc EMPLOYEE trong tenant")
+               description = "Tạo EMPLOYEE hoặc custom role trong tenant")
     public ResponseEntity<UserResponse> createUser(
             @AuthenticationPrincipal UserDetails userDetails,
             @Valid @RequestBody CreateUserRequest request) {

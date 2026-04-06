@@ -41,8 +41,7 @@ public class TenantRoleService {
         return roles.stream()
                 .filter(role -> {
                     String code = role.getCode();
-                    return code != null && !code.equals("TENANT_ADMIN")
-                            && !code.equals("SUPER_ADMIN") && !code.equals("STAFF");
+                    return code != null && !code.equals("SUPER_ADMIN") && !code.equals("STAFF");
                 })
                 .map(role -> mapToResponse(role, tenantId))
                 .collect(Collectors.toList());

@@ -15,7 +15,7 @@ import java.util.UUID;
 public interface DocumentRepository extends JpaRepository<DocumentEntity, UUID> {
     
     /**
-     * Lấy tất cả documents của tenant (cho Knowledge Dashboard)
+     * Lấy tất cả documents của tenant (cho Document Dashboard)
      */
     List<DocumentEntity> findByTenantIdAndIsActiveOrderByUploadedAtDesc(UUID tenantId, Boolean isActive);
     

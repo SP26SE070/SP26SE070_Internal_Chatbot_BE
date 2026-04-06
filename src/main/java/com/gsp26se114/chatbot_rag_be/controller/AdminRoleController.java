@@ -31,7 +31,6 @@ import java.util.List;
          #### 1️⃣ **System Roles** (Roles mặc định của hệ thống):
          - `SUPER_ADMIN`: Quản trị viên tối cao - Quản lý toàn bộ hệ thống
          - `TENANT_ADMIN`: Quản trị viên tenant - Quản lý users trong tenant
-         - `CONTENT_MANAGER`: Quản lý nội dung - Quản lý tài liệu, knowledge base
          - `EMPLOYEE`: Nhân viên - Quyền cơ bản
          - **Đặc điểm**: `tenantId = null`, không thể xóa, code không thể sửa
          
@@ -81,7 +80,7 @@ public class AdminRoleController {
                    Lấy danh sách đầy đủ tất cả roles trong hệ thống.
                    
                    **Bao gồm:**
-                   - System roles (SUPER_ADMIN, TENANT_ADMIN, CONTENT_MANAGER, EMPLOYEE)
+                   - System roles (SUPER_ADMIN, TENANT_ADMIN, EMPLOYEE)
                    - Tenant-specific roles (Custom roles của từng tenant)
                    
                    **Sắp xếp:** System roles trước, sau đó đến custom roles theo tenant
@@ -259,8 +258,8 @@ public class AdminRoleController {
      * - Xóa custom role không còn sử dụng
      * - Dọn dẹp roles thừa
      * 
-     * Validation (SẼ BỊ TỪ CHỐI nếu):
-     * - ❌ Đang xóa system role (SUPER_ADMIN, TENANT_ADMIN, CONTENT_MANAGER, EMPLOYEE)
+      * Validation (SẼ BỊ TỪ CHỐI nếu):
+      * - ❌ Đang xóa system role (SUPER_ADMIN, TENANT_ADMIN, EMPLOYEE)
      * - ❌ Role đang được gán cho users (phải remove users khỏi role trước)
      * 
      * Quy trình an toàn:
@@ -278,7 +277,7 @@ public class AdminRoleController {
                    Xóa role khỏi hệ thống (CÓ VALIDATION).
                    
                    **⚠️ Không thể xóa nếu:**
-                   - ❌ Là system role (SUPER_ADMIN, TENANT_ADMIN, CONTENT_MANAGER, EMPLOYEE)
+                   - ❌ Là system role (SUPER_ADMIN, TENANT_ADMIN, EMPLOYEE)
                    - ❌ Role đang được gán cho users
                    
                    **✅ Có thể xóa:**

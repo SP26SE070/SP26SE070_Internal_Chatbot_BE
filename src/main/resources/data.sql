@@ -14,6 +14,8 @@ DROP TABLE IF EXISTS payment_transactions CASCADE;
 DROP TABLE IF EXISTS subscriptions CASCADE;
 DROP TABLE IF EXISTS subscription_plans CASCADE;
 DROP TABLE IF EXISTS documents CASCADE;
+DROP TABLE IF EXISTS onboarding_progress CASCADE;
+DROP TABLE IF EXISTS onboarding_modules CASCADE;
 DROP TABLE IF EXISTS refresh_tokens CASCADE;
 DROP TABLE IF EXISTS blacklisted_tokens CASCADE;
 DROP TABLE IF EXISTS users CASCADE;
@@ -147,6 +149,57 @@ CREATE UNIQUE INDEX IF NOT EXISTS uq_users_password_reset_session_token
     ON users (password_reset_session_token)
     WHERE password_reset_session_token IS NOT NULL;
 
+-- Tạo bảng Onboarding Modules (nội dung onboarding theo tenant)
+CREATE TABLE onboarding_modules (
+    onboarding_module_id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
+    tenant_id UUID NOT NULL REFERENCES tenants(tenant_id) ON DELETE CASCADE,
+    title VARCHAR(200) NOT NULL,
+    summary VARCHAR(1000),
+    content TEXT NOT NULL,
+    detail_file_name VARCHAR(255),
+    detail_file_type VARCHAR(100),
+    detail_file_path VARCHAR(500),
+    detail_file_size BIGINT,
+    estimated_minutes INTEGER DEFAULT 5,
+    display_order INTEGER NOT NULL DEFAULT 0,
+    required_permissions JSONB DEFAULT '[]'::jsonb,
+    is_active BOOLEAN NOT NULL DEFAULT TRUE,
+    created_by UUID NOT NULL REFERENCES users(user_id),
+    created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    updated_at TIMESTAMP
+);
+
+-- Backward-compatible columns for existing onboarding_modules tables
+ALTER TABLE IF EXISTS onboarding_modules ADD COLUMN IF NOT EXISTS detail_file_name VARCHAR(255);
+ALTER TABLE IF EXISTS onboarding_modules ADD COLUMN IF NOT EXISTS detail_file_type VARCHAR(100);
+ALTER TABLE IF EXISTS onboarding_modules ADD COLUMN IF NOT EXISTS detail_file_path VARCHAR(500);
+ALTER TABLE IF EXISTS onboarding_modules ADD COLUMN IF NOT EXISTS detail_file_size BIGINT;
+
+CREATE INDEX IF NOT EXISTS idx_onboarding_modules_tenant_active
+    ON onboarding_modules(tenant_id, is_active);
+CREATE INDEX IF NOT EXISTS idx_onboarding_modules_tenant_order
+    ON onboarding_modules(tenant_id, display_order);
+
+-- Tạo bảng Onboarding Progress (tiến độ theo user và module)
+CREATE TABLE onboarding_progress (
+    onboarding_progress_id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
+    tenant_id UUID NOT NULL REFERENCES tenants(tenant_id) ON DELETE CASCADE,
+    user_id UUID NOT NULL REFERENCES users(user_id) ON DELETE CASCADE,
+    module_id UUID NOT NULL REFERENCES onboarding_modules(onboarding_module_id) ON DELETE CASCADE,
+    read_percent INTEGER NOT NULL DEFAULT 0,
+    completed BOOLEAN NOT NULL DEFAULT FALSE,
+    completed_at TIMESTAMP,
+    last_viewed_at TIMESTAMP,
+    created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    updated_at TIMESTAMP,
+    CONSTRAINT uq_onboarding_progress_user_module UNIQUE (user_id, module_id)
+);
+
+CREATE INDEX IF NOT EXISTS idx_onboarding_progress_tenant_user
+    ON onboarding_progress(tenant_id, user_id);
+CREATE INDEX IF NOT EXISTS idx_onboarding_progress_module
+    ON onboarding_progress(module_id);
+
 -- Tạo sequence rõ ràng cho refresh_tokens & blacklisted_tokens
 -- (tránh lỗi khi schema cũ vẫn tham chiếu refresh_tokens_seq)
 CREATE SEQUENCE refresh_tokens_seq START WITH 1 INCREMENT BY 1 NO MINVALUE NO MAXVALUE CACHE 1;
@@ -167,7 +220,7 @@ CREATE TABLE blacklisted_tokens (
     expiry_date TIMESTAMP NOT NULL
 );
 
--- Tạo bảng Documents (Knowledge Base)
+-- Tạo bảng Documents (Document Dashboard)
 CREATE TABLE IF NOT EXISTS documents (
     document_id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
     
@@ -856,10 +909,10 @@ VALUES
 ('staff@system.com', 'staff@system.com', '$2a$10$cCA6u7Es2IIDr74Pah9shuayGvlfemwx6EkunmAuLKhrVwK5uPtGy', 'Platform Staff', '+84-987-111-222', 2, NULL, NULL),
 
 -- Tenant Users (FPT Software)
--- TENANT_ADMIN (role_id = 3) - Has DOCUMENT_ALL → Can manage Knowledge Dashboard
+-- TENANT_ADMIN (role_id = 3) - Has DOCUMENT_ALL → Can manage Document Dashboard
 ('admin@fpt.com', 'fpt.admin.real@gmail.com', '$2a$10$cCA6u7Es2IIDr74Pah9shuayGvlfemwx6EkunmAuLKhrVwK5uPtGy', 'FPT Tenant Admin', '+84-987-654-321', 3, 1, '550e8400-e29b-41d4-a716-446655440000'),
 
--- EMPLOYEE (role_id = 4) - Has DOCUMENT_READ → Can only use chatbot
+-- EMPLOYEE (role_id = 4) - Basic profile + chatbot usage
 ('employee1@fpt.com', 'fpt.employee1.real@gmail.com', '$2a$10$cCA6u7Es2IIDr74Pah9shuayGvlfemwx6EkunmAuLKhrVwK5uPtGy', 'FPT Employee 1', '+84-901-234-567', 4, 3, '550e8400-e29b-41d4-a716-446655440000'),
 ('employee2@fpt.com', 'fpt.employee2.real@gmail.com', '$2a$10$cCA6u7Es2IIDr74Pah9shuayGvlfemwx6EkunmAuLKhrVwK5uPtGy', 'FPT Employee 2', '+84-902-345-678', 4, 4, '550e8400-e29b-41d4-a716-446655440000'),
 ('employee3@fpt.com', 'fpt.employee3.real@gmail.com', '$2a$10$cCA6u7Es2IIDr74Pah9shuayGvlfemwx6EkunmAuLKhrVwK5uPtGy', 'FPT Employee 3', '+84-903-456-789', 4, 5, '550e8400-e29b-41d4-a716-446655440000');
@@ -867,6 +920,80 @@ VALUES
 -- Thêm User đang chờ Reset Password (OTP: 888888)
 INSERT INTO users (email, contact_email, password, full_name, role_id, tenant_id, reset_password_token, token_expiry)
 VALUES ('forgot_user@fpt.com', 'forgot.user.real@gmail.com', '$2a$10$cCA6u7Es2IIDr74Pah9shuayGvlfemwx6EkunmAuLKhrVwK5uPtGy', 'Forgot User', 4, '550e8400-e29b-41d4-a716-446655440000', '888888', CURRENT_TIMESTAMP + interval '15 minutes');
+
+-------------------------------------------------------
+-- 5.1 SEED DATA: ONBOARDING MODULES (FPT Software)
+-------------------------------------------------------
+INSERT INTO onboarding_modules (
+    onboarding_module_id, tenant_id, title, summary, content,
+    estimated_minutes, display_order, required_permissions, created_by
+) VALUES
+(
+    'f1000000-0000-0000-0000-000000000001',
+    '550e8400-e29b-41d4-a716-446655440000',
+    'Khởi động hệ thống & Dashboard tổng quan / System Kickoff and Dashboard Tour',
+    'Bắt đầu từ dashboard theo role và hiểu đúng ý nghĩa từng mục điều hướng chính trong hệ thống',
+    '[VI]\nMục tiêu:\n- Xác định đúng dashboard theo vai trò đăng nhập.\n- Hiểu chức năng từng mục trong sidebar/quick actions trước khi thao tác nghiệp vụ.\n- Nắm thứ tự làm việc chuẩn: Dashboard -> Profile -> Document Dashboard -> Chatbot -> Quản trị nâng cao.\n\nLuồng sử dụng theo role:\n1. Đăng nhập hệ thống.\n2. Nếu là EMPLOYEE, vào dashboard tại /employee để xem tiến độ và các hành động chính.\n3. Nếu là TENANT_ADMIN, vào dashboard tại /tenant-admin để quản trị tổ chức.\n4. Nếu là STAFF, vào dashboard tại /staff để quản trị tenant toàn hệ thống.\n\nChi tiết các mục trên Tenant Admin dashboard (/tenant-admin):\n- Employees (/tenant-admin/employees): quản lý danh sách nhân viên, reset mật khẩu, cập nhật quyền bổ sung.\n- Departments (/tenant-admin/departments): tổ chức phòng ban và phân bổ nhân sự.\n- Roles (/tenant-admin/roles): cấu hình vai trò cố định và custom roles.\n- Document Dashboard (/tenant-admin/documents): quản lý tài liệu nội bộ, danh mục, thẻ.\n- AI Chatbot (/chatbot): hỏi đáp nội bộ có RAG.\n- Analytics (/tenant-admin/analytics): thống kê truy vấn AI, token và tài liệu.\n- Subscription (/tenant-admin/subscription): chọn gói, tạo thanh toán, theo dõi lịch sử.\n\nChecklist sau khi đọc:\n- Tôi biết dashboard ứng với role của mình.\n- Tôi biết mỗi mục quản trị tenant dùng để làm gì.\n- Tôi có thể chỉ ra đúng nơi thao tác khi có yêu cầu nghiệp vụ.\n\n[EN]\nObjective:\n- Identify the correct dashboard for the signed-in role.\n- Understand the purpose of each sidebar/quick-action entry before doing operations.\n- Follow the recommended sequence: Dashboard -> Profile -> Document Dashboard -> Chatbot -> Advanced administration.\n\nRole-based navigation flow:\n1. Sign in.\n2. EMPLOYEE lands on /employee for personal workflow and task shortcuts.\n3. TENANT_ADMIN lands on /tenant-admin for tenant management.\n4. STAFF lands on /staff for cross-tenant platform operations.\n\nTenant Admin dashboard breakdown (/tenant-admin):\n- Employees (/tenant-admin/employees): manage employee list, reset passwords, update extra permissions.\n- Departments (/tenant-admin/departments): maintain department structure and assignment.\n- Roles (/tenant-admin/roles): manage fixed and custom roles.\n- Document Dashboard (/tenant-admin/documents): manage internal documents, categories, tags.\n- AI Chatbot (/chatbot): internal Q&A with RAG.\n- Analytics (/tenant-admin/analytics): usage and document statistics.\n- Subscription (/tenant-admin/subscription): plan selection, payment creation, payment history.\n\nAfter-reading checklist:\n- I can identify my role-specific dashboard.\n- I understand what each tenant admin section does.\n- I know exactly where to perform each core operation.',
+    8,
+    1,
+    '[]'::jsonb,
+    (SELECT user_id FROM users WHERE email = 'admin@fpt.com')
+),
+(
+    'f1000000-0000-0000-0000-000000000002',
+    '550e8400-e29b-41d4-a716-446655440000',
+    'Cập nhật hồ sơ cá nhân / Profile Setup and Personal Info Update',
+    'Hướng dẫn chi tiết cách vào Profile để cập nhật thông tin cá nhân, đổi mật khẩu và cập nhật contact email bằng OTP',
+    '[VI]\nMục tiêu:\n- Hoàn thiện hồ sơ cá nhân ngay sau lần đăng nhập đầu tiên.\n- Đảm bảo thông tin liên hệ chính xác để nhận OTP/thông báo hệ thống.\n- Áp dụng chính sách bảo mật mật khẩu theo chuẩn hiện tại.\n\nLuồng thao tác đúng theo code hiện tại:\n1. Vào /profile từ menu tài khoản (ở chatbot có menu user ở góc phải trên cùng).\n2. Trong form cập nhật thông tin, điền các trường:\n   - Số điện thoại (phoneNumber)\n   - Ngày sinh (định dạng dd/mm/yyyy, hệ thống kiểm tra >= 18 tuổi)\n   - Địa chỉ (address)\n3. Nhấn nút lưu để gọi API update profile.\n4. Nếu cần đổi mật khẩu:\n   - Nhập mật khẩu cũ (trừ trường hợp bắt buộc đổi lần đầu)\n   - Nhập mật khẩu mới và xác nhận\n   - Mật khẩu phải có chữ hoa, chữ thường, số, ký tự đặc biệt và tối thiểu 8 ký tự.\n5. Nếu cần đổi contact email:\n   - Nhập email mới\n   - Gửi OTP\n   - Nhập OTP để xác nhận cập nhật email liên hệ.\n\nLưu ý thực tế:\n- Email đăng nhập (email) và contact email là hai thông tin khác nhau.\n- Contact email dùng cho kịch bản xác minh/phục hồi, cần luôn hoạt động.\n\nChecklist sau khi đọc:\n- Tôi biết đường dẫn và form cập nhật profile.\n- Tôi biết quy tắc mật khẩu khi đổi.\n- Tôi biết quy trình đổi contact email qua OTP.\n\n[EN]\nObjective:\n- Complete your profile setup right after first login.\n- Keep contact information accurate for OTP/notification flows.\n- Follow the current password policy in the codebase.\n\nWorkflow aligned with current implementation:\n1. Open /profile from the user menu.\n2. Update fields:\n   - Phone number\n   - Date of birth (dd/mm/yyyy, age >= 18 validation)\n   - Address\n3. Save profile updates.\n4. To change password:\n   - Provide old password (except forced first-time change)\n   - Enter and confirm new password\n   - New password must include upper/lowercase letters, number, special character, minimum length 8.\n5. To update contact email:\n   - Enter new contact email\n   - Request OTP\n   - Verify OTP to finalize update.\n\nOperational notes:\n- Login email and contact email are separate fields.\n- Contact email should remain reachable for verification and recovery flows.\n\nAfter-reading checklist:\n- I know the profile route and update form.\n- I understand the password policy.\n- I can complete contact email update via OTP.',
+    10,
+    2,
+    '[]'::jsonb,
+    (SELECT user_id FROM users WHERE email = 'admin@fpt.com')
+),
+(
+    'f1000000-0000-0000-0000-000000000003',
+    '550e8400-e29b-41d4-a716-446655440000',
+    'Document Dashboard: tài liệu, danh mục, thẻ / Document Dashboard: Documents, Categories, Tags',
+    'Đồng bộ terminology Document Dashboard và hướng dẫn thao tác tài liệu nội bộ theo đúng màn hình tenant-admin/documents',
+    '[VI]\nMục tiêu:\n- Sử dụng đúng module Document Dashboard thay cho cách gọi Knowledge Base cũ.\n- Hiểu cơ chế phân quyền tài liệu theo phạm vi truy cập.\n- Quản lý danh mục/thẻ để tối ưu truy xuất cho chatbot.\n\nĐường dẫn và cấu trúc màn hình:\n1. Vào /tenant-admin/documents.\n2. Màn hình gồm 3 tab chính:\n   - Documents: tải lên, cập nhật quyền, upload phiên bản mới, xóa mềm/khôi phục.\n   - Categories: quản lý nhóm tài liệu.\n   - Tags: gắn nhãn theo chủ đề để lọc nhanh.\n\nLuồng upload tài liệu chuẩn:\n1. Chọn file hợp lệ.\n2. Chọn category (nếu có).\n3. Chọn tags liên quan.\n4. Chọn phạm vi truy cập (company wide / specific departments / specific roles / departments and roles).\n5. Upload và theo dõi trạng thái embedding (pending/processing/completed/failed).\n\nChecklist sau khi đọc:\n- Tôi biết nơi quản lý Document Dashboard.\n- Tôi hiểu sự khác nhau giữa Documents/Categories/Tags.\n- Tôi biết cách set scope truy cập tài liệu đúng nghiệp vụ.\n\n[EN]\nObjective:\n- Use the standardized term Document Dashboard instead of legacy Knowledge Base wording.\n- Understand document access scope behavior in current implementation.\n- Maintain categories/tags to improve chatbot retrieval quality.\n\nRoute and screen structure:\n1. Open /tenant-admin/documents.\n2. The page contains 3 tabs:\n   - Documents: upload, access update, new version upload, soft delete/restore.\n   - Categories: category management.\n   - Tags: topic labeling for faster filtering.\n\nRecommended upload flow:\n1. Select a supported file.\n2. Assign category (optional).\n3. Assign relevant tags.\n4. Configure visibility scope (company/departments/roles/both).\n5. Upload and monitor embedding status (pending/processing/completed/failed).\n\nAfter-reading checklist:\n- I know where the Document Dashboard is managed.\n- I understand the role of Documents/Categories/Tags.\n- I can configure document visibility correctly for business needs.',
+    12,
+    3,
+    '["DOCUMENT_WRITE"]'::jsonb,
+    (SELECT user_id FROM users WHERE email = 'admin@fpt.com')
+),
+(
+    'f1000000-0000-0000-0000-000000000004',
+    '550e8400-e29b-41d4-a716-446655440000',
+    'Sử dụng AI Chatbot và tìm kiếm tài liệu / Chatbot and Document Retrieval Workflow',
+    'Thực hành gửi câu hỏi, dùng bộ lọc category/tag/topK và đọc nguồn tham chiếu trong chatbot',
+    '[VI]\nMục tiêu:\n- Chat đúng ngữ cảnh để nhận phản hồi chính xác hơn.\n- Biết dùng bộ lọc RAG để thu hẹp tài liệu theo nghiệp vụ.\n- Biết đọc references trước khi áp dụng kết quả AI.\n\nLuồng thao tác tại /chatbot:\n1. Mở chatbot từ sidebar hoặc quick action.\n2. Thiết lập bộ lọc RAG ở đầu trang chat:\n   - Category: chọn nhóm tài liệu liên quan\n   - Top K: số lượng đoạn tài liệu truy xuất\n   - Tags: chọn nhãn chủ đề\n3. Nhập câu hỏi rõ ràng ở khung chat và gửi.\n4. Đọc câu trả lời + phần references (documentName, excerpt, confidence).\n5. Nếu cần truy vấn khác ngữ cảnh, chọn New Chat hoặc mở lịch sử hội thoại để xem lại.\n\nMẹo để tăng chất lượng phản hồi:\n- Nêu rõ phòng ban/ngữ cảnh khi hỏi.\n- Nếu câu hỏi chuyên sâu, tăng Top K ở mức hợp lý.\n- Khi thấy độ tin cậy thấp, kiểm tra lại bằng tài liệu gốc trước khi ra quyết định.\n\nChecklist sau khi đọc:\n- Tôi biết cách cấu hình Category/Tags/Top K.\n- Tôi biết đọc references trong phản hồi chatbot.\n- Tôi biết khi nào cần mở chat mới để tránh nhiễu ngữ cảnh.\n\n[EN]\nObjective:\n- Ask context-rich questions for better response quality.\n- Use RAG filters to narrow retrieval scope.\n- Validate references before applying AI output.\n\nWorkflow on /chatbot:\n1. Open chatbot from navigation/quick action.\n2. Configure RAG filters:\n   - Category\n   - Top K\n   - Tags\n3. Send a clear prompt.\n4. Review answer plus references (document name, excerpt, confidence).\n5. Use New Chat or history when context switching is needed.\n\nQuality tips:\n- Include department/business context in prompts.\n- Increase Top K for deeper retrieval when necessary.\n- Re-check source documents when confidence appears low.\n\nAfter-reading checklist:\n- I can configure Category/Tags/Top K correctly.\n- I can interpret references in chatbot answers.\n- I know when to start a new chat to avoid context drift.',
+    11,
+    4,
+    '["DOCUMENT_READ"]'::jsonb,
+    (SELECT user_id FROM users WHERE email = 'admin@fpt.com')
+),
+(
+    'f1000000-0000-0000-0000-000000000005',
+    '550e8400-e29b-41d4-a716-446655440000',
+    'Tenant Admin: vận hành tổ chức và phân quyền / Tenant Admin Operations and Access Control',
+    'Tập trung vào các tác vụ quản trị tenant cốt lõi: nhân sự, phòng ban, vai trò, phân quyền theo nghiệp vụ',
+    '[VI]\nMục tiêu:\n- Quản trị người dùng theo cấu trúc tổ chức rõ ràng.\n- Thiết lập vai trò/permission phù hợp cho từng bộ phận.\n- Đảm bảo tính nhất quán giữa role và phạm vi dữ liệu truy cập.\n\nLuồng vận hành chuẩn cho TENANT_ADMIN:\n1. Quản lý nhân sự tại /tenant-admin/employees:\n   - Tạo user mới\n   - Cập nhật thông tin\n   - Cập nhật quyền bổ sung\n   - Vô hiệu hóa/kích hoạt tài khoản\n2. Quản lý phòng ban tại /tenant-admin/departments:\n   - Tạo/cập nhật phòng ban\n   - Phân bổ nhân viên\n3. Quản lý vai trò tại /tenant-admin/roles:\n   - Dùng fixed roles đúng mục đích\n   - Tạo custom role khi cần quyền đặc thù\n   - Chỉ gán permission cần thiết (least privilege)\n\nNguyên tắc phân quyền:\n- Ưu tiên role rõ chức năng thay vì cấp quyền tràn lan cho từng user.\n- Với tài liệu và chatbot, luôn kiểm tra role có permission tương ứng trước khi hỗ trợ user.\n\nChecklist sau khi đọc:\n- Tôi biết nơi thao tác user/department/role.\n- Tôi hiểu cách phối hợp fixed role và custom role.\n- Tôi biết nguyên tắc cấp quyền tối thiểu.\n\n[EN]\nObjective:\n- Operate tenant administration with a clear organizational model.\n- Configure roles/permissions per department responsibility.\n- Keep role assignment consistent with data access scope.\n\nOperational flow for TENANT_ADMIN:\n1. Manage employees at /tenant-admin/employees:\n   - Create users\n   - Update profile data\n   - Adjust additional permissions\n   - Activate/deactivate accounts\n2. Manage departments at /tenant-admin/departments:\n   - Create/update departments\n   - Assign employees\n3. Manage roles at /tenant-admin/roles:\n   - Use fixed roles appropriately\n   - Create custom roles for specific needs\n   - Apply least-privilege permission assignment\n\nAccess-control principles:\n- Prefer role-based control over ad-hoc per-user permission sprawl.\n- For documents/chatbot access, always verify permission alignment before granting guidance.\n\nAfter-reading checklist:\n- I know where to manage users/departments/roles.\n- I understand fixed vs custom role usage.\n- I can apply least-privilege principles.',
+    12,
+    5,
+    '["USER_WRITE"]'::jsonb,
+    (SELECT user_id FROM users WHERE email = 'admin@fpt.com')
+),
+(
+    'f1000000-0000-0000-0000-000000000006',
+    '550e8400-e29b-41d4-a716-446655440000',
+    'Tenant Admin: chọn gói và thanh toán / Tenant Admin: Plan Purchase and Payment Flow',
+    'Hướng dẫn đầy đủ cách chọn tier, chu kỳ thanh toán, quét QR/chuyển khoản và theo dõi trạng thái giao dịch',
+    '[VI]\nMục tiêu:\n- Chọn đúng gói subscription theo quy mô tổ chức.\n- Thực hiện đúng luồng thanh toán đang triển khai trong hệ thống.\n- Theo dõi lịch sử thanh toán và trạng thái sau khi thanh toán thành công.\n\nLuồng thao tác tại /tenant-admin/subscription:\n1. Mở tab Plans để xem gói hiện tại và khu vực tạo thanh toán.\n2. Chọn Tier (TRIAL/STARTER/STANDARD/ENTERPRISE).\n3. Chọn Billing Cycle (MONTHLY/QUARTERLY/YEARLY).\n4. Nhấn Create payment để tạo giao dịch.\n5. Ở khối chờ thanh toán:\n   - Quét mã QR hoặc chuyển khoản thủ công theo thông tin ngân hàng\n   - Theo dõi trạng thái polling đến khi SUCCESS\n6. Kiểm tra lại thông tin gói sau khi thanh toán thành công.\n7. Vào tab History để kiểm tra lịch sử giao dịch.\n\nLưu ý vận hành:\n- Nếu tổ chức đang có gói trả phí active, cần xử lý theo điều kiện hệ thống trước khi tạo gói mới.\n- Luôn đối chiếu transaction_code khi làm việc với bộ phận kế toán/hỗ trợ.\n\nChecklist sau khi đọc:\n- Tôi biết vị trí và ý nghĩa từng tab trong trang subscription.\n- Tôi biết các bước tạo payment và xác nhận thành công.\n- Tôi biết nơi kiểm tra lịch sử giao dịch.\n\n[EN]\nObjective:\n- Select the proper subscription tier for tenant scale.\n- Follow the implemented payment flow correctly.\n- Verify payment status and billing history after success.\n\nWorkflow at /tenant-admin/subscription:\n1. Open Plans tab to view current plan and payment section.\n2. Select Tier (TRIAL/STARTER/STANDARD/ENTERPRISE).\n3. Select Billing Cycle (MONTHLY/QUARTERLY/YEARLY).\n4. Click Create payment.\n5. In pending payment section:\n   - Scan QR or perform manual bank transfer\n   - Wait for polling status until SUCCESS\n6. Re-check plan details after successful payment.\n7. Open History tab for transaction history.\n\nOperational notes:\n- If a paid active plan exists, follow system constraints before creating another payment.\n- Always keep transaction_code for finance/support reconciliation.\n\nAfter-reading checklist:\n- I understand each tab in the subscription page.\n- I can complete payment creation and success verification.\n- I know where to audit transaction history.',
+    10,
+    6,
+    '["SUBSCRIPTION_MANAGE"]'::jsonb,
+    (SELECT user_id FROM users WHERE email = 'admin@fpt.com')
+);
 
 -------------------------------------------------------
 -- 6. SEED DATA: SUBSCRIPTION PLANS
