@@ -105,7 +105,10 @@ public class DocumentProcessingService {
 
             // 3. Extract text
             log.info("[STEP 3] Extracting text from {} file", document.getFileType());
-            String text = textExtractor.extractText(fileContent, document.getFileType());
+            String text = textExtractor.extractText(
+                    fileContent,
+                    document.getFileType(),
+                    document.getOriginalFileName());
             log.info("[STEP 3] ✓ Extracted {} characters", text.length());
 
             if (text.isBlank()) {

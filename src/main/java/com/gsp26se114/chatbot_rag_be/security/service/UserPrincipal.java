@@ -28,6 +28,29 @@ public class UserPrincipal implements UserDetails {
     private String roleCode;
     private Collection<? extends GrantedAuthority> authorities;
 
+    private static void addPermissionWithAllExpansion(List<GrantedAuthority> authorities, String perm) {
+        if (perm == null || perm.isBlank()) {
+            return;
+        }
+        String p = perm.trim();
+        authorities.add(new SimpleGrantedAuthority(p));
+        if (p.endsWith("_ALL")) {
+            String prefix = p.substring(0, p.length() - 4);
+            authorities.add(new SimpleGrantedAuthority(prefix + "_READ"));
+            authorities.add(new SimpleGrantedAuthority(prefix + "_WRITE"));
+            authorities.add(new SimpleGrantedAuthority(prefix + "_DELETE"));
+        }
+    }
+
+    private static void addPermissionList(List<GrantedAuthority> authorities, List<String> perms) {
+        if (perms == null) {
+            return;
+        }
+        for (String perm : perms) {
+            addPermissionWithAllExpansion(authorities, perm);
+        }
+    }
+
     public static UserPrincipal build(User user, RoleEntity role) {
         String roleCode = role != null ? role.getCode() : "EMPLOYEE";
 
@@ -35,31 +58,16 @@ public class UserPrincipal implements UserDetails {
         List<GrantedAuthority> authorities = new ArrayList<>();
         authorities.add(new SimpleGrantedAuthority("ROLE_" + roleCode));
 
-        // Add basic role permissions (from RolePermissionConstants)
-        List<String> basicPerms = RolePermissionConstants.getBasicPermissions(roleCode);
-        for (String perm : basicPerms) {
-            authorities.add(new SimpleGrantedAuthority(perm));
-            // Expand X_ALL → X_READ, X_WRITE, X_DELETE
-            if (perm.endsWith("_ALL")) {
-                String prefix = perm.substring(0, perm.length() - 4);
-                authorities.add(new SimpleGrantedAuthority(prefix + "_READ"));
-                authorities.add(new SimpleGrantedAuthority(prefix + "_WRITE"));
-                authorities.add(new SimpleGrantedAuthority(prefix + "_DELETE"));
-            }
+        // Static defaults per role code (code constants)
+        addPermissionList(authorities, RolePermissionConstants.getBasicPermissions(roleCode));
+
+        // Tenant-configured permissions on the role row (jsonb) — e.g. DOCUMENT_READ after admin grant
+        if (role != null) {
+            addPermissionList(authorities, role.getPermissions());
         }
 
-        // Add user-specific extra permissions granted by TENANT_ADMIN
-        if (user.getPermissions() != null) {
-            for (String perm : user.getPermissions()) {
-                authorities.add(new SimpleGrantedAuthority(perm));
-                if (perm.endsWith("_ALL")) {
-                    String prefix = perm.substring(0, perm.length() - 4);
-                    authorities.add(new SimpleGrantedAuthority(prefix + "_READ"));
-                    authorities.add(new SimpleGrantedAuthority(prefix + "_WRITE"));
-                    authorities.add(new SimpleGrantedAuthority(prefix + "_DELETE"));
-                }
-            }
-        }
+        // User-specific extra permissions
+        addPermissionList(authorities, user.getPermissions());
 
         return new UserPrincipal(
                 user.getId(),

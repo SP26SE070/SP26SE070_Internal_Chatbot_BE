@@ -25,6 +25,7 @@ import com.gsp26se114.chatbot_rag_be.service.DocumentPreviewService;
 import com.gsp26se114.chatbot_rag_be.security.service.UserPrincipal;
 import com.gsp26se114.chatbot_rag_be.service.DocumentProcessingService;
 import com.gsp26se114.chatbot_rag_be.service.MinioService;
+import com.gsp26se114.chatbot_rag_be.service.TextExtractorService;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.Parameter;
 import io.swagger.v3.oas.annotations.responses.ApiResponse;
@@ -46,10 +47,13 @@ import org.springframework.transaction.annotation.Transactional;
 import org.springframework.web.bind.annotation.*;
 import org.springframework.web.multipart.MultipartFile;
 
+import java.nio.charset.StandardCharsets;
 import java.time.LocalDateTime;
 import java.util.Arrays;
+import java.util.LinkedHashMap;
 import java.util.LinkedHashSet;
 import java.util.List;
+import java.util.Map;
 import java.util.Set;
 import java.util.UUID;
 import java.net.URLConnection;
@@ -74,6 +78,7 @@ public class DocumentController {
     private final RoleRepository roleRepository;
     private final DocumentProcessingService documentProcessingService;
     private final DocumentPreviewService documentPreviewService;
+    private final TextExtractorService textExtractorService;
     private final ObjectMapper objectMapper;
 
     private static final List<String> ALLOWED_CONTENT_TYPES = Arrays.asList(
@@ -163,6 +168,54 @@ public class DocumentController {
 
     private boolean isPreviewMode(String mode) {
         return mode != null && "preview".equalsIgnoreCase(mode.trim());
+    }
+
+    /** FE gửi {@code format=text} để xem nội dung dạng text/plain (trích text), không ép PDF. */
+    private boolean isTextPreviewFormat(String format) {
+        return format != null && "text".equalsIgnoreCase(format.trim());
+    }
+
+    /**
+     * Preview chỉ văn bản: trích text giống pipeline RAG, trả {@code text/plain; charset=UTF-8}.
+     */
+    private ResponseEntity<?> buildTextPreviewResponse(
+            String storagePath,
+            String originalFileName,
+            String fileType
+    ) {
+        try {
+            byte[] raw = minioService.downloadDocument(storagePath);
+            String text = textExtractorService.extractText(raw, fileType, originalFileName);
+            if (text == null || text.isBlank()) {
+                return buildPreviewError(
+                        HttpStatus.UNPROCESSABLE_ENTITY,
+                        "PREVIEW_TEXT_EMPTY",
+                        "Không trích được văn bản từ tệp (ví dụ: PDF scan, định dạng chưa hỗ trợ). Hãy tải xuống để xem.",
+                        null
+                );
+            }
+            byte[] body = text.getBytes(StandardCharsets.UTF_8);
+            HttpHeaders headers = new HttpHeaders();
+            headers.setContentType(MediaType.parseMediaType("text/plain; charset=UTF-8"));
+            headers.setContentLength(body.length);
+            headers.set(HttpHeaders.CACHE_CONTROL, CacheControl.noCache().cachePrivate().mustRevalidate().getHeaderValue());
+            headers.set("X-Preview-Mode", "text");
+            headers.set("X-Source-Content-Type", resolveContentType(originalFileName, fileType));
+            headers.setContentDisposition(
+                    ContentDisposition.builder("inline")
+                            .filename("preview.txt", StandardCharsets.UTF_8)
+                            .build()
+            );
+            return ResponseEntity.ok().headers(headers).body(body);
+        } catch (RuntimeException ex) {
+            log.warn("Text preview failed: {}", ex.getMessage());
+            return buildPreviewError(
+                    HttpStatus.INTERNAL_SERVER_ERROR,
+                    "PREVIEW_TEXT_FAILED",
+                    ex.getMessage() != null ? ex.getMessage() : "Text extraction failed",
+                    ex
+            );
+        }
     }
 
     private ResponseEntity<PreviewErrorResponse> buildPreviewError(
@@ -1066,30 +1119,31 @@ public class DocumentController {
         if (doc == null || !canReadDocument(userDetails, doc)) {
             return ResponseEntity.notFound().build();
         }
+        // LinkedHashMap — Map.of forbids null values (NPE → 500 for null active_version_id or version_note).
         if (doc.getActiveVersionId() == null) {
-            return ResponseEntity.ok(java.util.Map.of(
-                    "document_id", doc.getId(),
-                    "active_version_id", null
-            ));
+            Map<String, Object> body = new LinkedHashMap<>();
+            body.put("document_id", doc.getId());
+            body.put("active_version_id", null);
+            return ResponseEntity.ok(body);
         }
 
         DocumentVersion active = documentVersionRepository
                 .findByIdAndDocumentIdAndTenantId(doc.getActiveVersionId(), doc.getId(), userDetails.getTenantId())
                 .orElse(null);
         if (active == null) {
-            return ResponseEntity.ok(java.util.Map.of(
-                    "document_id", doc.getId(),
-                    "active_version_id", doc.getActiveVersionId()
-            ));
+            Map<String, Object> body = new LinkedHashMap<>();
+            body.put("document_id", doc.getId());
+            body.put("active_version_id", doc.getActiveVersionId());
+            return ResponseEntity.ok(body);
         }
 
-        return ResponseEntity.ok(java.util.Map.of(
-                "document_id", doc.getId(),
-                "active_version_id", active.getId(),
-                "version_number", active.getVersionNumber(),
-                "version_note", active.getVersionNote(),
-                "created_at", active.getCreatedAt()
-        ));
+        Map<String, Object> body = new LinkedHashMap<>();
+        body.put("document_id", doc.getId());
+        body.put("active_version_id", active.getId());
+        body.put("version_number", active.getVersionNumber());
+        body.put("version_note", active.getVersionNote());
+        body.put("created_at", active.getCreatedAt());
+        return ResponseEntity.ok(body);
     }
 
     @PutMapping("/{id}/rag-version/{versionId}")
@@ -1142,6 +1196,7 @@ public class DocumentController {
     public ResponseEntity<?> viewDocumentContent(
             @PathVariable UUID id,
             @RequestParam(value = "mode", defaultValue = "preview") String mode,
+            @RequestParam(value = "format", required = false) String format,
             @RequestHeader(value = HttpHeaders.IF_NONE_MATCH, required = false) String ifNoneMatch,
             @AuthenticationPrincipal UserPrincipal userDetails
     ) {
@@ -1153,6 +1208,10 @@ public class DocumentController {
                 return buildPreviewError(HttpStatus.NOT_FOUND, "PREVIEW_NOT_FOUND", "Document was not found", null);
             }
             return ResponseEntity.notFound().build();
+        }
+
+        if (isPreviewMode(mode) && isTextPreviewFormat(format)) {
+            return buildTextPreviewResponse(doc.getStoragePath(), doc.getOriginalFileName(), doc.getFileType());
         }
 
         return buildPreviewOrInlineResponse(
@@ -1191,6 +1250,7 @@ public class DocumentController {
             @PathVariable UUID id,
             @PathVariable UUID versionId,
             @RequestParam(value = "mode", defaultValue = "preview") String mode,
+            @RequestParam(value = "format", required = false) String format,
             @RequestHeader(value = HttpHeaders.IF_NONE_MATCH, required = false) String ifNoneMatch,
             @AuthenticationPrincipal UserPrincipal userDetails
     ) {
@@ -1212,6 +1272,10 @@ public class DocumentController {
                 return buildPreviewError(HttpStatus.NOT_FOUND, "PREVIEW_NOT_FOUND", "Document version was not found", null);
             }
             return ResponseEntity.notFound().build();
+        }
+
+        if (isPreviewMode(mode) && isTextPreviewFormat(format)) {
+            return buildTextPreviewResponse(version.getStoragePath(), doc.getOriginalFileName(), doc.getFileType());
         }
 
         String fileName = isPreviewMode(mode)

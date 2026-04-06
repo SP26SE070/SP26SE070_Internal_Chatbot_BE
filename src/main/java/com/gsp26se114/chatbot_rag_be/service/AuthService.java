@@ -205,12 +205,17 @@ public class AuthService {
             throw new RuntimeException("Refresh token đã hết hạn. Vui lòng đăng nhập lại!");
         }
 
-        // 3. Lấy user từ refresh token
-        User user = refreshToken.getUser();
+        // 3. Reload user from DB so permissions/role are current (not stale Hibernate proxy cache)
+        User user = userRepository.findById(refreshToken.getUser().getId())
+                .orElseThrow(() -> new RuntimeException("User không tồn tại!"));
+        if (Boolean.FALSE.equals(user.getIsActive())) {
+            throw new RuntimeException("Account has been disabled");
+        }
 
-        // 3.5 Load role information
+        // 3.5 Load role information (includes jsonb permissions)
         RoleEntity role = roleRepository.findById(user.getRoleId())
                 .orElseThrow(() -> new RuntimeException("Role not found"));
+
 
         // 4. Tạo access token mới
         UserPrincipal userPrincipal = UserPrincipal.build(user, role);
