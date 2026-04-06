@@ -104,17 +104,39 @@ public class AdminSubscriptionPlanController {
         return ResponseEntity.ok(plan);
     }
     
+    @PutMapping("/{id}/deactivate")
+    @Operation(summary = "Deactivate plan",
+               description = "Soft disable subscription plan bằng cách set isActive = false")
+    public ResponseEntity<SubscriptionPlanResponse> deactivatePlan(
+            @PathVariable UUID id,
+            @AuthenticationPrincipal UserPrincipal userPrincipal) {
+        log.info("Deactivating subscription plan: {}", id);
+        SubscriptionPlanResponse plan = planService.deactivatePlan(id, userPrincipal.getId());
+        return ResponseEntity.ok(plan);
+    }
+
+    @PutMapping("/{id}/activate")
+    @Operation(summary = "Activate plan",
+               description = "Activate subscription plan bằng cách set isActive = true")
+    public ResponseEntity<SubscriptionPlanResponse> activatePlan(
+            @PathVariable UUID id,
+            @AuthenticationPrincipal UserPrincipal userPrincipal) {
+        log.info("Activating subscription plan: {}", id);
+        SubscriptionPlanResponse plan = planService.activatePlan(id, userPrincipal.getId());
+        return ResponseEntity.ok(plan);
+    }
+
     /**
-     * Delete (deactivate) subscription plan
+     * Hard delete subscription plan
      */
     @DeleteMapping("/{id}")
-    @Operation(summary = "Xóa plan", 
-               description = "Deactivate subscription plan (không xóa vật lý)")
+    @Operation(summary = "Hard delete plan",
+               description = "Xóa vĩnh viễn subscription plan")
     public ResponseEntity<MessageResponse> deletePlan(
             @PathVariable UUID id,
             @AuthenticationPrincipal UserPrincipal userPrincipal) {
-        log.info("Deleting subscription plan: {}", id);
-        planService.deletePlan(id, userPrincipal.getId());
-        return ResponseEntity.ok(new MessageResponse("Plan đã được deactivate thành công"));
+        log.info("Hard deleting subscription plan: {}", id);
+        planService.hardDeletePlan(id, userPrincipal.getId());
+        return ResponseEntity.ok(new MessageResponse("Plan deleted successfully"));
     }
 }

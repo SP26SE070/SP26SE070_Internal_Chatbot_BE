@@ -23,9 +23,8 @@ import java.util.UUID;
 @RequestMapping("/api/v1/tenant-admin/dashboard")
 @RequiredArgsConstructor
 @Tag(name = "15. 📊 Tenant Admin - Dashboard & Analytics", 
-     description = "Dashboard và thống kê của tenant (token, LLM request, documents) - TENANT_ADMIN")
+    description = "Dashboard và thống kê của tenant (token, LLM request, documents) - TENANT_ADMIN hoặc custom role có quyền phù hợp")
 @SecurityRequirement(name = "bearerAuth")
-@PreAuthorize("hasRole('TENANT_ADMIN')")
 public class TenantDashboardController {
 
     private final UserRepository userRepository;
@@ -35,6 +34,7 @@ public class TenantDashboardController {
     private final TenantRepository tenantRepository;
 
     @GetMapping
+    @PreAuthorize("hasRole('TENANT_ADMIN') or hasAuthority('ANALYTICS_VIEW')")
     @Operation(summary = "Dashboard tổng quan của tenant", 
                description = "Xem thống kê tổng quan: users, documents, chunks của tenant")
     public ResponseEntity<Map<String, Object>> getTenantDashboard(@AuthenticationPrincipal UserPrincipal userPrincipal) {
@@ -74,6 +74,7 @@ public class TenantDashboardController {
     }
 
     @GetMapping("/tenant")
+    @PreAuthorize("hasRole('TENANT_ADMIN')")
     @Operation(summary = "Xem thông tin tenant", description = "TENANT_ADMIN xem thông tin tổ chức (tenant) của mình")
     public ResponseEntity<Map<String, Object>> getTenantInfo(@AuthenticationPrincipal UserPrincipal userPrincipal) {
         Tenant tenant = tenantRepository.findById(userPrincipal.getTenantId())
@@ -104,8 +105,9 @@ public class TenantDashboardController {
     }
 
     @GetMapping("/documents")
+    @PreAuthorize("hasRole('TENANT_ADMIN') or hasAuthority('ANALYTICS_VIEW') or hasAuthority('DOCUMENT_READ')")
     @Operation(summary = "Thống kê documents của tenant", 
-               description = "Chi tiết về tài liệu và knowledge base")
+               description = "Chi tiết về tài liệu và Document Dashboard")
     public ResponseEntity<Map<String, Object>> getDocumentStatistics(@AuthenticationPrincipal UserPrincipal userPrincipal) {
         Map<String, Object> stats = new HashMap<>();
         
@@ -129,6 +131,7 @@ public class TenantDashboardController {
     }
 
     @GetMapping("/llm-usage")
+    @PreAuthorize("hasRole('TENANT_ADMIN') or hasAuthority('ANALYTICS_VIEW')")
     @Operation(summary = "Thống kê sử dụng LLM của tenant", 
                description = "Chi tiết về token và request đã sử dụng")
     public ResponseEntity<Map<String, Object>> getLLMUsageStatistics(@AuthenticationPrincipal UserPrincipal userPrincipal) {
@@ -157,6 +160,7 @@ public class TenantDashboardController {
     }
 
     @GetMapping("/users")
+    @PreAuthorize("hasRole('TENANT_ADMIN') or hasAuthority('ANALYTICS_VIEW')")
     @Operation(summary = "Thống kê users trong tenant", 
                description = "Số lượng users và phân bổ theo role")
     public ResponseEntity<Map<String, Object>> getUserStatistics(@AuthenticationPrincipal UserPrincipal userPrincipal) {

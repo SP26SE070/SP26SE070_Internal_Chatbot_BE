@@ -94,8 +94,7 @@ public class PermissionConstants {
             ROLE_ALL,             // Admin only
             ROLE_WRITE,           // Admin only
             ROLE_READ,            // Admin only
-            SUBSCRIPTION_MANAGE,  // Admin only
-            ANALYTICS_VIEW        // Admin only
+            SUBSCRIPTION_MANAGE   // Admin only
         );
     }
 }

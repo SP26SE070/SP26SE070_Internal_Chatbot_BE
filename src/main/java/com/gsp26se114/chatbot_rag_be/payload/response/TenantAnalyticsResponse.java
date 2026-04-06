@@ -22,7 +22,7 @@ public class TenantAnalyticsResponse {
     private Integer newUsersThisMonth;
     
     // ========== USERS BY ROLE ==========
-    private Map<String, Long> usersByRole; // {"CONTENT_MANAGER": 5, "EMPLOYEE": 20}
+    private Map<String, Long> usersByRole; // {"TENANT_ADMIN": 1, "EMPLOYEE": 20, "HR_MANAGER": 3}
     
     // ========== USERS BY DEPARTMENT ==========
     private Map<String, Long> usersByDepartment; // {"IT": 10, "HR": 5, "SALES": 8}

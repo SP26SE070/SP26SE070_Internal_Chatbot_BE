@@ -12,7 +12,9 @@ import org.springframework.security.core.userdetails.UserDetails;
 
 import java.util.ArrayList;
 import java.util.Collection;
+import java.util.LinkedHashSet;
 import java.util.List;
+import java.util.Set;
 import java.util.UUID;
 
 @Data
@@ -58,13 +60,12 @@ public class UserPrincipal implements UserDetails {
         List<GrantedAuthority> authorities = new ArrayList<>();
         authorities.add(new SimpleGrantedAuthority("ROLE_" + roleCode));
 
-        // Static defaults per role code (code constants)
-        addPermissionList(authorities, RolePermissionConstants.getBasicPermissions(roleCode));
-
-        // Tenant-configured permissions on the role row (jsonb) — e.g. DOCUMENT_READ after admin grant
-        if (role != null) {
-            addPermissionList(authorities, role.getPermissions());
+        // Merge old + new behavior: default role perms + DB role perms, de-duplicated.
+        Set<String> effectiveRolePerms = new LinkedHashSet<>(RolePermissionConstants.getBasicPermissions(roleCode));
+        if (role != null && role.getPermissions() != null) {
+            effectiveRolePerms.addAll(role.getPermissions());
         }
+        addPermissionList(authorities, new ArrayList<>(effectiveRolePerms));
 
         // User-specific extra permissions
         addPermissionList(authorities, user.getPermissions());

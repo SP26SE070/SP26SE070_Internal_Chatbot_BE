@@ -11,7 +11,11 @@ import org.springdoc.core.customizers.OpenApiCustomizer;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
 
+import java.util.ArrayList;
+import java.util.Comparator;
+import java.util.LinkedHashMap;
 import java.util.List;
+import java.util.Map;
 
 @Configuration
 @OpenAPIDefinition(
@@ -30,15 +34,14 @@ import java.util.List;
 )
 public class OpenApiConfig {
     
-    /**
-     * Customizer to sort tags by name (01, 02, 03...)
-     * This ensures Swagger UI displays tags in the correct order
-     */
+        /**
+         * Customizer to force Swagger tag order by configured sequence first,
+         * then by numeric prefix fallback (01, 02, 03...).
+         */
     @Bean
     public OpenApiCustomizer sortTagsAlphabetically() {
         return openApi -> {
-            // Define the desired tag order
-            List<Tag> orderedTags = List.of(
+                        List<Tag> desiredOrder = List.of(
                     new Tag().name("01. 🔐 Authentication")
                             .description("Đăng nhập, đăng ký, quên mật khẩu (Public)"),
                     
@@ -56,6 +59,9 @@ public class OpenApiConfig {
                     
                     new Tag().name("06. 📊 Super Admin - Role Management")
                             .description("Quản lý roles hệ thống (SUPER_ADMIN)"),
+
+                    new Tag().name("06. 🔐 Super Admin - Tenant Lookup")
+                            .description("Lấy danh sách tenant cho bộ lọc"),
                     
                     new Tag().name("07. 📊 Super Admin - System Analytics")
                             .description("Thống kê toàn hệ thống: subscription, plan, document & RAG, token/LLM usage (SUPER_ADMIN)"),
@@ -68,6 +74,12 @@ public class OpenApiConfig {
                     
                     new Tag().name("10. 💳 Staff - Transaction Management")
                             .description("Quản lý giao dịch thanh toán của tenants (STAFF)"),
+
+                    new Tag().name("11. 🧾 Staff - Subscription Management")
+                            .description("Danh sách subscriptions cho Staff Manage Subscriptions"),
+
+                    new Tag().name("18. 🧠 Staff - Onboarding Content")
+                            .description("Quản lý onboarding content theo tenant (STAFF)"),
                     
                     new Tag().name("11. 💳 Tenant Admin - Subscription")
                             .description("Xem và quản lý subscription (TENANT_ADMIN)"),
@@ -89,8 +101,11 @@ public class OpenApiConfig {
                     
                     new Tag().name("17. 💳 Payment Management")
                             .description("Quản lý thanh toán và giao dịch"),
+
+                    new Tag().name("17. 📖 Employee Onboarding")
+                            .description("Theo dõi tiến độ onboarding cho user trong tenant"),
                     
-                    new Tag().name("18. 📚 Knowledge Base")
+                    new Tag().name("18. 📚 Document Dashboard")
                             .description("Document upload and management APIs"),
                     
                     new Tag().name("19. 🗂️ Document Categories")
@@ -105,8 +120,53 @@ public class OpenApiConfig {
                     new Tag().name("99. 🔧 Admin - Document Management")
                             .description("Quản lý tài liệu nâng cao (chỉ dành cho SUPER_ADMIN)")
             );
-            
-            openApi.setTags(orderedTags);
+
+                        Map<String, Integer> orderIndex = new LinkedHashMap<>();
+                        for (int i = 0; i < desiredOrder.size(); i++) {
+                                orderIndex.put(desiredOrder.get(i).getName(), i);
+                        }
+
+                        Map<String, Tag> mergedTags = new LinkedHashMap<>();
+                        if (openApi.getTags() != null) {
+                                for (Tag tag : openApi.getTags()) {
+                                        if (tag != null && tag.getName() != null) {
+                                                mergedTags.put(tag.getName(), tag);
+                                        }
+                                }
+                        }
+
+                        // Prefer canonical names/descriptions from desiredOrder.
+                        for (Tag tag : desiredOrder) {
+                                mergedTags.put(tag.getName(), tag);
+                        }
+
+                        List<Tag> sortedTags = new ArrayList<>(mergedTags.values());
+                        sortedTags.sort(
+                                        Comparator
+                                                        .comparingInt((Tag tag) -> orderIndex.getOrDefault(tag.getName(), Integer.MAX_VALUE))
+                                                        .thenComparingInt(tag -> extractOrderNumber(tag.getName()))
+                                                        .thenComparing(Tag::getName, String.CASE_INSENSITIVE_ORDER)
+                        );
+
+                        openApi.setTags(sortedTags);
         };
     }
+
+        private static int extractOrderNumber(String tagName) {
+                if (tagName == null || tagName.isBlank()) {
+                        return Integer.MAX_VALUE;
+                }
+
+                int dotIndex = tagName.indexOf('.');
+                if (dotIndex <= 0) {
+                        return Integer.MAX_VALUE;
+                }
+
+                String prefix = tagName.substring(0, dotIndex).trim();
+                try {
+                        return Integer.parseInt(prefix);
+                } catch (NumberFormatException ignored) {
+                        return Integer.MAX_VALUE;
+                }
+        }
 }

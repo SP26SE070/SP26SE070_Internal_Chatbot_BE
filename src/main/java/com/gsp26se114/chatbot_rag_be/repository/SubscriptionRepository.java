@@ -47,6 +47,9 @@ public interface SubscriptionRepository extends JpaRepository<Subscription, UUID
     // Kiểm tra tenant có subscription active không
     boolean existsByTenantIdAndStatus(UUID tenantId, SubscriptionStatus status);
 
+    // Kiểm tra plan có đang được subscription nào tham chiếu không
+    boolean existsByPlanId(UUID planId);
+
     @Query("""
             SELECT s
             FROM Subscription s

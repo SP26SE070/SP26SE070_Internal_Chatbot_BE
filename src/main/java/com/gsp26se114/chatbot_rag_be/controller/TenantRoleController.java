@@ -34,7 +34,6 @@ import java.util.List;
          
          #### 🔒 **Fixed Roles** (Roles cố định - Không thể sửa/xóa):
          - `TENANT_ADMIN`: Quản trị viên tenant - Full quyền trong tenant
-         - `CONTENT_MANAGER`: Quản lý nội dung - Quản lý documents
          - `EMPLOYEE`: Nhân viên - Quyền cơ bản
          
          #### ✨ **Custom Roles** (Roles tùy chỉnh - Tự do tạo/sửa/xóa):
@@ -76,7 +75,7 @@ public class TenantRoleController {
                    Lấy danh sách tất cả roles có sẵn cho tenant.
                    
                    **Bao gồm:**
-                   - Fixed roles: TENANT_ADMIN, CONTENT_MANAGER, EMPLOYEE (3 roles)
+                   - Fixed roles: TENANT_ADMIN, EMPLOYEE (2 roles)
                    - Custom roles: Roles do TENANT_ADMIN tạo
                    
                    **Response:**
@@ -116,7 +115,7 @@ public class TenantRoleController {
     @GetMapping("/fixed")
     @Operation(summary = "📋 Xem fixed roles", 
                description = """
-                   Lấy danh sách fixed roles (TENANT_ADMIN, CONTENT_MANAGER, EMPLOYEE).
+                   Lấy danh sách fixed roles (TENANT_ADMIN, EMPLOYEE).
                    
                    **Đặc điểm:**
                    - Không thể sửa/xóa

@@ -48,24 +48,13 @@ public class RolePermissionConstants {
     );
     
     /**
-     * Quyền cơ bản của CONTENT_MANAGER
-     * (Nếu có role này trong future)
-     */
-    public static final List<String> CONTENT_MANAGER_PERMISSIONS = List.of(
-        PermissionConstants.DOCUMENT_ALL,
-        PermissionConstants.ANALYTICS_VIEW,
-        PermissionConstants.PROFILE_MANAGE
-    );
-    
-    /**
      * Map từ role code sang basic permissions
      */
     public static final Map<String, List<String>> ROLE_BASIC_PERMISSIONS = Map.of(
         "SUPER_ADMIN", SUPER_ADMIN_PERMISSIONS,
         "STAFF", STAFF_PERMISSIONS,
         "TENANT_ADMIN", TENANT_ADMIN_PERMISSIONS,
-        "EMPLOYEE", EMPLOYEE_PERMISSIONS,
-        "CONTENT_MANAGER", CONTENT_MANAGER_PERMISSIONS
+        "EMPLOYEE", EMPLOYEE_PERMISSIONS
     );
     
     /**
@@ -85,6 +74,9 @@ public class RolePermissionConstants {
         PermissionConstants.DOCUMENT_WRITE,
         PermissionConstants.DOCUMENT_DELETE,
         PermissionConstants.DOCUMENT_ALL,
+
+        // Analytics permissions
+        PermissionConstants.ANALYTICS_VIEW,
 
         // User management (chỉ read)
         PermissionConstants.USER_READ

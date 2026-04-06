@@ -12,7 +12,7 @@ import java.util.Set;
 import java.util.UUID;
 
 /**
- * Document entity lưu thông tin tài liệu được upload vào Knowledge Base
+ * Document entity lưu thông tin tài liệu được upload vào Document Dashboard
  * Support access control theo department hoặc role
  */
 @Entity

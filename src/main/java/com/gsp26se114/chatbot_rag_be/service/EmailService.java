@@ -86,7 +86,7 @@ public class EmailService {
      * @param employeeName Họ tên nhân viên
      * @param loginEmail Email ảo để đăng nhập hệ thống
      * @param temporaryPassword Mật khẩu tạm thời
-     * @param role Vai trò (EMPLOYEE, CONTENT_MANAGER)
+      * @param role Vai trò (EMPLOYEE hoặc custom role)
      * @param department Phòng ban
      * @param tenantName Tên công ty/tổ chức
      */

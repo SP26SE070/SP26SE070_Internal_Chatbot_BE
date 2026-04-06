@@ -1,11 +1,14 @@
 package com.gsp26se114.chatbot_rag_be.service;
 
+import com.gsp26se114.chatbot_rag_be.exception.ConflictException;
+import com.gsp26se114.chatbot_rag_be.exception.ResourceNotFoundException;
 import com.gsp26se114.chatbot_rag_be.entity.SubscriptionPlan;
 import com.gsp26se114.chatbot_rag_be.entity.SubscriptionTier;
 import com.gsp26se114.chatbot_rag_be.payload.request.CreateSubscriptionPlanRequest;
 import com.gsp26se114.chatbot_rag_be.payload.request.UpdateSubscriptionPlanRequest;
 import com.gsp26se114.chatbot_rag_be.payload.response.SubscriptionPlanResponse;
 import com.gsp26se114.chatbot_rag_be.payload.response.SubscriptionPlanTypeResponse;
+import com.gsp26se114.chatbot_rag_be.repository.SubscriptionRepository;
 import com.gsp26se114.chatbot_rag_be.repository.SubscriptionPlanRepository;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
@@ -25,6 +28,7 @@ import java.util.stream.Collectors;
 public class SubscriptionPlanService {
     
     private final SubscriptionPlanRepository planRepository;
+    private final SubscriptionRepository subscriptionRepository;
     private static final Map<SubscriptionTier, String> DEFAULT_PLAN_NAMES = Map.of(
             SubscriptionTier.TRIAL, "Goi dung thu",
             SubscriptionTier.STARTER, "Goi Khoi Dau",
@@ -57,8 +61,7 @@ public class SubscriptionPlanService {
      */
     public SubscriptionPlanResponse getPlanById(UUID id) {
         log.info("Getting plan by ID: {}", id);
-        SubscriptionPlan plan = planRepository.findById(id)
-                .orElseThrow(() -> new RuntimeException("Plan not found: " + id));
+        SubscriptionPlan plan = getPlanOrThrow(id);
         return toResponse(plan);
     }
     
@@ -67,7 +70,7 @@ public class SubscriptionPlanService {
      */
     public SubscriptionPlan getPlanByCode(String code) {
         return planRepository.findByCodeIgnoreCase(code)
-                .orElseThrow(() -> new RuntimeException("Plan not found: " + code));
+                .orElseThrow(() -> new ResourceNotFoundException("Plan not found: " + code));
     }
 
     /**
@@ -147,8 +150,7 @@ public class SubscriptionPlanService {
     public SubscriptionPlanResponse updatePlan(UUID id, UpdateSubscriptionPlanRequest request, UUID adminId) {
         log.info("Updating subscription plan: {}", id);
         
-        SubscriptionPlan plan = planRepository.findById(id)
-                .orElseThrow(() -> new RuntimeException("Plan not found: " + id));
+        SubscriptionPlan plan = getPlanOrThrow(id);
         
         // Update fields
         plan.setName(request.getName());
@@ -190,21 +192,53 @@ public class SubscriptionPlanService {
     }
     
     /**
-     * Delete (deactivate) subscription plan
+     * Soft-deactivate plan.
      */
     @Transactional
-    public void deletePlan(UUID id, UUID adminId) {
-        log.info("Deleting subscription plan: {}", id);
-        
-        SubscriptionPlan plan = planRepository.findById(id)
-                .orElseThrow(() -> new RuntimeException("Plan not found: " + id));
-        
-        plan.setIsActive(false);
+    public SubscriptionPlanResponse deactivatePlan(UUID id, UUID adminId) {
+        log.info("Deactivating subscription plan: {}", id);
+        return setPlanActiveStatus(id, false, adminId);
+    }
+
+    /**
+     * Soft-activate plan.
+     */
+    @Transactional
+    public SubscriptionPlanResponse activatePlan(UUID id, UUID adminId) {
+        log.info("Activating subscription plan: {}", id);
+        return setPlanActiveStatus(id, true, adminId);
+    }
+
+    /**
+     * Hard delete plan.
+     */
+    @Transactional
+    public void hardDeletePlan(UUID id, UUID adminId) {
+        log.info("Hard deleting subscription plan: {} by admin: {}", id, adminId);
+
+        SubscriptionPlan plan = getPlanOrThrow(id);
+        if (subscriptionRepository.existsByPlanId(id)) {
+            throw new ConflictException("Cannot delete plan because it is currently in use by subscriptions");
+        }
+
+        planRepository.delete(plan);
+        log.info("Hard deleted plan: {}", plan.getCode());
+    }
+
+    private SubscriptionPlanResponse setPlanActiveStatus(UUID id, boolean isActive, UUID adminId) {
+        SubscriptionPlan plan = getPlanOrThrow(id);
+
+        plan.setIsActive(isActive);
         plan.setUpdatedBy(adminId);
         plan.setUpdatedAt(LocalDateTime.now());
-        
-        planRepository.save(plan);
-        log.info("Deactivated plan: {}", plan.getCode());
+
+        SubscriptionPlan updated = planRepository.save(plan);
+        return toResponse(updated);
+    }
+
+    private SubscriptionPlan getPlanOrThrow(UUID id) {
+        return planRepository.findById(id)
+                .orElseThrow(() -> new ResourceNotFoundException("Plan not found: " + id));
     }
     
     /**
