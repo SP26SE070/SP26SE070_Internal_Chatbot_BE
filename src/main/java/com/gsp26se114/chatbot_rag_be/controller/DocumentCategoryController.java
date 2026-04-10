@@ -140,6 +140,24 @@ public class DocumentCategoryController {
         return ResponseEntity.ok(result);
     }
 
+    @GetMapping("/manage")
+    @PreAuthorize("hasAuthority('DOCUMENT_READ')")
+    @SecurityRequirement(name = "bearerAuth")
+    @Operation(
+        summary = "Flat list category để quản trị",
+        description = "Trả về toàn bộ categories của tenant (bao gồm cả inactive) để UI quản trị có thể kích hoạt lại."
+    )
+    public ResponseEntity<List<DocumentCategoryResponse>> listManage(
+            @AuthenticationPrincipal UserPrincipal user) {
+
+        List<DocumentCategoryResponse> result = categoryRepository
+                .findByTenantIdOrderByNameAsc(user.getTenantId())
+                .stream()
+                .map(this::toResponse)
+                .toList();
+        return ResponseEntity.ok(result);
+    }
+
     // =========================================================
     // GET /{id}  — Chi tiết một category
     // =========================================================
@@ -328,13 +346,13 @@ public class DocumentCategoryController {
     }
 
     // =========================================================
-    // DELETE /{id}  — Soft-delete (deactivate)
+    // PATCH /{id}/deactivate  — Soft-delete (deactivate)
     // =========================================================
-    @DeleteMapping("/delete/{id}")
+    @PatchMapping("/{id}/deactivate")
     @PreAuthorize("hasAuthority('DOCUMENT_WRITE')")
     @SecurityRequirement(name = "bearerAuth")
     @Operation(
-        summary = "Vô hiệu hóa category (soft delete)",
+        summary = "Vô hiệu hóa category (deactivate)",
         description = """
             Đánh dấu `isActive = false`. **Không xóa vật lý** khỏi database.
 
@@ -353,6 +371,89 @@ public class DocumentCategoryController {
     public ResponseEntity<?> delete(
             @Parameter(description = "ID của category cần vô hiệu hóa", required = true) @PathVariable UUID id,
             @AuthenticationPrincipal UserPrincipal user) {
+
+        return deactivateCategory(id, user);
+    }
+
+    // Backward-compatible alias for existing FE clients.
+    @DeleteMapping("/delete/{id}")
+    @PreAuthorize("hasAuthority('DOCUMENT_WRITE')")
+    @SecurityRequirement(name = "bearerAuth")
+    @Operation(summary = "[Deprecated] Vô hiệu hóa category (soft delete)")
+    public ResponseEntity<?> legacySoftDelete(
+            @PathVariable UUID id,
+            @AuthenticationPrincipal UserPrincipal user) {
+
+        return deactivateCategory(id, user);
+    }
+
+    @DeleteMapping("/{id}")
+    @PreAuthorize("hasAuthority('DOCUMENT_WRITE')")
+    @SecurityRequirement(name = "bearerAuth")
+    @Operation(
+        summary = "Xóa vĩnh viễn category",
+        description = """
+            Xóa vĩnh viễn category khỏi hệ thống.
+
+            - Chỉ cho phép khi category không còn sub-category active.
+            - Các document đang tham chiếu category sẽ tự động được gỡ category (category_id = null).
+            """
+    )
+    public ResponseEntity<?> hardDelete(
+            @Parameter(description = "ID của category cần xóa vĩnh viễn", required = true) @PathVariable UUID id,
+            @AuthenticationPrincipal UserPrincipal user) {
+
+        DocumentCategory cat = categoryRepository.findById(id)
+                .orElseThrow(() -> new RuntimeException("Không tìm thấy category"));
+
+        if (!cat.getTenantId().equals(user.getTenantId())) {
+            return ResponseEntity.status(403).body(Map.of("message", "Không có quyền xóa category này"));
+        }
+
+        if (categoryRepository.hasActiveChildren(id)) {
+            return ResponseEntity.badRequest()
+                    .body(Map.of("message", "Không thể xóa category còn sub-category đang active. Hãy xử lý sub-category trước."));
+        }
+
+        categoryRepository.delete(cat);
+        log.info("Hard-deleted document category: {} tenant={}", id, user.getTenantId());
+        return ResponseEntity.ok(Map.of("message", "Đã xóa vĩnh viễn category"));
+    }
+
+    @PatchMapping("/{id}/activate")
+    @PreAuthorize("hasAuthority('DOCUMENT_WRITE')")
+    @SecurityRequirement(name = "bearerAuth")
+    @Operation(summary = "Kích hoạt lại category")
+    public ResponseEntity<?> activateCategory(
+            @PathVariable UUID id,
+            @AuthenticationPrincipal UserPrincipal user) {
+
+        DocumentCategory cat = categoryRepository.findById(id)
+                .orElseThrow(() -> new RuntimeException("Không tìm thấy category"));
+
+        if (!cat.getTenantId().equals(user.getTenantId())) {
+            return ResponseEntity.status(403).body(Map.of("message", "Không có quyền cập nhật category này"));
+        }
+
+        if (cat.getParentId() != null) {
+            boolean parentActive = categoryRepository.findById(cat.getParentId())
+                    .map(parent -> parent.getTenantId().equals(user.getTenantId()) && parent.getIsActive())
+                    .orElse(false);
+            if (!parentActive) {
+                return ResponseEntity.badRequest()
+                        .body(Map.of("message", "Không thể kích hoạt category khi category cha đang không active"));
+            }
+        }
+
+        cat.setIsActive(true);
+        cat.setUpdatedAt(LocalDateTime.now());
+        categoryRepository.save(cat);
+
+        log.info("Activated document category: {} tenant={}", id, user.getTenantId());
+        return ResponseEntity.ok(Map.of("message", "Đã kích hoạt lại category"));
+    }
+
+    private ResponseEntity<?> deactivateCategory(UUID id, UserPrincipal user) {
 
         DocumentCategory cat = categoryRepository.findById(id)
                 .orElseThrow(() -> new RuntimeException("Không tìm thấy category"));

@@ -149,17 +149,17 @@ public class TenantAdminController {
     }
     
     /**
-     * Delete user (soft delete by removing from tenant)
+     * Delete user (remove from tenant)
      */
     @DeleteMapping("/users/{userId}")
     @PreAuthorize("hasRole('TENANT_ADMIN') or hasAuthority('USER_WRITE')")
     @Operation(summary = "Xóa user", 
-               description = "Xóa mềm user khỏi tenant (set isActive = false, không thể xóa chính mình)")
+               description = "Xóa user khỏi tenant (set isActive = false, tenantId = null). Khác với deactivate, hành động này không thể kích hoạt lại từ tenant hiện tại.")
     public ResponseEntity<MessageResponse> deleteUser(
             @AuthenticationPrincipal UserDetails userDetails,
             @PathVariable UUID userId) {
         tenantAdminService.deleteUser(userDetails.getUsername(), userId);
-        return ResponseEntity.ok(new MessageResponse("User đã được vô hiệu hóa (xóa mềm)!"));
+        return ResponseEntity.ok(new MessageResponse("User đã được xóa khỏi tổ chức"));
     }
     
     /**

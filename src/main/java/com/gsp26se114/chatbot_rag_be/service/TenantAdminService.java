@@ -29,6 +29,7 @@ import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.NoSuchElementException;
+import java.util.Objects;
 import java.util.UUID;
 import java.util.stream.Collectors;
 
@@ -177,7 +178,7 @@ public class TenantAdminService {
                 .orElseThrow(() -> new NoSuchElementException("User không tồn tại với ID: " + userId));
         
         // Verify same tenant
-        if (!user.getTenantId().equals(tenantAdmin.getTenantId())) {
+        if (!Objects.equals(user.getTenantId(), tenantAdmin.getTenantId())) {
             throw new AccessDeniedException("Bạn không có quyền truy cập user này!");
         }
 
@@ -365,7 +366,7 @@ public class TenantAdminService {
                 .orElseThrow(() -> new NoSuchElementException("User không tồn tại với ID: " + userId));
         
         // Verify same tenant
-        if (!user.getTenantId().equals(tenantAdmin.getTenantId())) {
+        if (!Objects.equals(user.getTenantId(), tenantAdmin.getTenantId())) {
             throw new AccessDeniedException("Bạn không có quyền cập nhật user này!");
         }
 
@@ -463,7 +464,7 @@ public class TenantAdminService {
                 .orElseThrow(() -> new NoSuchElementException("User không tồn tại với ID: " + userId));
         
         // Verify same tenant
-        if (!user.getTenantId().equals(tenantAdmin.getTenantId())) {
+        if (!Objects.equals(user.getTenantId(), tenantAdmin.getTenantId())) {
             throw new AccessDeniedException("Bạn không có quyền xóa user này!");
         }
 
@@ -483,10 +484,12 @@ public class TenantAdminService {
 
         Boolean oldActive = user.getIsActive();
         user.setIsActive(false);
+        user.setTenantId(null);
+        user.setDepartmentId(null);
         user.setUpdatedAt(LocalDateTime.now());
-        userRepository.save(user);
-        writeUserStatusAudit(tenantAdmin, user, "USER_DEACTIVATE", oldActive, user.getIsActive(), "Soft delete user");
-        log.info("Soft-deleted user (isActive=false): {}", userId);
+        User saved = userRepository.save(user);
+        writeUserStatusAudit(tenantAdmin, saved, "USER_DELETE", oldActive, saved.getIsActive(), "Remove user from tenant");
+        log.info("Removed user from tenant (soft delete): {}", userId);
     }
 
     @Transactional
@@ -495,7 +498,7 @@ public class TenantAdminService {
         User user = userRepository.findById(userId)
                 .orElseThrow(() -> new NoSuchElementException("User không tồn tại với ID: " + userId));
 
-        if (!user.getTenantId().equals(tenantAdmin.getTenantId())) {
+        if (!Objects.equals(user.getTenantId(), tenantAdmin.getTenantId())) {
             throw new AccessDeniedException("Bạn không có quyền cập nhật user này!");
         }
 
@@ -519,7 +522,7 @@ public class TenantAdminService {
         User user = userRepository.findById(userId)
                 .orElseThrow(() -> new NoSuchElementException("User không tồn tại với ID: " + userId));
 
-        if (!user.getTenantId().equals(tenantAdmin.getTenantId())) {
+        if (!Objects.equals(user.getTenantId(), tenantAdmin.getTenantId())) {
             throw new AccessDeniedException("Bạn không có quyền cập nhật user này!");
         }
 
@@ -557,7 +560,7 @@ public class TenantAdminService {
                 .orElseThrow(() -> new RuntimeException("User không tồn tại với ID: " + userId));
         
         // Verify same tenant
-        if (!user.getTenantId().equals(tenantAdmin.getTenantId())) {
+        if (!Objects.equals(user.getTenantId(), tenantAdmin.getTenantId())) {
             throw new RuntimeException("Bạn không có quyền reset password cho user này!");
         }
 
@@ -704,7 +707,7 @@ public class TenantAdminService {
                 .orElseThrow(() -> new RuntimeException("User không tồn tại với ID: " + userId));
         
         // Verify same tenant
-        if (!user.getTenantId().equals(tenantAdmin.getTenantId())) {
+        if (!Objects.equals(user.getTenantId(), tenantAdmin.getTenantId())) {
             throw new RuntimeException("Bạn không có quyền cập nhật user này!");
         }
 

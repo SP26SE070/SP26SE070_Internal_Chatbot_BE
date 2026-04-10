@@ -145,6 +145,46 @@ public class DocumentTagController {
         return ResponseEntity.ok(new MessageResponse("Tag đã được vô hiệu hóa"));
     }
 
+    @PatchMapping("/{id}/activate")
+    @PreAuthorize("hasRole('TENANT_ADMIN')")
+    @SecurityRequirement(name = "bearerAuth")
+    @Operation(summary = "Kích hoạt lại tag của tenant")
+    public ResponseEntity<?> activateTag(
+            @PathVariable UUID id,
+            @AuthenticationPrincipal UserPrincipal user) {
+
+        DocumentTag tag = documentTagRepository.findByIdAndTenantId(id, user.getTenantId())
+                .orElse(null);
+        if (tag == null) {
+            return ResponseEntity.notFound().build();
+        }
+
+        tag.setIsActive(true);
+        tag.setUpdatedAt(LocalDateTime.now());
+        documentTagRepository.save(tag);
+        log.info("Tenant {} activated document tag {}", user.getTenantId(), tag.getCode());
+        return ResponseEntity.ok(new MessageResponse("Tag đã được kích hoạt lại"));
+    }
+
+    @DeleteMapping("/{id}")
+    @PreAuthorize("hasRole('TENANT_ADMIN')")
+    @SecurityRequirement(name = "bearerAuth")
+    @Operation(summary = "Xóa vĩnh viễn tag của tenant")
+    public ResponseEntity<?> deleteTag(
+            @PathVariable UUID id,
+            @AuthenticationPrincipal UserPrincipal user) {
+
+        DocumentTag tag = documentTagRepository.findByIdAndTenantId(id, user.getTenantId())
+                .orElse(null);
+        if (tag == null) {
+            return ResponseEntity.notFound().build();
+        }
+
+        documentTagRepository.delete(tag);
+        log.info("Tenant {} hard-deleted document tag {}", user.getTenantId(), tag.getCode());
+        return ResponseEntity.ok(new MessageResponse("Tag đã được xóa vĩnh viễn"));
+    }
+
     private DocumentTagResponse toResponse(DocumentTag tag) {
         return DocumentTagResponse.builder()
                 .id(tag.getId())

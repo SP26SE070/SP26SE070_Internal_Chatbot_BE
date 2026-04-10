@@ -16,6 +16,9 @@ public interface DocumentCategoryRepository extends JpaRepository<DocumentCatego
     /** Lấy tất cả category đang active của tenant */
     List<DocumentCategory> findByTenantIdAndIsActiveTrueOrderByNameAsc(UUID tenantId);
 
+    /** Lấy tất cả category (bao gồm inactive) của tenant để quản trị */
+    List<DocumentCategory> findByTenantIdOrderByNameAsc(UUID tenantId);
+
     /** Lấy các category cấp root (parent_id IS NULL) của tenant */
     List<DocumentCategory> findByTenantIdAndParentIdIsNullAndIsActiveTrueOrderByNameAsc(UUID tenantId);
 
@@ -24,6 +27,8 @@ public interface DocumentCategoryRepository extends JpaRepository<DocumentCatego
 
     /** Tìm theo code trong tenant (code phải unique trong tenant) */
     Optional<DocumentCategory> findByTenantIdAndCode(UUID tenantId, String code);
+
+    Optional<DocumentCategory> findByIdAndTenantId(UUID id, UUID tenantId);
 
     /** Kiểm tra code đã tồn tại trong tenant chưa (dùng khi tạo mới) */
     boolean existsByTenantIdAndCode(UUID tenantId, String code);
