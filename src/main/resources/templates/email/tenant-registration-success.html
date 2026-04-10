@@ -47,17 +47,33 @@
         }
         
         .success-icon {
-            width: 80px;
-            height: 80px;
-            background: rgba(255, 255, 255, 0.2);
+            width: 88px;
+            height: 88px;
+            background: rgba(255, 255, 255, 0.18);
             border-radius: 50%;
-            display: inline-flex;
-            align-items: center;
-            justify-content: center;
-            font-size: 45px;
+            display: inline-block;
             margin-bottom: 20px;
             position: relative;
+            border: 1px solid rgba(255, 255, 255, 0.35);
             animation: successPulse 2s infinite;
+            text-align: center;
+            line-height: 88px;
+        }
+
+        .success-check {
+            display: inline-block;
+            width: 54px;
+            height: 54px;
+            border-radius: 50%;
+            background: #ffffff;
+            color: #10b981;
+            font-size: 34px;
+            font-weight: 700;
+            line-height: 54px;
+            text-align: center;
+            vertical-align: middle;
+            font-family: 'Segoe UI', Arial, sans-serif;
+            box-shadow: 0 8px 18px rgba(15, 23, 42, 0.2);
         }
         
         @keyframes successPulse {
@@ -201,19 +217,19 @@
         
         .timeline-step {
             display: flex;
-            gap: 20px;
+            gap: 16px;
+            align-items: flex-start;
             margin-bottom: 25px;
             position: relative;
-            padding-left: 10px;
         }
         
         .timeline-step:not(:last-child)::after {
             content: '';
             position: absolute;
-            left: 29px;
+            left: 19px;
             top: 45px;
             width: 2px;
-            height: calc(100% - 20px);
+            height: calc(100% - 10px);
             background: linear-gradient(180deg, #667eea 0%, #e2e8f0 100%);
         }
         
@@ -221,13 +237,17 @@
             width: 40px;
             height: 40px;
             border-radius: 50%;
-            display: flex;
-            align-items: center;
-            justify-content: center;
-            font-size: 20px;
+            display: inline-block;
+            text-align: center;
+            font-size: 16px;
+            font-weight: 700;
+            line-height: 40px;
+            font-family: 'Segoe UI', Arial, sans-serif;
             flex-shrink: 0;
             position: relative;
             z-index: 1;
+            color: #ffffff;
+            vertical-align: top;
         }
         
         .step-completed {
@@ -248,12 +268,13 @@
         
         .step-pending {
             background: #e2e8f0;
-            color: #94a3b8;
+            color: #64748b;
+            border: 1px solid #cbd5e1;
         }
         
         .step-content {
             flex: 1;
-            padding-top: 5px;
+            padding-top: 3px;
         }
         
         .step-title {
@@ -440,7 +461,7 @@
     <div class="email-wrapper">
         <!-- Header -->
         <div class="header">
-            <div class="success-icon">✅</div>
+            <div class="success-icon"><span class="success-check">&#10003;</span></div>
             <h1>Đăng ký thành công!</h1>
             <p>Chào mừng đến với Chatbot RAG Platform</p>
         </div>
@@ -496,7 +517,7 @@
                 <h3>🗓️ Quy trình xét duyệt</h3>
                 
                 <div class="timeline-step">
-                    <div class="step-icon step-completed">✓</div>
+                    <div class="step-icon step-completed">&#10003;</div>
                     <div class="step-content">
                         <div class="step-title">Bước 1: Đăng ký tài khoản</div>
                         <div class="step-description">Yêu cầu của bạn đã được gửi thành công vào hệ thống.</div>
@@ -504,7 +525,7 @@
                 </div>
 
                 <div class="timeline-step">
-                    <div class="step-icon step-active">⏳</div>
+                    <div class="step-icon step-active">2</div>
                     <div class="step-content">
                         <div class="step-title">Bước 2: Xét duyệt hồ sơ</div>
                         <div class="step-description">Đội ngũ quản trị viên đang xem xét thông tin. Thời gian dự kiến: 24-48 giờ làm việc.</div>
@@ -512,7 +533,7 @@
                 </div>
 
                 <div class="timeline-step">
-                    <div class="step-icon step-pending">📧</div>
+                    <div class="step-icon step-pending">3</div>
                     <div class="step-content">
                         <div class="step-title">Bước 3: Thông báo kết quả</div>
                         <div class="step-description">Bạn sẽ nhận email thông báo kết quả phê duyệt kèm hướng dẫn chi tiết.</div>
@@ -520,7 +541,7 @@
                 </div>
 
                 <div class="timeline-step">
-                    <div class="step-icon step-pending">🚀</div>
+                    <div class="step-icon step-pending">4</div>
                     <div class="step-content">
                         <div class="step-title">Bước 4: Bắt đầu sử dụng</div>
                         <div class="step-description">Đăng nhập bằng tài khoản được cấp và khám phá các tính năng của nền tảng.</div>
