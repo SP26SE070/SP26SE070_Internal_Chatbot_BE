@@ -1,0 +1,112 @@
+package com.gsp26se114.chatbot_rag_be.service;
+
+import com.gsp26se114.chatbot_rag_be.entity.RoleEntity;
+import com.gsp26se114.chatbot_rag_be.entity.Tenant;
+import com.gsp26se114.chatbot_rag_be.entity.TenantStatus;
+import com.gsp26se114.chatbot_rag_be.entity.User;
+import com.gsp26se114.chatbot_rag_be.repository.RoleRepository;
+import com.gsp26se114.chatbot_rag_be.repository.TenantRepository;
+import com.gsp26se114.chatbot_rag_be.repository.UserRepository;
+import com.gsp26se114.chatbot_rag_be.util.UserUtil;
+import lombok.RequiredArgsConstructor;
+import org.springframework.security.crypto.password.PasswordEncoder;
+import org.springframework.stereotype.Service;
+import org.springframework.transaction.annotation.Transactional;
+
+import java.time.LocalDateTime;
+import java.util.UUID;
+
+@Service
+@RequiredArgsConstructor
+public class StaffTenantService {
+
+    private final TenantRepository tenantRepository;
+    private final UserRepository userRepository;
+    private final RoleRepository roleRepository;
+    private final PasswordEncoder passwordEncoder;
+
+    public record ApprovalResult(
+            Tenant tenant,
+            String loginEmail,
+            String temporaryPassword
+    ) {}
+
+    @Transactional
+    public ApprovalResult approveTenant(UUID tenantId, UUID staffUserId) {
+        Tenant tenant = tenantRepository.findById(tenantId)
+                .orElseThrow(() -> new RuntimeException("Tenant not found"));
+
+        if (tenant.getStatus() != TenantStatus.PENDING) {
+            throw new IllegalStateException("Tenant không ở trạng thái PENDING");
+        }
+
+        tenant.setStatus(TenantStatus.ACTIVE);
+        tenant.setReviewedAt(LocalDateTime.now());
+        tenant.setReviewedBy(staffUserId);
+        tenantRepository.save(tenant);
+
+        // Create TENANT_ADMIN user for this tenant
+        String representativeName = tenant.getRepresentativeName() != null
+                ? tenant.getRepresentativeName()
+                : tenant.getContactEmail();
+
+        RoleEntity tenantAdminRole = roleRepository.findByCode("TENANT_ADMIN")
+                .orElseThrow(() -> new RuntimeException("Role TENANT_ADMIN không tồn tại"));
+
+        String loginEmail = generateTenantAdminLoginEmail(tenant.getName());
+        String temporaryPassword = UserUtil.generateRandomPassword();
+
+        User tenantAdminUser = new User();
+        tenantAdminUser.setEmail(loginEmail);
+        tenantAdminUser.setContactEmail(tenant.getContactEmail());
+        tenantAdminUser.setPassword(passwordEncoder.encode(temporaryPassword));
+        tenantAdminUser.setFullName(representativeName);
+        tenantAdminUser.setPhoneNumber(tenant.getRepresentativePhone());
+        tenantAdminUser.setRoleId(tenantAdminRole.getId());
+        tenantAdminUser.setTenantId(tenant.getId());
+        tenantAdminUser.setMustChangePassword(true);
+        tenantAdminUser.setIsActive(true);
+        tenantAdminUser.setCreatedAt(LocalDateTime.now());
+
+        userRepository.save(tenantAdminUser);
+
+        return new ApprovalResult(tenant, loginEmail, temporaryPassword);
+    }
+
+    @Transactional
+    public Tenant rejectTenant(UUID tenantId, UUID staffUserId, String reason) {
+        Tenant tenant = tenantRepository.findById(tenantId)
+                .orElseThrow(() -> new RuntimeException("Tenant not found"));
+
+        if (tenant.getStatus() != TenantStatus.PENDING) {
+            throw new IllegalStateException("Chỉ có thể từ chối tenant đang ở trạng thái PENDING");
+        }
+
+        tenant.setStatus(TenantStatus.REJECTED);
+        tenant.setReviewedAt(LocalDateTime.now());
+        tenant.setReviewedBy(staffUserId);
+        tenant.setRejectionReason(reason);
+        tenantRepository.save(tenant);
+
+        return tenant;
+    }
+
+    private String generateTenantAdminLoginEmail(String tenantName) {
+        String username = "admin";
+        String tenantDomain = UserUtil.removeAccent(tenantName)
+                .toLowerCase()
+                .replaceAll("\\s+", "")
+                .replaceAll("[^a-z0-9]", "");
+
+        String baseEmail = username + "@" + tenantDomain + ".com";
+        String loginEmail = baseEmail;
+        int suffix = 1;
+
+        while (userRepository.existsByEmail(loginEmail)) {
+            loginEmail = username + suffix + "@" + tenantDomain + ".com";
+            suffix++;
+        }
+
+        return loginEmail;
+    }
+}
