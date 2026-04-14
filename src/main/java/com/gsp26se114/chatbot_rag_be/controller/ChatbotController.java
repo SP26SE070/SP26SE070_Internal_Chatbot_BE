@@ -58,37 +58,47 @@ public class ChatbotController {
         try {
             log.info("User {} asking: {}", userDetails.getEmail(), request.getMessage());
 
-            // Step 1: Create embedding for user query
-            float[] queryEmbedding = embeddingService.createEmbedding(request.getMessage());
-            String vectorString = embeddingService.toVectorString(queryEmbedding);
-            log.debug("Query embedding created: {} dimensions", queryEmbedding.length);
+            // Step 1 & 2: Create embedding and find similar chunks with access control
+            // If RAG pipeline fails, fall back to general knowledge (no context)
+            float[] queryEmbedding = null;
+            List<DocumentChunkEntity> similarChunks;
 
-            // Step 2: Find similar chunks with access control
-            int topK = request.getTopK() != null ? request.getTopK() : 3;
-            double maxDistance = 0.7;
-            String tagIdsJson = null;
+            try {
+                queryEmbedding = embeddingService.createEmbedding(request.getMessage());
+                String vectorString = embeddingService.toVectorString(queryEmbedding);
+                log.debug("Query embedding created: {} dimensions", queryEmbedding.length);
 
-            if (request.getTagIds() != null && !request.getTagIds().isEmpty()) {
-                tagIdsJson = objectMapper.writeValueAsString(request.getTagIds().stream().distinct().toList());
+                int topK = request.getTopK() != null ? request.getTopK() : 3;
+                double maxDistance = 0.7;
+                String tagIdsJson = null;
+
+                if (request.getTagIds() != null && !request.getTagIds().isEmpty()) {
+                    tagIdsJson = objectMapper.writeValueAsString(request.getTagIds().stream().distinct().toList());
+                }
+
+                log.info("[DEBUG] tenantId={}, userId={}, deptId={}, roleId={}",
+                        userDetails.getTenantId(), userDetails.getId(),
+                        userDetails.getDepartmentId(), userDetails.getRoleId());
+
+                similarChunks = chunkRepository.findSimilarChunksWithAccessControl(
+                        userDetails.getTenantId(),
+                        userDetails.getId(),
+                        vectorString,
+                        userDetails.getDepartmentId(),
+                        userDetails.getRoleId(),
+                        request.getCategoryId(),
+                        tagIdsJson,
+                        maxDistance,
+                        topK
+                );
+
+                log.info("Found {} similar chunks (similarity threshold: > 30%)", similarChunks.size());
+
+            } catch (Exception ragError) {
+                log.warn("RAG pipeline failed, falling back to general knowledge: {}", ragError.getMessage());
+                queryEmbedding = null;
+                similarChunks = List.of();
             }
-
-            log.info("[DEBUG] tenantId={}, userId={}, deptId={}, roleId={}",
-                    userDetails.getTenantId(), userDetails.getId(),
-                    userDetails.getDepartmentId(), userDetails.getRoleId());
-
-            List<DocumentChunkEntity> similarChunks = chunkRepository.findSimilarChunksWithAccessControl(
-                    userDetails.getTenantId(),
-                    userDetails.getId(),
-                    vectorString,
-                    userDetails.getDepartmentId(),
-                    userDetails.getRoleId(),
-                    request.getCategoryId(),
-                    tagIdsJson,
-                    maxDistance,
-                    topK
-            );
-
-            log.info("Found {} similar chunks (similarity threshold: > 30%)", similarChunks.size());
 
             // Step 3: Build context from chunks (if any)
             String context;
@@ -98,6 +108,8 @@ public class ChatbotController {
                 context = "";
                 sources = List.of();
             } else {
+                final float[] queryEmbeddingFinal = queryEmbedding;
+
                 context = similarChunks.stream()
                         .map(DocumentChunkEntity::getContent)
                         .distinct()
@@ -110,7 +122,9 @@ public class ChatbotController {
                         .map(chunk -> {
                             DocumentEntity doc = documentRepository.findById(chunk.getDocumentId()).orElse(null);
                             float[] chunkEmbedding = embeddingService.parseVector(chunk.getEmbedding());
-                            double distance = embeddingService.cosineDistance(queryEmbedding, chunkEmbedding);
+                            double distance = queryEmbeddingFinal != null
+                                    ? embeddingService.cosineDistance(queryEmbeddingFinal, chunkEmbedding)
+                                    : 1.0;
                             double similarity = Math.round((1.0 - distance) * 100.0) / 100.0;
 
                             return ChatResponse.SourceDocument.builder()
