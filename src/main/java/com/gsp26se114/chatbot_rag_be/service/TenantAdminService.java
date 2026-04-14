@@ -309,6 +309,7 @@ public class TenantAdminService {
                  savedUser.getFullName(), savedUser.getEmail(), savedUser.getRoleId(), tenantId);
         
         // Send welcome email with credentials to contact email
+        boolean emailSent = true;
         try {
             emailService.sendEmployeeWelcome(
                 savedUser.getContactEmail(),
@@ -322,9 +323,10 @@ public class TenantAdminService {
             log.info("Sent welcome email to: {}", savedUser.getContactEmail());
         } catch (Exception e) {
             log.error("Failed to send welcome email to: {}", savedUser.getContactEmail(), e);
+            emailSent = false;
         }
-        
-        return mapToUserResponse(savedUser, role, department);
+
+        return mapToUserResponse(savedUser, role, department, emailSent);
     }
     
     /**
@@ -668,6 +670,10 @@ public class TenantAdminService {
      * Map User entity to UserResponse DTO
      */
     private UserResponse mapToUserResponse(User user, RoleEntity role, Department department) {
+        return mapToUserResponse(user, role, department, null);
+    }
+
+    private UserResponse mapToUserResponse(User user, RoleEntity role, Department department, Boolean emailSent) {
         // Get tenant name
         String tenantName = null;
         if (user.getTenantId() != null) {
@@ -693,7 +699,8 @@ public class TenantAdminService {
                 user.getIsActive(),
                 user.getCreatedAt(),
                 user.getUpdatedAt(),
-                user.getLastLoginAt()
+                user.getLastLoginAt(),
+                emailSent
         );
     }
     

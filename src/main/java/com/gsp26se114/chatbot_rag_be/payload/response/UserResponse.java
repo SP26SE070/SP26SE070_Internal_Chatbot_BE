@@ -25,5 +25,6 @@ public record UserResponse(
         Boolean isActive,
         LocalDateTime createdAt,
         LocalDateTime updatedAt,
-        LocalDateTime lastLoginAt
+        LocalDateTime lastLoginAt,
+        Boolean emailSent
 ) {}
