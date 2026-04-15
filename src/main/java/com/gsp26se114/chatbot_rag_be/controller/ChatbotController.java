@@ -20,6 +20,7 @@ import com.gsp26se114.chatbot_rag_be.security.service.UserPrincipal;
 import com.gsp26se114.chatbot_rag_be.service.ChatHistoryService;
 import com.gsp26se114.chatbot_rag_be.service.EmbeddingService;
 import com.gsp26se114.chatbot_rag_be.service.GeminiChatService;
+import com.gsp26se114.chatbot_rag_be.service.RateLimiterService;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.tags.Tag;
 import jakarta.validation.Valid;
@@ -52,6 +53,7 @@ public class ChatbotController {
     private final ObjectMapper objectMapper;
     private final ChatbotConfigRepository chatbotConfigRepository;
     private final ChatMessageRepository chatMessageRepository;
+    private final RateLimiterService rateLimiterService;
 
     @PostMapping("/chat")
     @PreAuthorize("isAuthenticated()")
@@ -96,6 +98,21 @@ public class ChatbotController {
                 return ResponseEntity.status(429).body(
                         ChatResponse.builder()
                                 .answer("Bạn đã đạt giới hạn " + maxPerDay + " tin nhắn hôm nay. Vui lòng thử lại vào ngày mai.")
+                                .conversationId(request.getConversationId())
+                                .sources(List.of())
+                                .responseTimeMs(0L)
+                                .build()
+                );
+            }
+
+            // Rate limit check — burst protection (5 requests per 60 seconds)
+            RateLimiterService.RateLimitResult limitResult = rateLimiterService.checkLimit(
+                    userDetails.getTenantId(), userDetails.getId());
+            if (!limitResult.allowed()) {
+                return ResponseEntity.status(429).body(
+                        ChatResponse.builder()
+                                .answer("Bạn đang gửi quá nhiều yêu cầu. Vui lòng chờ " +
+                                        limitResult.retryAfterSeconds() + " giây.")
                                 .conversationId(request.getConversationId())
                                 .sources(List.of())
                                 .responseTimeMs(0L)
