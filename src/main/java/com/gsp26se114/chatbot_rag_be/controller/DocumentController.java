@@ -582,6 +582,21 @@ public class DocumentController {
                 .orElse(ResponseEntity.notFound().build());
     }
 
+    @GetMapping("/{id}/url")
+    @PreAuthorize("hasAuthority('DOCUMENT_READ')")
+    @SecurityRequirement(name = "bearerAuth")
+    @Operation(summary = "Get pre-signed download URL for document")
+    public ResponseEntity<Map<String, String>> getDocumentUrl(
+            @PathVariable UUID id,
+            @AuthenticationPrincipal UserPrincipal userDetails) {
+
+        DocumentEntity doc = documentRepository.findByIdAndTenantId(id, userDetails.getTenantId())
+                .orElseThrow(() -> new RuntimeException("Document not found"));
+
+        String url = minioService.getPresignedUrl(doc.getStoragePath());
+        return ResponseEntity.ok(Map.of("url", url, "expiresInMinutes", "15"));
+    }
+
     @GetMapping
     @PreAuthorize("hasAuthority('DOCUMENT_READ')")
     @SecurityRequirement(name = "bearerAuth")
