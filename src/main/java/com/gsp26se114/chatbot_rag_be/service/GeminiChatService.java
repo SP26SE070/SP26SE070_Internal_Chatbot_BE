@@ -18,6 +18,8 @@ import java.util.concurrent.TimeUnit;
 @Slf4j
 public class GeminiChatService {
 
+    public record AnswerWithTokens(String answer, int tokensUsed) {}
+
     @Value("${spring.ai.google.genai.api-key}")
     private String apiKey;
 
@@ -42,9 +44,9 @@ public class GeminiChatService {
      * @param question User's question
      * @return Generated answer
      */
-    public String generateAnswer(String context, String question) {
+    public AnswerWithTokens generateAnswer(String context, String question) {
         if (apiKey == null || apiKey.isBlank()) {
-            return "He thong chua cau hinh GEMINI_API_KEY, vui long lien he quan tri vien.";
+            return new AnswerWithTokens("He thong chua cau hinh GEMINI_API_KEY, vui long lien he quan tri vien.", 0);
         }
 
         try {
@@ -103,7 +105,7 @@ public class GeminiChatService {
     /**
      * Call Gemini API to generate text
      */
-    private String callGeminiAPI(String prompt) throws IOException {
+    private AnswerWithTokens callGeminiAPI(String prompt) throws IOException {
         String url = "https://generativelanguage.googleapis.com/v1beta/models/" 
                    + chatModel + ":generateContent?key=" + apiKey;
 
@@ -154,7 +156,7 @@ public class GeminiChatService {
             
             if (candidates == null || candidates.isEmpty()) {
                 log.warn("No candidates in Gemini response");
-                return "I apologize, but I couldn't generate a response at this time.";
+                return new AnswerWithTokens("I apologize, but I couldn't generate a response at this time.", 0);
             }
 
             JsonObject firstCandidate = candidates.get(0).getAsJsonObject();
@@ -163,13 +165,30 @@ public class GeminiChatService {
             
             if (partsArray == null || partsArray.isEmpty()) {
                 log.warn("No parts in Gemini response");
-                return "I apologize, but I couldn't generate a response at this time.";
+                return new AnswerWithTokens("I apologize, but I couldn't generate a response at this time.", 0);
             }
 
             String answer = partsArray.get(0).getAsJsonObject().get("text").getAsString();
             log.info("Generated answer: {} characters", answer.length());
-            
-            return answer;
+
+            // Extract token usage from usageMetadata if available
+            int tokensUsed = 0;
+            try {
+                if (jsonResponse.has("usageMetadata")) {
+                    JsonObject usage = jsonResponse.getAsJsonObject("usageMetadata");
+                    if (usage.has("totalTokenCount")) {
+                        tokensUsed = usage.get("totalTokenCount").getAsInt();
+                    }
+                }
+            } catch (Exception e) {
+                // Fallback: estimate from text length
+                tokensUsed = answer.length() / 4;
+            }
+            if (tokensUsed == 0) {
+                tokensUsed = answer.length() / 4;
+            }
+
+            return new AnswerWithTokens(answer, tokensUsed);
         }
     }
 }

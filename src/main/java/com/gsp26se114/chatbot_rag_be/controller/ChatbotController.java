@@ -196,8 +196,10 @@ public class ChatbotController {
             }
 
             // Step 4: Generate answer with Gemini
-            String answer = geminiChatService.generateAnswer(context, request.getMessage());
-            log.info("Answer generated: {} characters", answer.length());
+            GeminiChatService.AnswerWithTokens result = geminiChatService.generateAnswer(context, request.getMessage());
+            String answer = result.answer();
+            int tokensUsed = result.tokensUsed();
+            log.info("Answer generated: {} characters, {} tokens", answer.length(), tokensUsed);
 
             // Step 5: Persist conversation
             UUID conversationId = null;
@@ -231,7 +233,7 @@ public class ChatbotController {
                         userDetails.getId(),
                         answer,
                         sourceChunksForUser,
-                        0 // tokens tracking not available from GeminiChatService
+                        tokensUsed
                 );
                 assistantMessageId = savedAssistant.getId();
 
