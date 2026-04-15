@@ -612,9 +612,7 @@ public class DocumentController {
                     userDetails.getTenantId(),
                     keyword,
                     categoryId,
-                    status,
-                    fromDate,
-                    toDate
+                    status
             );
         } else {
             documents = documentRepository.findAccessibleDocumentsWithFilters(
@@ -624,9 +622,7 @@ public class DocumentController {
                     userDetails.getRoleId(),
                     keyword,
                     categoryId != null ? categoryId.toString() : null,
-                    status,
-                    fromDate != null ? fromDate.toString() : null,
-                    toDate != null ? toDate.toString() : null
+                    status
             );
         }
 
@@ -636,6 +632,20 @@ public class DocumentController {
                     .filter(doc -> doc.getTags() != null &&
                             doc.getTags().stream()
                                     .anyMatch(tag -> tagIds.contains(tag.getId())))
+                    .toList();
+        }
+
+        // Date filtering in Java
+        if (fromDate != null) {
+            LocalDateTime fd = fromDate;
+            documents = documents.stream()
+                    .filter(doc -> doc.getUploadedAt() != null && !doc.getUploadedAt().isBefore(fd))
+                    .toList();
+        }
+        if (toDate != null) {
+            LocalDateTime td = toDate;
+            documents = documents.stream()
+                    .filter(doc -> doc.getUploadedAt() != null && !doc.getUploadedAt().isAfter(td))
                     .toList();
         }
 

@@ -56,26 +56,22 @@ public interface DocumentRepository extends JpaRepository<DocumentEntity, UUID> 
     /**
      * Lấy tất cả documents của tenant có filter (cho Tenant Admin)
      */
-    @Query("""
-        SELECT d FROM DocumentEntity d
-        WHERE d.tenantId = :tenantId
-        AND d.isActive = true
+    @Query(value = """
+        SELECT * FROM documents
+        WHERE tenant_id = :tenantId
+        AND is_active = true
         AND (:keyword IS NULL OR (
-             LOWER(d.documentTitle) LIKE LOWER(CONCAT('%', :keyword, '%'))
-             OR LOWER(d.originalFileName) LIKE LOWER(CONCAT('%', :keyword, '%'))))
-        AND (:categoryId IS NULL OR d.categoryId = :categoryId)
-        AND (:status IS NULL OR d.embeddingStatus = :status)
-        AND (:fromDate IS NULL OR d.uploadedAt >= :fromDate)
-        AND (:toDate IS NULL OR d.uploadedAt <= :toDate)
-        ORDER BY d.uploadedAt DESC
-        """)
+             LOWER(document_title::text) LIKE LOWER('%' || :keyword || '%')
+             OR LOWER(original_file_name::text) LIKE LOWER('%' || :keyword || '%')))
+        AND (:categoryId IS NULL OR category_id = :categoryId)
+        AND (:status IS NULL OR embedding_status = :status)
+        ORDER BY uploaded_at DESC
+        """, nativeQuery = true)
     List<DocumentEntity> findByTenantIdWithFilters(
         @Param("tenantId") UUID tenantId,
         @Param("keyword") String keyword,
         @Param("categoryId") UUID categoryId,
-        @Param("status") String status,
-        @Param("fromDate") LocalDateTime fromDate,
-        @Param("toDate") LocalDateTime toDate
+        @Param("status") String status
     );
 
     /**
@@ -101,8 +97,6 @@ public interface DocumentRepository extends JpaRepository<DocumentEntity, UUID> 
              OR LOWER(original_file_name) LIKE LOWER(CONCAT('%', :keyword, '%'))))
         AND (:categoryId IS NULL OR category_id = CAST(:categoryId AS text)::uuid)
         AND (:status IS NULL OR embedding_status = :status)
-        AND (:fromDate IS NULL OR uploaded_at >= CAST(:fromDate AS text)::timestamp)
-        AND (:toDate IS NULL OR uploaded_at <= CAST(:toDate AS text)::timestamp)
         ORDER BY uploaded_at DESC
         """, nativeQuery = true)
     List<DocumentEntity> findAccessibleDocumentsWithFilters(
@@ -112,9 +106,7 @@ public interface DocumentRepository extends JpaRepository<DocumentEntity, UUID> 
         @Param("userRoleId") Integer userRoleId,
         @Param("keyword") String keyword,
         @Param("categoryId") String categoryId,
-        @Param("status") String status,
-        @Param("fromDate") String fromDate,
-        @Param("toDate") String toDate
+        @Param("status") String status
     );
     
     /**

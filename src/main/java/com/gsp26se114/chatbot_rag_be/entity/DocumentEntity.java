@@ -34,7 +34,7 @@ public class DocumentEntity {
     @Column(nullable = false)
     private String fileName;           // "uuid_Employee_Handbook.pdf"
     
-    @Column(nullable = false)
+    @Column(nullable = false, columnDefinition = "text")
     private String originalFileName;   // "Employee Handbook.pdf" (tên gốc từ user)
     
     @Column(nullable = false)
