@@ -8,7 +8,10 @@ import okhttp3.*;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.stereotype.Service;
 
+import com.gsp26se114.chatbot_rag_be.entity.ChatMessage;
+
 import java.io.IOException;
+import java.util.List;
 import java.util.concurrent.TimeUnit;
 
 /**
@@ -44,13 +47,13 @@ public class GeminiChatService {
      * @param question User's question
      * @return Generated answer
      */
-    public AnswerWithTokens generateAnswer(String context, String question) {
+    public AnswerWithTokens generateAnswer(String context, String question, List<ChatMessage> history) {
         if (apiKey == null || apiKey.isBlank()) {
             return new AnswerWithTokens("He thong chua cau hinh GEMINI_API_KEY, vui long lien he quan tri vien.", 0);
         }
 
         try {
-            String prompt = buildPrompt(context, question);
+            String prompt = buildPrompt(context, question, history);
             return callGeminiAPI(prompt);
         } catch (Exception e) {
             log.error("Failed to generate answer with Gemini", e);
@@ -61,7 +64,21 @@ public class GeminiChatService {
     /**
      * Build prompt with RAG pattern: context + instruction + question
      */
-    private String buildPrompt(String context, String question) {
+    private String buildPrompt(String context, String question, List<ChatMessage> history) {
+        StringBuilder historyBlock = new StringBuilder();
+        if (history != null && !history.isEmpty()) {
+            historyBlock.append("LỊCH SỬ HỘI THOẠI GẦN ĐÂY:\n");
+            for (ChatMessage msg : history) {
+                if ("USER".equals(msg.getRole())) {
+                    historyBlock.append("Người dùng: ").append(msg.getContent()).append("\n");
+                } else {
+                    historyBlock.append("Trợ lý: ").append(msg.getContent()).append("\n");
+                }
+            }
+            historyBlock.append("\n");
+        }
+        String historyText = historyBlock.toString();
+
         // If no context (no documents), answer with general knowledge
         if (context == null || context.isBlank()) {
             return """
@@ -74,10 +91,10 @@ public class GeminiChatService {
                     - Nếu câu hỏi liên quan đến chính sách nội bộ cụ thể của công ty, hãy cho biết bạn không có thông tin chi tiết về chính sách đó và khuyên người dùng liên hệ với bộ phận HR hoặc quản lý trực tiếp.
                     - Không đề cập đến việc tải tài liệu lên hệ thống.
 
-                    CÂU HỎI: %s
+                    %sCÂU HỎI HIỆN TẠI: %s
 
                     TRẢ LỜI:
-                    """.formatted(question);
+                    """.formatted(historyText, question);
         }
         
         // With context from documents - answer based on RAG
@@ -96,10 +113,10 @@ public class GeminiChatService {
                 THÔNG TIN TỪ TÀI LIỆU CÔNG TY:
                 %s
                 
-                CÂU HỎI CỦA NGƯỜI DÙNG: %s
-                
+                %sCÂU HỎI HIỆN TẠI: %s
+
                 HÃY TRẢ LỜI DỰA TRÊN THÔNG TIN TRÊN (nếu có):
-                """.formatted(context, question);
+                """.formatted(context, historyText, question);
     }
 
     /**

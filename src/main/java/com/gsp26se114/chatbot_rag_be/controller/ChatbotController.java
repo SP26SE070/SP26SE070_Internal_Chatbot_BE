@@ -196,13 +196,33 @@ public class ChatbotController {
             }
 
             // Step 4: Generate answer with Gemini
-            GeminiChatService.AnswerWithTokens result = geminiChatService.generateAnswer(context, request.getMessage());
+            List<ChatMessage> conversationHistory = List.of();
+
+            // Step 5: Persist conversation
+            UUID conversationId = null;
+
+            // Fetch last 10 messages (5 turns) for conversation memory
+            UUID existingSessionIdForHistory = parseConversationId(request.getConversationId());
+            if (existingSessionIdForHistory != null) {
+                try {
+                    conversationHistory = chatMessageRepository
+                            .findBySessionIdOrderByCreatedAtAsc(existingSessionIdForHistory)
+                            .stream()
+                            .filter(m -> m.getCreatedAt() != null)
+                            .sorted((a, b) -> b.getCreatedAt().compareTo(a.getCreatedAt()))
+                            .limit(10)
+                            .sorted((a, b) -> a.getCreatedAt().compareTo(b.getCreatedAt()))
+                            .toList();
+                } catch (Exception e) {
+                    log.warn("Failed to fetch conversation history for memory: {}", e.getMessage());
+                }
+            }
+
+            GeminiChatService.AnswerWithTokens result = geminiChatService.generateAnswer(context, request.getMessage(), conversationHistory);
             String answer = result.answer();
             int tokensUsed = result.tokensUsed();
             log.info("Answer generated: {} characters, {} tokens", answer.length(), tokensUsed);
 
-            // Step 5: Persist conversation
-            UUID conversationId = null;
             UUID assistantMessageId = null;
             try {
                 UUID existingSessionId = parseConversationId(request.getConversationId());
