@@ -49,4 +49,11 @@ public interface ChatMessageRepository extends JpaRepository<ChatMessage, UUID> 
     List<ChatMessage> findBySessionIdOrderByCreatedAtAsc(UUID sessionId);
 
     Long countBySessionId(UUID sessionId);
+
+    @Query("SELECT COUNT(m) FROM ChatMessage m WHERE m.tenantId = :tenantId AND m.userId = :userId AND m.createdAt >= :startOfDay AND m.role = 'USER'")
+    Long countTodayMessagesByUser(
+        @Param("tenantId") UUID tenantId,
+        @Param("userId") UUID userId,
+        @Param("startOfDay") LocalDateTime startOfDay
+    );
 }

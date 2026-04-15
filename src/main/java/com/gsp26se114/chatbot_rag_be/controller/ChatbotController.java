@@ -1,6 +1,7 @@
 package com.gsp26se114.chatbot_rag_be.controller;
 
 import com.fasterxml.jackson.databind.ObjectMapper;
+import com.gsp26se114.chatbot_rag_be.entity.ChatbotConfig;
 import com.gsp26se114.chatbot_rag_be.entity.ChatMessage;
 import com.gsp26se114.chatbot_rag_be.entity.ChatSession;
 import com.gsp26se114.chatbot_rag_be.entity.DocumentChunkEntity;
@@ -11,6 +12,8 @@ import com.gsp26se114.chatbot_rag_be.payload.response.ChatHistoryResponse;
 import com.gsp26se114.chatbot_rag_be.payload.response.ChatMessageResponse;
 import com.gsp26se114.chatbot_rag_be.payload.response.ChatResponse;
 import com.gsp26se114.chatbot_rag_be.payload.response.ConversationSummaryResponse;
+import com.gsp26se114.chatbot_rag_be.repository.ChatbotConfigRepository;
+import com.gsp26se114.chatbot_rag_be.repository.ChatMessageRepository;
 import com.gsp26se114.chatbot_rag_be.repository.DocumentChunkRepository;
 import com.gsp26se114.chatbot_rag_be.repository.DocumentRepository;
 import com.gsp26se114.chatbot_rag_be.security.service.UserPrincipal;
@@ -28,6 +31,8 @@ import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.security.core.annotation.AuthenticationPrincipal;
 import org.springframework.web.bind.annotation.*;
 
+import java.time.LocalDate;
+import java.time.LocalDateTime;
 import java.util.List;
 import java.util.UUID;
 import java.util.stream.Collectors;
@@ -45,6 +50,8 @@ public class ChatbotController {
     private final DocumentRepository documentRepository;
     private final ChatHistoryService chatHistoryService;
     private final ObjectMapper objectMapper;
+    private final ChatbotConfigRepository chatbotConfigRepository;
+    private final ChatMessageRepository chatMessageRepository;
 
     @PostMapping("/chat")
     @PreAuthorize("isAuthenticated()")
@@ -57,6 +64,44 @@ public class ChatbotController {
 
         try {
             log.info("User {} asking: {}", userDetails.getEmail(), request.getMessage());
+
+            // Load chatbot config once
+            ChatbotConfig chatbotConfig = chatbotConfigRepository
+                    .findByTenantId(userDetails.getTenantId()).orElse(null);
+
+            // Validate message length
+            int maxLength = (chatbotConfig != null && chatbotConfig.getMaxMessageLength() != null)
+                    ? chatbotConfig.getMaxMessageLength() : 500;
+            if (request.getMessage().length() > maxLength) {
+                return ResponseEntity.badRequest().body(
+                        ChatResponse.builder()
+                                .answer("Tin nhắn quá dài. Vui lòng giới hạn trong " + maxLength + " ký tự.")
+                                .conversationId(request.getConversationId())
+                                .sources(List.of())
+                                .responseTimeMs(0L)
+                                .build()
+                );
+            }
+
+            // Validate daily message limit
+            int maxPerDay = (chatbotConfig != null && chatbotConfig.getMaxMessagesPerDay() != null)
+                    ? chatbotConfig.getMaxMessagesPerDay() : 100;
+            LocalDateTime startOfDay = LocalDate.now().atStartOfDay();
+            Long todayCount = chatMessageRepository.countTodayMessagesByUser(
+                    userDetails.getTenantId(),
+                    userDetails.getId(),
+                    startOfDay
+            );
+            if (todayCount >= maxPerDay) {
+                return ResponseEntity.status(429).body(
+                        ChatResponse.builder()
+                                .answer("Bạn đã đạt giới hạn " + maxPerDay + " tin nhắn hôm nay. Vui lòng thử lại vào ngày mai.")
+                                .conversationId(request.getConversationId())
+                                .sources(List.of())
+                                .responseTimeMs(0L)
+                                .build()
+                );
+            }
 
             // Step 1 & 2: Create embedding and find similar chunks with access control
             // If RAG pipeline fails, fall back to general knowledge (no context)
