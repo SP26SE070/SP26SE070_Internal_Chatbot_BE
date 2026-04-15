@@ -7,6 +7,7 @@ import org.springframework.data.jpa.repository.Query;
 import org.springframework.data.repository.query.Param;
 import org.springframework.stereotype.Repository;
 
+import java.time.LocalDateTime;
 import java.util.List;
 import java.util.Optional;
 import java.util.UUID;
@@ -50,6 +51,70 @@ public interface DocumentRepository extends JpaRepository<DocumentEntity, UUID> 
         @Param("userId") UUID userId,
         @Param("userDepartmentId") Integer userDepartmentId,
         @Param("userRoleId") Integer userRoleId
+    );
+
+    /**
+     * Lấy tất cả documents của tenant có filter (cho Tenant Admin)
+     */
+    @Query("""
+        SELECT d FROM DocumentEntity d
+        WHERE d.tenantId = :tenantId
+        AND d.isActive = true
+        AND (:keyword IS NULL OR (
+             LOWER(d.documentTitle) LIKE LOWER(CONCAT('%', :keyword, '%'))
+             OR LOWER(d.originalFileName) LIKE LOWER(CONCAT('%', :keyword, '%'))))
+        AND (:categoryId IS NULL OR d.categoryId = :categoryId)
+        AND (:status IS NULL OR d.embeddingStatus = :status)
+        AND (:fromDate IS NULL OR d.uploadedAt >= :fromDate)
+        AND (:toDate IS NULL OR d.uploadedAt <= :toDate)
+        ORDER BY d.uploadedAt DESC
+        """)
+    List<DocumentEntity> findByTenantIdWithFilters(
+        @Param("tenantId") UUID tenantId,
+        @Param("keyword") String keyword,
+        @Param("categoryId") UUID categoryId,
+        @Param("status") String status,
+        @Param("fromDate") LocalDateTime fromDate,
+        @Param("toDate") LocalDateTime toDate
+    );
+
+    /**
+     * Lấy documents user có quyền xem với filter (cho Employee)
+     */
+    @Query(value = """
+        SELECT * FROM documents
+        WHERE tenant_id = :tenantId
+        AND is_active = true
+        AND (
+            uploaded_by = CAST(:userId AS uuid)
+            OR visibility = 'COMPANY_WIDE'
+            OR (visibility = 'SPECIFIC_DEPARTMENTS'
+                AND accessible_departments @> CAST(CONCAT('[', :userDepartmentId, ']') AS jsonb))
+            OR (visibility = 'SPECIFIC_ROLES'
+                AND accessible_roles @> CAST(CONCAT('[', :userRoleId, ']') AS jsonb))
+            OR (visibility = 'SPECIFIC_DEPARTMENTS_AND_ROLES'
+                AND accessible_departments @> CAST(CONCAT('[', :userDepartmentId, ']') AS jsonb)
+                AND accessible_roles @> CAST(CONCAT('[', :userRoleId, ']') AS jsonb))
+        )
+        AND (:keyword IS NULL OR (
+             LOWER(document_title) LIKE LOWER(CONCAT('%', :keyword, '%'))
+             OR LOWER(original_file_name) LIKE LOWER(CONCAT('%', :keyword, '%'))))
+        AND (:categoryId IS NULL OR category_id = CAST(:categoryId AS text)::uuid)
+        AND (:status IS NULL OR embedding_status = :status)
+        AND (:fromDate IS NULL OR uploaded_at >= CAST(:fromDate AS text)::timestamp)
+        AND (:toDate IS NULL OR uploaded_at <= CAST(:toDate AS text)::timestamp)
+        ORDER BY uploaded_at DESC
+        """, nativeQuery = true)
+    List<DocumentEntity> findAccessibleDocumentsWithFilters(
+        @Param("tenantId") UUID tenantId,
+        @Param("userId") UUID userId,
+        @Param("userDepartmentId") Integer userDepartmentId,
+        @Param("userRoleId") Integer userRoleId,
+        @Param("keyword") String keyword,
+        @Param("categoryId") String categoryId,
+        @Param("status") String status,
+        @Param("fromDate") String fromDate,
+        @Param("toDate") String toDate
     );
     
     /**

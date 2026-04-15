@@ -44,6 +44,7 @@ import org.springframework.http.ResponseEntity;
 import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.security.core.annotation.AuthenticationPrincipal;
 import org.springframework.transaction.annotation.Transactional;
+import org.springframework.format.annotation.DateTimeFormat;
 import org.springframework.web.bind.annotation.*;
 import org.springframework.web.multipart.MultipartFile;
 
@@ -593,24 +594,49 @@ public class DocumentController {
             - Tài liệu `SPECIFIC_ROLES` thuộc role của user
 
             Kết quả bao gồm cả tài liệu đang `PENDING` embedding.
+            Hỗ trợ filter: keyword, categoryId, tagIds, status, fromDate, toDate
             """
     )
     public ResponseEntity<List<DocumentResponse>> listDocuments(
-            @AuthenticationPrincipal UserPrincipal userDetails
+            @AuthenticationPrincipal UserPrincipal userDetails,
+            @RequestParam(required = false) String keyword,
+            @RequestParam(required = false) UUID categoryId,
+            @RequestParam(required = false) List<UUID> tagIds,
+            @RequestParam(required = false) String status,
+            @RequestParam(required = false) @DateTimeFormat(iso = DateTimeFormat.ISO.DATE_TIME) LocalDateTime fromDate,
+            @RequestParam(required = false) @DateTimeFormat(iso = DateTimeFormat.ISO.DATE_TIME) LocalDateTime toDate
     ) {
         List<DocumentEntity> documents;
         if (isTenantAdmin(userDetails)) {
-            documents = documentRepository.findByTenantIdAndIsActiveOrderByUploadedAtDesc(
-                    userDetails.getTenantId(), true
+            documents = documentRepository.findByTenantIdWithFilters(
+                    userDetails.getTenantId(),
+                    keyword,
+                    categoryId,
+                    status,
+                    fromDate,
+                    toDate
             );
         } else {
-            // Use access control query - only return documents user can access
-            documents = documentRepository.findAccessibleDocuments(
+            documents = documentRepository.findAccessibleDocumentsWithFilters(
                     userDetails.getTenantId(),
                     userDetails.getId(),
                     userDetails.getDepartmentId(),
-                    userDetails.getRoleId()
+                    userDetails.getRoleId(),
+                    keyword,
+                    categoryId != null ? categoryId.toString() : null,
+                    status,
+                    fromDate != null ? fromDate.toString() : null,
+                    toDate != null ? toDate.toString() : null
             );
+        }
+
+        // Tag filtering in Java (tags use JSONB join — handled post-query)
+        if (tagIds != null && !tagIds.isEmpty()) {
+            documents = documents.stream()
+                    .filter(doc -> doc.getTags() != null &&
+                            doc.getTags().stream()
+                                    .anyMatch(tag -> tagIds.contains(tag.getId())))
+                    .toList();
         }
 
         List<DocumentResponse> responses = documents.stream()
