@@ -217,13 +217,8 @@ public class SubscriptionService {
             throw new IllegalArgumentException("Cannot purchase TRIAL tier. Trial is auto-assigned.");
         }
 
-        // Check if tenant has active non-trial subscription
-        subscriptionRepository.findActiveSubscriptionByTenantId(tenantId)
-            .ifPresent(existing -> {
-                if (!existing.getIsTrial()) {
-                    throw new IllegalStateException("Tenant already has an active paid subscription. Please cancel first.");
-                }
-            });
+        // Allow upgrade/downgrade flow even when tenant already has an active paid subscription.
+        // Existing active subscription will be deactivated when the new payment is confirmed in webhook flow.
         SubscriptionPlan plan = getActivePlanByTier(tier);
 
         // Calculate end date
