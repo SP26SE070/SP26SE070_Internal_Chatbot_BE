@@ -74,7 +74,8 @@ CREATE TABLE tenants (
     
     -- Audit Fields
     created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP NOT NULL,
-    updated_at TIMESTAMP
+    updated_at TIMESTAMP,
+    version BIGINT DEFAULT 0
 );
 
 -- Tạo bảng Roles
