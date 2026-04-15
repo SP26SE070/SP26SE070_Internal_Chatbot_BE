@@ -597,6 +597,26 @@ public class DocumentController {
         return ResponseEntity.ok(Map.of("url", url, "expiresInMinutes", "15"));
     }
 
+    @PostMapping("/{id}/reindex")
+    @PreAuthorize("hasRole('TENANT_ADMIN')")
+    @SecurityRequirement(name = "bearerAuth")
+    @Operation(summary = "Manually trigger re-indexing for a document")
+    public ResponseEntity<Map<String, String>> reindexDocument(
+            @PathVariable UUID id,
+            @AuthenticationPrincipal UserPrincipal userDetails) {
+
+        DocumentEntity doc = documentRepository.findByIdAndTenantId(id, userDetails.getTenantId())
+                .orElseThrow(() -> new RuntimeException("Document not found"));
+
+        documentProcessingService.reprocessDocument(doc.getId());
+
+        return ResponseEntity.ok(Map.of(
+                "message", "Re-indexing started for document: " + doc.getOriginalFileName(),
+                "documentId", doc.getId().toString(),
+                "status", "PROCESSING"
+        ));
+    }
+
     @GetMapping
     @PreAuthorize("hasAuthority('DOCUMENT_READ')")
     @SecurityRequirement(name = "bearerAuth")
