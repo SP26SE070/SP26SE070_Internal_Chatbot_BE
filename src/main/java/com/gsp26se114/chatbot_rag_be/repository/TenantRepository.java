@@ -12,7 +12,7 @@ import java.util.UUID;
 @Repository
 public interface TenantRepository extends JpaRepository<Tenant, UUID> {
 
-    interface TenantBasicView {
+    static interface TenantBasicView {
         UUID getId();
         String getName();
         TenantStatus getStatus();
