@@ -31,6 +31,7 @@ public interface UserRepository extends JpaRepository<User, UUID> {
      * Use for fixed roles (shared role row across tenants) and custom roles.
      */
     long countByTenantIdAndRoleId(UUID tenantId, Integer roleId);
+    long countByTenantIdAndIsActive(UUID tenantId, Boolean isActive);
 
     /**
      * Platform accounts: users whose role is SYSTEM (SUPER_ADMIN, STAFF), active only.

@@ -21,6 +21,7 @@ import com.gsp26se114.chatbot_rag_be.repository.DocumentTagRepository;
 import com.gsp26se114.chatbot_rag_be.repository.DocumentVersionRepository;
 import com.gsp26se114.chatbot_rag_be.repository.DepartmentRepository;
 import com.gsp26se114.chatbot_rag_be.repository.RoleRepository;
+import com.gsp26se114.chatbot_rag_be.service.SubscriptionValidationService;
 import com.gsp26se114.chatbot_rag_be.service.DocumentPreviewService;
 import com.gsp26se114.chatbot_rag_be.security.service.UserPrincipal;
 import com.gsp26se114.chatbot_rag_be.service.DocumentProcessingService;
@@ -81,6 +82,7 @@ public class DocumentController {
     private final DocumentPreviewService documentPreviewService;
     private final TextExtractorService textExtractorService;
     private final ObjectMapper objectMapper;
+    private final SubscriptionValidationService subscriptionValidationService;
 
     private static final List<String> ALLOWED_CONTENT_TYPES = Arrays.asList(
             "application/pdf",
@@ -454,6 +456,7 @@ public class DocumentController {
             }
 
             log.info("Uploading document: {} ({})", file.getOriginalFilename(), contentType);
+            subscriptionValidationService.validateDocumentUpload(userDetails.getTenantId());
 
             // Upload to MinIO
             String folder = "tenant-" + userDetails.getTenantId() + "/documents";

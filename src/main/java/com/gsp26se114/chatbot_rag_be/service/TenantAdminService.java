@@ -45,6 +45,7 @@ public class TenantAdminService {
     private final AuditLogRepository auditLogRepository;
     private final PasswordEncoder passwordEncoder;
     private final EmailService emailService;
+    private final SubscriptionValidationService subscriptionValidationService;
     
     /**
      * Get tenant dashboard analytics
@@ -203,7 +204,8 @@ public class TenantAdminService {
                 .orElseThrow(() -> new RuntimeException("Tenant không tồn tại"));
         
         log.info("Creating new user in tenant: {} ({})", tenant.getName(), tenantId);
-        
+        subscriptionValidationService.validateUserCreation(tenantId);
+
         // Validate role: TENANT_ADMIN can only create roles within their tenant (not TENANT_ADMIN)
         RoleEntity tenantAdminRole = roleRepository.findByCode("TENANT_ADMIN")
                 .orElseThrow(() -> new RuntimeException("Role TENANT_ADMIN không tồn tại"));
