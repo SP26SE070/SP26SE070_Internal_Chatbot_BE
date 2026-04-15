@@ -16,4 +16,5 @@ public class DocumentTagResponse {
     private Boolean isActive;
     private LocalDateTime createdAt;
     private LocalDateTime updatedAt;
+    private Long usageCount;
 }

@@ -2,6 +2,8 @@ package com.gsp26se114.chatbot_rag_be.repository;
 
 import com.gsp26se114.chatbot_rag_be.entity.DocumentTag;
 import org.springframework.data.jpa.repository.JpaRepository;
+import org.springframework.data.jpa.repository.Query;
+import org.springframework.data.repository.query.Param;
 import org.springframework.stereotype.Repository;
 
 import java.util.Collection;
@@ -23,4 +25,8 @@ public interface DocumentTagRepository extends JpaRepository<DocumentTag, UUID> 
     boolean existsByTenantIdAndCode(UUID tenantId, String code);
 
     boolean existsByTenantIdAndCodeAndIdNot(UUID tenantId, String code, UUID excludeId);
+
+    @Query(value = "SELECT COUNT(*) FROM document_tag_mappings WHERE tag_id = :tagId",
+           nativeQuery = true)
+    Long countDocumentsByTagId(@Param("tagId") UUID tagId);
 }

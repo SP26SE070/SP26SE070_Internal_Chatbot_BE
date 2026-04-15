@@ -186,6 +186,7 @@ public class DocumentTagController {
     }
 
     private DocumentTagResponse toResponse(DocumentTag tag) {
+        Long usageCount = documentTagRepository.countDocumentsByTagId(tag.getId());
         return DocumentTagResponse.builder()
                 .id(tag.getId())
                 .name(tag.getName())
@@ -194,6 +195,7 @@ public class DocumentTagController {
                 .isActive(tag.getIsActive())
                 .createdAt(tag.getCreatedAt())
                 .updatedAt(tag.getUpdatedAt())
+                .usageCount(usageCount)
                 .build();
     }
 
