@@ -80,4 +80,7 @@ public class Tenant {
     private LocalDateTime createdAt = LocalDateTime.now();
     
     private LocalDateTime updatedAt;
+
+    @Version
+    private Long version;
 }
