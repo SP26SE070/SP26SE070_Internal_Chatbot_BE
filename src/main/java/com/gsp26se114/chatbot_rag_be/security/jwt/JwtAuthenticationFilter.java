@@ -1,5 +1,8 @@
 package com.gsp26se114.chatbot_rag_be.security.jwt;
 
+import com.gsp26se114.chatbot_rag_be.entity.Tenant;
+import com.gsp26se114.chatbot_rag_be.entity.TenantStatus;
+import com.gsp26se114.chatbot_rag_be.security.service.UserPrincipal;
 import com.gsp26se114.chatbot_rag_be.security.service.UserDetailsServiceImpl;
 import jakarta.servlet.FilterChain;
 import jakarta.servlet.ServletException;
@@ -28,6 +31,7 @@ public class JwtAuthenticationFilter extends OncePerRequestFilter {
     private final JwtUtils jwtUtils;
     private final UserDetailsServiceImpl userDetailsService;
     private final com.gsp26se114.chatbot_rag_be.repository.BlacklistedTokenRepository blacklistedTokenRepository;
+    private final com.gsp26se114.chatbot_rag_be.repository.TenantRepository tenantRepository;
 
     @Override
     protected void doFilterInternal(HttpServletRequest request, HttpServletResponse response, FilterChain filterChain)
@@ -56,7 +60,19 @@ public class JwtAuthenticationFilter extends OncePerRequestFilter {
                 
                 String username = jwtUtils.getUserNameFromJwtToken(jwt);
                 UserDetails userDetails = userDetailsService.loadUserByUsername(username);
-                
+
+                // 3b. Check tenant suspension status
+                if (userDetails instanceof UserPrincipal principal && principal.getTenantId() != null) {
+                    Tenant tenant = tenantRepository.findById(principal.getTenantId()).orElse(null);
+                    if (tenant != null && tenant.getStatus() == TenantStatus.SUSPENDED) {
+                        log.warn("Access denied — tenant {} is suspended", principal.getTenantId());
+                        response.setStatus(HttpServletResponse.SC_FORBIDDEN);
+                        response.setContentType("application/json");
+                        response.getWriter().write("{\"error\": \"Tenant account is suspended\"}");
+                        return;
+                    }
+                }
+
                 UsernamePasswordAuthenticationToken authentication = new UsernamePasswordAuthenticationToken(
                         userDetails, 
                         null, 
