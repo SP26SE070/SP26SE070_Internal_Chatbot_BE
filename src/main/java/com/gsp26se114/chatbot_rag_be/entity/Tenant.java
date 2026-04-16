@@ -83,4 +83,12 @@ public class Tenant {
 
     @Version
     private Long version;
+
+    /** Timestamp when tenant became inactive (subscription expired) */
+    @Column(name = "inactive_at")
+    private LocalDateTime inactiveAt;
+
+    /** Flag set when tenant has been inactive for 6+ months */
+    @Column(name = "marked_for_deletion", nullable = false)
+    private Boolean markedForDeletion = false;
 }

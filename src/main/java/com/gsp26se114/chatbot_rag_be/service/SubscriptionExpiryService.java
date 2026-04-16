@@ -3,6 +3,7 @@ package com.gsp26se114.chatbot_rag_be.service;
 import com.gsp26se114.chatbot_rag_be.entity.Subscription;
 import com.gsp26se114.chatbot_rag_be.entity.SubscriptionStatus;
 import com.gsp26se114.chatbot_rag_be.repository.SubscriptionRepository;
+import com.gsp26se114.chatbot_rag_be.repository.TenantRepository;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.scheduling.annotation.Scheduled;
@@ -18,6 +19,7 @@ import java.util.List;
 public class SubscriptionExpiryService {
 
     private final SubscriptionRepository subscriptionRepository;
+    private final TenantRepository tenantRepository;
 
     /**
      * Daily job to mark expired subscriptions.
@@ -71,6 +73,17 @@ public class SubscriptionExpiryService {
         if (!fullyExpired.isEmpty()) {
             subscriptionRepository.saveAll(fullyExpired);
             log.info("Marked {} subscription(s) as EXPIRED", fullyExpired.size());
+        }
+
+        // Set inactiveAt on tenants whose subscription just expired
+        for (Subscription sub : fullyExpired) {
+            tenantRepository.findById(sub.getTenantId()).ifPresent(tenant -> {
+                if (tenant.getInactiveAt() == null) {
+                    tenant.setInactiveAt(now);
+                    tenantRepository.save(tenant);
+                    log.info("Set inactiveAt for tenant: {}", sub.getTenantId());
+                }
+            });
         }
         if (inGrace.isEmpty() && fullyExpired.isEmpty()) {
             log.info("Subscription expiry check: no expired subscriptions found");
