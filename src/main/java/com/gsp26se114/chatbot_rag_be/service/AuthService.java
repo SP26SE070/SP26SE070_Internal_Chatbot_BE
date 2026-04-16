@@ -83,12 +83,20 @@ public class AuthService {
             }
         }
 
-        String accessToken = jwtUtils.generateJwtToken(authentication);
+        // Reload user so JWT contains the updated tokenVersion
+        User userWithUpdatedTokenVersion = userRepository.findById(userDetails.getId()).get();
+
+        // Reload role info
+        RoleEntity role = roleRepository.findById(userWithUpdatedTokenVersion.getRoleId())
+                .orElseThrow(() -> new RuntimeException("Role not found"));
+
+        UserPrincipal updatedPrincipal = UserPrincipal.build(userWithUpdatedTokenVersion, role);
+        UsernamePasswordAuthenticationToken updatedAuth =
+                new UsernamePasswordAuthenticationToken(updatedPrincipal, null, updatedPrincipal.getAuthorities());
+        String accessToken = jwtUtils.generateJwtToken(updatedAuth);
 
         // Single session enforcement — delete existing token first
-        refreshTokenRepository.deleteByUser(
-            userRepository.findById(userDetails.getId()).get()
-        );
+        refreshTokenRepository.deleteByUser(userWithUpdatedTokenVersion);
         refreshTokenRepository.flush();
         RefreshToken refreshToken = createRefreshToken(userDetails.getId());
 
