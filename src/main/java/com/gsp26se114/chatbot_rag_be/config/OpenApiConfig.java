@@ -5,9 +5,10 @@ import io.swagger.v3.oas.annotations.enums.SecuritySchemeType;
 import io.swagger.v3.oas.annotations.info.Info;
 import io.swagger.v3.oas.annotations.security.SecurityRequirement;
 import io.swagger.v3.oas.annotations.security.SecurityScheme;
-import io.swagger.v3.oas.annotations.servers.Server;
+import io.swagger.v3.oas.models.servers.Server;
 import io.swagger.v3.oas.models.tags.Tag;
 import org.springdoc.core.customizers.OpenApiCustomizer;
+import org.springframework.beans.factory.annotation.Value;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
 
@@ -20,11 +21,7 @@ import java.util.Map;
 @Configuration
 @OpenAPIDefinition(
     info = @Info(title = "SP26SE070 Chatbot RAG API", version = "1.0"),
-    security = @SecurityRequirement(name = "bearerAuth"),
-    servers = {
-        @Server(url = "http://localhost:8080", description = "Local Development Server"),
-        @Server(url = "https://718d91ceb9d2.ngrok-free.app", description = "Ngrok Tunnel (for webhook testing)")
-    }
+    security = @SecurityRequirement(name = "bearerAuth")
 )
 @SecurityScheme(
     name = "bearerAuth",
@@ -39,8 +36,9 @@ public class OpenApiConfig {
          * then by numeric prefix fallback (01, 02, 03...).
          */
     @Bean
-    public OpenApiCustomizer sortTagsAlphabetically() {
+    public OpenApiCustomizer sortTagsAlphabetically(@Value("${app.server-url:http://localhost:8080}") String serverUrl) {
         return openApi -> {
+            openApi.addServersItem(new Server().url(serverUrl).description("API Server"));
                         List<Tag> desiredOrder = List.of(
                     new Tag().name("01. 🔐 Authentication")
                             .description("Đăng nhập, đăng ký, quên mật khẩu (Public)"),
