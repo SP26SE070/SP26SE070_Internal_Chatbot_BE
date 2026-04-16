@@ -130,8 +130,31 @@ public class ChatbotController {
                 String vectorString = embeddingService.toVectorString(queryEmbedding);
                 log.debug("Query embedding created: {} dimensions", queryEmbedding.length);
 
-                int topK = request.getTopK() != null ? request.getTopK() : 3;
-                double maxDistance = 0.7;
+                // Apply mode-based config override
+                String chatMode = (chatbotConfig != null && chatbotConfig.getMode() != null)
+                        ? chatbotConfig.getMode().toUpperCase() : "BALANCED";
+
+                int defaultTopK;
+                double maxDistance;
+
+                switch (chatMode) {
+                    case "STRICT" -> {
+                        defaultTopK = 2;
+                        maxDistance = 0.5;
+                    }
+                    case "FLEXIBLE" -> {
+                        defaultTopK = 5;
+                        maxDistance = 0.85;
+                    }
+                    default -> {
+                        defaultTopK = (chatbotConfig != null && chatbotConfig.getTopK() != null)
+                                ? chatbotConfig.getTopK() : 3;
+                        maxDistance = (chatbotConfig != null && chatbotConfig.getSimilarityThreshold() != null)
+                                ? chatbotConfig.getSimilarityThreshold() : 0.7;
+                    }
+                }
+
+                int topK = request.getTopK() != null ? request.getTopK() : defaultTopK;
                 String tagIdsJson = null;
 
                 if (request.getTagIds() != null && !request.getTagIds().isEmpty()) {
