@@ -307,8 +307,14 @@ public class TenantAdminService {
         newUser.setCreatedAt(LocalDateTime.now());
         
         User savedUser = userRepository.save(newUser);
-        log.info("Created user: {} (login: {}) with roleId: {} in tenant: {}", 
+        log.info("Created user: {} (login: {}) with roleId: {} in tenant: {}",
                  savedUser.getFullName(), savedUser.getEmail(), savedUser.getRoleId(), tenantId);
+
+        writeAuditLog(tenantAdmin, "USER_CREATE", "User",
+                String.valueOf(savedUser.getId()),
+                Map.of(),
+                Map.of("email", savedUser.getEmail(), "role", selectedRole.getCode()),
+                "Created user: " + savedUser.getEmail());
         
         // Send welcome email with credentials to contact email
         boolean emailSent = true;
@@ -450,11 +456,17 @@ public class TenantAdminService {
         User updatedUser = userRepository.save(user);
         log.info("Updated user: {}", userId);
         
-        RoleEntity role = user.getRoleId() != null ? 
+        RoleEntity role = user.getRoleId() != null ?
             roleRepository.findById(user.getRoleId()).orElse(null) : null;
-        Department department = user.getDepartmentId() != null ? 
+        Department department = user.getDepartmentId() != null ?
             departmentRepository.findById(user.getDepartmentId()).orElse(null) : null;
-        
+
+        writeAuditLog(tenantAdmin, "USER_UPDATE", "User",
+                String.valueOf(updatedUser.getId()),
+                Map.of("fullName", user.getFullName() != null ? user.getFullName() : ""),
+                Map.of("fullName", updatedUser.getFullName() != null ? updatedUser.getFullName() : ""),
+                "Updated user: " + updatedUser.getEmail());
+
         return mapToUserResponse(updatedUser, role, department);
     }
     
@@ -582,7 +594,13 @@ public class TenantAdminService {
         user.setMustChangePassword(true); // Bắt buộc đổi mật khẩu
         user.setUpdatedAt(LocalDateTime.now());
         userRepository.save(user);
-        
+
+        writeAuditLog(tenantAdmin, "USER_PASSWORD_RESET", "User",
+                String.valueOf(user.getId()),
+                Map.of(),
+                Map.of("passwordReset", "true"),
+                "Password reset for user: " + user.getEmail());
+
         log.info("Reset password for user: {}", userId);
         
         // Send new password via email
@@ -646,6 +664,24 @@ public class TenantAdminService {
         logEntry.setOldValue(Map.of("isActive", String.valueOf(oldActive)));
         logEntry.setNewValue(Map.of("isActive", String.valueOf(newActive)));
         logEntry.setDescription(description + " - target=" + target.getEmail());
+        logEntry.setStatus("SUCCESS");
+        logEntry.setCreatedAt(LocalDateTime.now());
+        auditLogRepository.save(logEntry);
+    }
+
+    private void writeAuditLog(User actor, String action, String entityType,
+                                String entityId, Map<String, Object> oldValue,
+                                Map<String, Object> newValue, String description) {
+        AuditLog logEntry = new AuditLog();
+        logEntry.setTenantId(actor.getTenantId());
+        logEntry.setUserId(actor.getId());
+        logEntry.setUserEmail(actor.getEmail());
+        logEntry.setAction(action);
+        logEntry.setEntityType(entityType);
+        logEntry.setEntityId(entityId);
+        logEntry.setOldValue(oldValue);
+        logEntry.setNewValue(newValue);
+        logEntry.setDescription(description);
         logEntry.setStatus("SUCCESS");
         logEntry.setCreatedAt(LocalDateTime.now());
         auditLogRepository.save(logEntry);
@@ -740,8 +776,14 @@ public class TenantAdminService {
         user.setPermissions(permissions);
         user.setUpdatedAt(LocalDateTime.now());
         user = userRepository.save(user);
-        
-        log.info("TENANT_ADMIN {} updated permissions for user {}: {}", 
+
+        writeAuditLog(tenantAdmin, "USER_PERMISSION_UPDATE", "User",
+                String.valueOf(user.getId()),
+                Map.of(),
+                Map.of("permissions", user.getPermissions() != null ? user.getPermissions().toString() : "[]"),
+                "Updated permissions for user: " + user.getEmail());
+
+        log.info("TENANT_ADMIN {} updated permissions for user {}: {}",
                 tenantAdminEmail, user.getEmail(), permissions);
         
         RoleEntity role = user.getRoleId() != null ? 

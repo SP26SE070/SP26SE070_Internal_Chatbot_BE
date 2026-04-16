@@ -1,5 +1,6 @@
 package com.gsp26se114.chatbot_rag_be.controller;
 
+import com.gsp26se114.chatbot_rag_be.entity.AuditLog;
 import com.gsp26se114.chatbot_rag_be.payload.request.CreateUserRequest;
 import com.gsp26se114.chatbot_rag_be.payload.request.UpdateUserPermissionsRequest;
 import com.gsp26se114.chatbot_rag_be.payload.request.UpdateUserRequest;
@@ -21,6 +22,9 @@ import org.springframework.security.core.annotation.AuthenticationPrincipal;
 import org.springframework.security.core.userdetails.UserDetails;
 import org.springframework.web.bind.annotation.*;
 
+import com.gsp26se114.chatbot_rag_be.security.service.UserPrincipal;
+import java.time.LocalDateTime;
+
 import java.util.List;
 import java.util.UUID;
 
@@ -30,20 +34,44 @@ import java.util.UUID;
 @Tag(name = "12. 👥 Tenant Admin - User Management", description = "Quản lý users trong tenant (TENANT_ADMIN)")
 @SecurityRequirement(name = "bearerAuth")
 public class TenantAdminController {
-    
+
     private final TenantAdminService tenantAdminService;
+    private final com.gsp26se114.chatbot_rag_be.repository.AuditLogRepository auditLogRepository;
     
     /**
      * Get tenant dashboard analytics
      */
     @GetMapping("/dashboard/analytics")
     @PreAuthorize("hasRole('TENANT_ADMIN')")
-    @Operation(summary = "Lấy thống kê dashboard tenant", 
+    @Operation(summary = "Lấy thống kê dashboard tenant",
                description = "Thống kê tổng quan: users, departments, transfer requests")
     public ResponseEntity<TenantAnalyticsResponse> getTenantAnalytics(
             @AuthenticationPrincipal UserDetails userDetails) {
         TenantAnalyticsResponse analytics = tenantAdminService.getTenantAnalytics(userDetails.getUsername());
         return ResponseEntity.ok(analytics);
+    }
+
+    /**
+     * Get recent audit logs for tenant
+     */
+    @GetMapping("/audit-logs")
+    @PreAuthorize("hasRole('TENANT_ADMIN')")
+    @SecurityRequirement(name = "bearerAuth")
+    @Operation(summary = "Get recent audit logs for tenant")
+    public ResponseEntity<List<AuditLog>> getAuditLogs(
+            @AuthenticationPrincipal UserPrincipal userDetails,
+            @RequestParam(defaultValue = "20") int limit) {
+
+        List<AuditLog> logs = auditLogRepository
+                .findRecentForDashboard(
+                    LocalDateTime.now().plusMinutes(1),
+                    org.springframework.data.domain.PageRequest.of(0, limit)
+                )
+                .stream()
+                .filter(log -> userDetails.getTenantId().equals(log.getTenantId()))
+                .toList();
+
+        return ResponseEntity.ok(logs);
     }
     
     /**

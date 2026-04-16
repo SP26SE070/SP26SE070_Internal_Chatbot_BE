@@ -84,6 +84,7 @@ public class DocumentController {
     private final TextExtractorService textExtractorService;
     private final ObjectMapper objectMapper;
     private final SubscriptionValidationService subscriptionValidationService;
+    private final com.gsp26se114.chatbot_rag_be.repository.AuditLogRepository auditLogRepository;
 
     private static final List<String> ALLOWED_CONTENT_TYPES = Arrays.asList(
             "application/pdf",
@@ -529,6 +530,25 @@ public class DocumentController {
             document = documentRepository.save(document);
             log.info("Document saved to database: {}", document.getId());
 
+            try {
+                com.gsp26se114.chatbot_rag_be.entity.AuditLog auditLog =
+                    new com.gsp26se114.chatbot_rag_be.entity.AuditLog();
+                auditLog.setTenantId(userDetails.getTenantId());
+                auditLog.setUserId(userDetails.getId());
+                auditLog.setUserEmail(userDetails.getUsername());
+                auditLog.setAction("DOCUMENT_UPLOAD");
+                auditLog.setEntityType("Document");
+                auditLog.setEntityId(String.valueOf(document.getId()));
+                auditLog.setNewValue(Map.of("fileName", document.getOriginalFileName(),
+                        "visibility", document.getVisibility().toString()));
+                auditLog.setDescription("Uploaded document: " + document.getOriginalFileName());
+                auditLog.setStatus("SUCCESS");
+                auditLog.setCreatedAt(LocalDateTime.now());
+                auditLogRepository.save(auditLog);
+            } catch (Exception e) {
+                log.warn("Failed to write audit log for document upload: {}", e.getMessage());
+            }
+
                 DocumentVersion initialVersion = DocumentVersion.builder()
                     .documentId(document.getId())
                     .tenantId(document.getTenantId())
@@ -955,6 +975,25 @@ public class DocumentController {
         document.setUpdatedBy(userDetails.getId());
         document.setUpdatedAt(LocalDateTime.now());
         documentRepository.save(document);
+
+        try {
+            com.gsp26se114.chatbot_rag_be.entity.AuditLog auditLog =
+                new com.gsp26se114.chatbot_rag_be.entity.AuditLog();
+            auditLog.setTenantId(userDetails.getTenantId());
+            auditLog.setUserId(userDetails.getId());
+            auditLog.setUserEmail(userDetails.getUsername());
+            auditLog.setAction("DOCUMENT_DELETE");
+            auditLog.setEntityType("Document");
+            auditLog.setEntityId(String.valueOf(id));
+            auditLog.setOldValue(Map.of("isActive", "true"));
+            auditLog.setNewValue(Map.of("isActive", "false"));
+            auditLog.setDescription("Soft deleted document: " + document.getOriginalFileName());
+            auditLog.setStatus("SUCCESS");
+            auditLog.setCreatedAt(LocalDateTime.now());
+            auditLogRepository.save(auditLog);
+        } catch (Exception e) {
+            log.warn("Failed to write audit log for document delete: {}", e.getMessage());
+        }
 
         // Remove chunks so deleted documents are excluded from RAG retrieval.
         documentChunkRepository.deleteByDocumentId(id);
