@@ -63,7 +63,11 @@ public class StaffTenantController {
         UUID staffUserId = principal.getId();
         StaffTenantService.ApprovalResult result = staffTenantService.approveTenant(tenantId, staffUserId);
 
-        emailService.sendTenantApprovalEmail(result.tenant(), result.loginEmail(), result.temporaryPassword());
+        try {
+            emailService.sendTenantApprovalEmail(result.tenant(), result.loginEmail(), result.temporaryPassword());
+        } catch (Exception e) {
+            log.warn("Failed to send approval email for tenant {}: {}", tenantId, e.getMessage());
+        }
 
         return ResponseEntity.ok(new MessageResponse("Tenant đã được phê duyệt"));
     }
@@ -89,7 +93,11 @@ public class StaffTenantController {
         UUID staffUserId = principal.getId();
         Tenant tenant = staffTenantService.rejectTenant(tenantId, staffUserId, reason);
 
-        emailService.sendTenantRejectedEmail(tenant);
+        try {
+            emailService.sendTenantRejectedEmail(tenant);
+        } catch (Exception e) {
+            log.warn("Failed to send rejection email for tenant {}: {}", tenantId, e.getMessage());
+        }
 
         return ResponseEntity.ok(new MessageResponse("Tenant đã bị từ chối"));
     }
