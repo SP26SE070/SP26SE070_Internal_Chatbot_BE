@@ -1,5 +1,7 @@
 package com.gsp26se114.chatbot_rag_be.security.jwt;
 
+import com.gsp26se114.chatbot_rag_be.entity.Subscription;
+import com.gsp26se114.chatbot_rag_be.entity.SubscriptionStatus;
 import com.gsp26se114.chatbot_rag_be.entity.Tenant;
 import com.gsp26se114.chatbot_rag_be.entity.TenantStatus;
 import com.gsp26se114.chatbot_rag_be.security.service.UserPrincipal;
@@ -33,6 +35,7 @@ public class JwtAuthenticationFilter extends OncePerRequestFilter {
     private final UserDetailsServiceImpl userDetailsService;
     private final com.gsp26se114.chatbot_rag_be.repository.BlacklistedTokenRepository blacklistedTokenRepository;
     private final com.gsp26se114.chatbot_rag_be.repository.TenantRepository tenantRepository;
+    private final com.gsp26se114.chatbot_rag_be.repository.SubscriptionRepository subscriptionRepository;
 
     @Override
     protected void doFilterInternal(HttpServletRequest request, HttpServletResponse response, FilterChain filterChain)
@@ -71,6 +74,33 @@ public class JwtAuthenticationFilter extends OncePerRequestFilter {
                         response.setContentType("application/json");
                         response.getWriter().write("{\"error\": \"Tenant account is suspended\"}");
                         return;
+                    }
+
+                    // 3c. Check subscription grace period — allow TENANT_ADMIN only
+                    Subscription subscription = subscriptionRepository
+                            .findActiveSubscriptionByTenantId(principal.getTenantId())
+                            .orElse(null);
+
+                    // Check for grace period subscription
+                    if (subscription == null) {
+                        subscription = subscriptionRepository
+                                .findByTenantIdAndStatus(principal.getTenantId(),
+                                        SubscriptionStatus.GRACE_PERIOD)
+                                .orElse(null);
+                    }
+
+                    if (subscription != null &&
+                            subscription.getStatus() == SubscriptionStatus.GRACE_PERIOD) {
+                        boolean isTenantAdmin = "TENANT_ADMIN".equals(principal.getRoleCode());
+                        if (!isTenantAdmin) {
+                            log.warn("Access denied — subscription in grace period, user {} is not TENANT_ADMIN",
+                                    principal.getId());
+                            response.setStatus(HttpServletResponse.SC_FORBIDDEN);
+                            response.setContentType("application/json");
+                            response.getWriter().write("{\"error\": \"Subscription expired. Please contact your administrator to renew.\"}");
+                            return;
+                        }
+                        log.info("Grace period access granted for TENANT_ADMIN: {}", principal.getId());
                     }
                 }
 

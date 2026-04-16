@@ -34,8 +34,12 @@ public class Subscription {
     
     @Enumerated(EnumType.STRING)
     @Column(nullable = false)
-    private SubscriptionStatus status; // ACTIVE, EXPIRED, CANCELLED, SUSPENDED
-    
+    private SubscriptionStatus status; // ACTIVE, EXPIRED, CANCELLED, SUSPENDED, GRACE_PERIOD
+
+    /** Grace period in days after expiry (default 7) */
+    @Column(name = "grace_period_days")
+    private Integer gracePeriodDays = 7;
+
     // ========== BILLING INFORMATION ==========
     @Column(nullable = false)
     private LocalDateTime startDate;

@@ -43,7 +43,19 @@ public interface SubscriptionRepository extends JpaRepository<Subscription, UUID
     // Lấy các subscription đã hết hạn nhưng chưa đổi status
     @Query("SELECT s FROM Subscription s WHERE s.status = 'ACTIVE' AND s.endDate < :now")
     List<Subscription> findExpiredActiveSubscriptions(LocalDateTime now);
-    
+
+    // Lấy các subscription đang trong grace period (endDate đã qua nhưng còn trong kỳ grace)
+    @Query("""
+        SELECT s FROM Subscription s
+        WHERE s.status = 'ACTIVE'
+        AND s.endDate < :now
+        AND s.endDate >= :graceStart
+        """)
+    List<Subscription> findSubscriptionsInGracePeriod(
+        @Param("now") LocalDateTime now,
+        @Param("graceStart") LocalDateTime graceStart
+    );
+
     // Kiểm tra tenant có subscription active không
     boolean existsByTenantIdAndStatus(UUID tenantId, SubscriptionStatus status);
 

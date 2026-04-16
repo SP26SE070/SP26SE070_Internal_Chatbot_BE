@@ -4,5 +4,6 @@ public enum SubscriptionStatus {
     ACTIVE,      // Đang hoạt động
     EXPIRED,     // Hết hạn
     CANCELLED,   // Đã hủy
-    SUSPENDED    // Bị tạm ngưng
+    SUSPENDED,   // Bị tạm ngưng
+    GRACE_PERIOD // Trong thời gian gia hạn
 }
