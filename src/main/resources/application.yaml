@@ -6,9 +6,9 @@ spring:
     include: sepay, gemini-local  # Added gemini-local for RAG
 
   datasource:
-    url: jdbc:postgresql://localhost:5433/chatbot_db  # Port 5433 for Docker PostgreSQL
-    username: postgres
-    password: postgres  # Docker PostgreSQL password
+    url: ${DB_URL:jdbc:postgresql://localhost:5433/chatbot_db}  # Port 5433 for Docker PostgreSQL
+    username: ${DB_USERNAME:postgres}
+    password: ${DB_PASSWORD:postgres}  # Docker PostgreSQL password
     driver-class-name: org.postgresql.Driver
 
   mail:
@@ -55,10 +55,10 @@ server:
 # MinIO Configuration (S3-compatible object storage)
 minio:
   enabled: true  # Đã có Docker, enable MinIO
-  endpoint: http://localhost:9000
-  access-key: minioadmin
-  secret-key: minioadmin123
-  bucket-name: chatbot-documents
+  endpoint: ${MINIO_ENDPOINT:http://localhost:9000}
+  access-key: ${MINIO_ACCESS_KEY:minioadmin}
+  secret-key: ${MINIO_SECRET_KEY:minioadmin123}
+  bucket-name: ${MINIO_BUCKET:chatbot-documents}
 
 jwt:
   secret: "GSP26SE114_Super_Secret_Key_For_Internal_Chatbot_RAG_2026_FPTU"
