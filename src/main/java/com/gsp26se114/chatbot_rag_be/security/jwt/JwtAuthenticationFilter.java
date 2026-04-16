@@ -76,7 +76,7 @@ public class JwtAuthenticationFilter extends OncePerRequestFilter {
                 }
 
                 // 3b. Check tenant suspension status
-                if (userDetails instanceof UserPrincipal principal && principal.getTenantId() != null) {
+                if (principal.getTenantId() != null) {
                     Tenant tenant = tenantRepository.findById(principal.getTenantId()).orElse(null);
                     if (tenant != null && tenant.getStatus() == TenantStatus.SUSPENDED) {
                         log.warn("Access denied — tenant {} is suspended", principal.getTenantId());
