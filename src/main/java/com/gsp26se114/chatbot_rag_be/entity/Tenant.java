@@ -89,6 +89,6 @@ public class Tenant {
     private LocalDateTime inactiveAt;
 
     /** Flag set when tenant has been inactive for 6+ months */
-    @Column(name = "marked_for_deletion", nullable = false)
+    @Column(name = "marked_for_deletion", nullable = false, columnDefinition = "boolean default false")
     private Boolean markedForDeletion = false;
 }
