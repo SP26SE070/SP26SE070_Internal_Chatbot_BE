@@ -8,6 +8,7 @@ import com.gsp26se114.chatbot_rag_be.payload.request.CancelSubscriptionRequest;
 import com.gsp26se114.chatbot_rag_be.payload.request.SelectPlanRequest;
 import com.gsp26se114.chatbot_rag_be.payload.response.SubscriptionPlanResponse;
 import com.gsp26se114.chatbot_rag_be.payload.response.SubscriptionResponse;
+import com.gsp26se114.chatbot_rag_be.repository.SubscriptionRepository;
 import com.gsp26se114.chatbot_rag_be.repository.TenantRepository;
 import com.gsp26se114.chatbot_rag_be.security.service.UserPrincipal;
 import com.gsp26se114.chatbot_rag_be.service.SubscriptionPlanService;
@@ -35,6 +36,7 @@ public class SubscriptionController {
 
     private final SubscriptionPlanService subscriptionPlanService;
     private final SubscriptionService subscriptionService;
+    private final SubscriptionRepository subscriptionRepository;
     private final TenantRepository tenantRepository;
     
     // ==================== SUPER ADMIN APIs MOVED TO AdminSubscriptionController ====================
@@ -225,8 +227,14 @@ public class SubscriptionController {
                 .orElseThrow(() -> new RuntimeException("Tenant không tồn tại: " + userPrincipal.getTenantId()));
 
         // Business rule: mỗi tenant chỉ trial 1 lần trong đời.
-        // Nếu đã từng dùng trial (trialUsed=true), ẩn TRIAL plan vĩnh viễn.
-        if (Boolean.TRUE.equals(tenant.getTrialUsed())) {
+        // Nếu đã từng dùng trial (trialUsed=true) HOẶC đã từng có subscription trả phí,
+        // ẩn TRIAL plan vĩnh viễn.
+        boolean hadPaidSubscription = subscriptionRepository
+                .findByTenantId(userPrincipal.getTenantId())
+                .stream()
+                .anyMatch(s -> !Boolean.TRUE.equals(s.getIsTrial()));
+
+        if (Boolean.TRUE.equals(tenant.getTrialUsed()) || hadPaidSubscription) {
             plans = plans.stream()
                     .filter(p -> !"TRIAL".equalsIgnoreCase(p.getCode()))
                     .toList();

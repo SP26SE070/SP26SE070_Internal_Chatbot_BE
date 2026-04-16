@@ -4,6 +4,7 @@ import com.gsp26se114.chatbot_rag_be.entity.BlacklistedToken;
 import com.gsp26se114.chatbot_rag_be.entity.RefreshToken;
 import com.gsp26se114.chatbot_rag_be.entity.User;
 import com.gsp26se114.chatbot_rag_be.entity.RoleEntity;
+import com.gsp26se114.chatbot_rag_be.exception.ForbiddenException;
 import com.gsp26se114.chatbot_rag_be.payload.request.*;
 import com.gsp26se114.chatbot_rag_be.payload.response.JwtResponse;
 import com.gsp26se114.chatbot_rag_be.payload.response.VerifyResetOtpResponse;
@@ -40,6 +41,7 @@ public class AuthService {
     private final PasswordEncoder passwordEncoder;
     private final EmailService emailService;
     private final EmailTemplateService emailTemplateService;
+    private final SubscriptionRepository subscriptionRepository;
 
     @Value("${jwt.refreshExpiration}") private Long refreshTokenDurationMs;
 
@@ -56,7 +58,27 @@ public class AuthService {
                 .orElseThrow(() -> new RuntimeException("User không tồn tại!"));
         user.setLastLoginAt(LocalDateTime.now());
         userRepository.save(user);
-        
+
+        // Check subscription grace period — block non-admin employees
+        if (userDetails.getTenantId() != null) {
+            com.gsp26se114.chatbot_rag_be.entity.Subscription subscription =
+                    subscriptionRepository.findByTenantIdAndStatus(
+                            userDetails.getTenantId(),
+                            com.gsp26se114.chatbot_rag_be.entity.SubscriptionStatus.GRACE_PERIOD)
+                    .orElse(null);
+
+            if (subscription != null) {
+                boolean isTenantAdmin = userDetails.getAuthorities().stream()
+                        .anyMatch(a -> a.getAuthority().equals("ROLE_TENANT_ADMIN"));
+                if (!isTenantAdmin) {
+                    throw new ForbiddenException(
+                        "Gói đăng ký của công ty bạn đã hết hạn. " +
+                        "Vui lòng liên hệ quản trị viên để gia hạn."
+                    );
+                }
+            }
+        }
+
         String accessToken = jwtUtils.generateJwtToken(authentication);
 
         // FIX HÌNH 4, 5: Dùng getId() thay vì id()
