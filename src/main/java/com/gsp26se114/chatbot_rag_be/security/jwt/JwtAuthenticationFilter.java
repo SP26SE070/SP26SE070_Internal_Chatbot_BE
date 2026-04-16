@@ -67,7 +67,7 @@ public class JwtAuthenticationFilter extends OncePerRequestFilter {
                 String username = jwtUtils.getUserNameFromJwtToken(jwt);
                 UserDetails userDetails = userDetailsService.loadUserByUsername(username);
                 UserPrincipal principal = (UserPrincipal) userDetails;
-                if (tokenVersion == null || !tokenVersion.equals(principal.getTokenVersion())) {
+                if (tokenVersion != null && !tokenVersion.equals(principal.getTokenVersion())) {
                     log.warn("Token version mismatch — old token rejected for user {}", principal.getEmail());
                     response.setStatus(HttpServletResponse.SC_UNAUTHORIZED);
                     response.setContentType("application/json");
