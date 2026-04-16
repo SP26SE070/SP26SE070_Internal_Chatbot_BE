@@ -3,6 +3,7 @@ package com.gsp26se114.chatbot_rag_be.controller;
 import com.gsp26se114.chatbot_rag_be.entity.RoleType;
 import com.gsp26se114.chatbot_rag_be.entity.AuditLog;
 import com.gsp26se114.chatbot_rag_be.entity.PaymentTransaction;
+import com.gsp26se114.chatbot_rag_be.entity.Tenant;
 import com.gsp26se114.chatbot_rag_be.repository.*;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.security.SecurityRequirement;
@@ -36,6 +37,7 @@ import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Set;
+import java.util.UUID;
 
 @RestController
 @RequestMapping("/api/v1/admin/analytics")
@@ -579,5 +581,62 @@ public class AdminAnalyticsController {
         analytics.put("averageChunksPerDocument", totalDocuments > 0 ? (totalChunks * 1.0 / totalDocuments) : 0);
         
         return ResponseEntity.ok(analytics);
+    }
+
+    @GetMapping("/ai-overview")
+    @PreAuthorize("hasRole('SUPER_ADMIN')")
+    @Operation(summary = "System-wide AI feedback overview", description = "Tổng quan phản hồi AI toàn hệ thống")
+    public ResponseEntity<Map<String, Object>> getAiOverview() {
+        Long totalMessages = chatMessageRepository.countAllRequests();
+        Long ratedMessages = chatMessageRepository.countAllRatedMessages();
+        Long positiveRatings = chatMessageRepository.countAllPositiveRatings();
+        Long negativeRatings = chatMessageRepository.countAllNegativeRatings();
+
+        double helpfulPercent = ratedMessages > 0
+                ? Math.round((positiveRatings * 100.0 / ratedMessages) * 10.0) / 10.0 : 0.0;
+
+        Map<String, Object> response = new HashMap<>();
+        response.put("totalMessages", totalMessages);
+        response.put("ratedMessages", ratedMessages);
+        response.put("positiveRatings", positiveRatings);
+        response.put("negativeRatings", negativeRatings);
+        response.put("helpfulPercent", helpfulPercent);
+        response.put("notHelpfulPercent", ratedMessages > 0 ? 100.0 - helpfulPercent : 0.0);
+
+        return ResponseEntity.ok(response);
+    }
+
+    @GetMapping("/tenant-performance")
+    @PreAuthorize("hasRole('SUPER_ADMIN')")
+    @Operation(summary = "Per-tenant AI feedback performance", description = "Hiệu suất phản hồi AI theo từng tenant")
+    public ResponseEntity<List<Map<String, Object>>> getTenantPerformance() {
+        List<UUID> tenantIds = chatMessageRepository.findDistinctTenantIds();
+
+        List<Map<String, Object>> result = tenantIds.stream().map(tenantId -> {
+            Long total = chatMessageRepository.countRequestsByTenantId(tenantId);
+            Long rated = chatMessageRepository.countRatedMessagesByTenant(tenantId);
+            Long positive = chatMessageRepository.countPositiveRatingsByTenant(tenantId);
+            Long negative = chatMessageRepository.countNegativeRatingsByTenant(tenantId);
+
+            double helpfulPercent = rated > 0
+                    ? Math.round((positive * 100.0 / rated) * 10.0) / 10.0 : 0.0;
+
+            Tenant tenant = tenantRepository.findById(tenantId).orElse(null);
+            String tenantName = tenant != null ? tenant.getName() : tenantId.toString();
+
+            Map<String, Object> item = new HashMap<>();
+            item.put("tenantId", tenantId);
+            item.put("tenantName", tenantName);
+            item.put("totalMessages", total);
+            item.put("ratedMessages", rated);
+            item.put("helpfulPercent", helpfulPercent);
+            item.put("lowPerforming", helpfulPercent < 70.0 && rated > 0);
+            return item;
+        }).sorted((a, b) -> Double.compare(
+                (Double) a.get("helpfulPercent"),
+                (Double) b.get("helpfulPercent")
+        )).toList();
+
+        return ResponseEntity.ok(result);
     }
 }

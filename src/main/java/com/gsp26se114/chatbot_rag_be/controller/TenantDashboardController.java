@@ -1,21 +1,25 @@
 package com.gsp26se114.chatbot_rag_be.controller;
 
 import com.gsp26se114.chatbot_rag_be.entity.Tenant;
+import com.gsp26se114.chatbot_rag_be.entity.ChatMessage;
 import com.gsp26se114.chatbot_rag_be.repository.*;
 import com.gsp26se114.chatbot_rag_be.security.service.UserPrincipal;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.security.SecurityRequirement;
 import io.swagger.v3.oas.annotations.tags.Tag;
 import lombok.RequiredArgsConstructor;
+import org.springframework.data.domain.PageRequest;
 import org.springframework.http.ResponseEntity;
 import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.security.core.annotation.AuthenticationPrincipal;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.RequestMapping;
+import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.RestController;
 
 import java.time.LocalDateTime;
 import java.util.HashMap;
+import java.util.List;
 import java.util.Map;
 import java.util.UUID;
 
@@ -161,15 +165,59 @@ public class TenantDashboardController {
 
     @GetMapping("/users")
     @PreAuthorize("hasRole('TENANT_ADMIN') or hasAuthority('ANALYTICS_VIEW')")
-    @Operation(summary = "Thống kê users trong tenant", 
+    @Operation(summary = "Thống kê users trong tenant",
                description = "Số lượng users và phân bổ theo role")
     public ResponseEntity<Map<String, Object>> getUserStatistics(@AuthenticationPrincipal UserPrincipal userPrincipal) {
         Map<String, Object> stats = new HashMap<>();
-        
+
         long totalUsers = userRepository.countByTenantId(userPrincipal.getTenantId());
-        
+
         stats.put("totalUsers", totalUsers);
-        
+
         return ResponseEntity.ok(stats);
+    }
+
+    @GetMapping("/feedback")
+    @PreAuthorize("hasRole('TENANT_ADMIN') or hasAuthority('ANALYTICS_VIEW')")
+    @Operation(summary = "Get chatbot feedback analytics for tenant")
+    public ResponseEntity<Map<String, Object>> getFeedbackAnalytics(
+            @AuthenticationPrincipal UserPrincipal userDetails,
+            @RequestParam(defaultValue = "10") int limit) {
+
+        UUID tenantId = userDetails.getTenantId();
+
+        Long totalMessages = chatMessageRepository.countRequestsByTenantId(tenantId);
+        Long ratedMessages = chatMessageRepository.countRatedMessagesByTenant(tenantId);
+        Long positiveRatings = chatMessageRepository.countPositiveRatingsByTenant(tenantId);
+        Long negativeRatings = chatMessageRepository.countNegativeRatingsByTenant(tenantId);
+
+        double helpfulPercent = ratedMessages > 0
+                ? Math.round((positiveRatings * 100.0 / ratedMessages) * 10.0) / 10.0 : 0.0;
+        double notHelpfulPercent = ratedMessages > 0
+                ? Math.round((negativeRatings * 100.0 / ratedMessages) * 10.0) / 10.0 : 0.0;
+
+        List<ChatMessage> lowRated = chatMessageRepository.findLowRatedMessagesByTenant(
+                tenantId, PageRequest.of(0, limit));
+
+        List<Map<String, Object>> lowRatedList = lowRated.stream().map(msg -> {
+            Map<String, Object> item = new HashMap<>();
+            item.put("messageId", msg.getId());
+            item.put("answer", msg.getContent());
+            item.put("rating", msg.getRating());
+            item.put("createdAt", msg.getCreatedAt());
+            item.put("sourceChunks", msg.getSourceChunks());
+            return item;
+        }).toList();
+
+        Map<String, Object> response = new HashMap<>();
+        response.put("totalMessages", totalMessages);
+        response.put("ratedMessages", ratedMessages);
+        response.put("positiveRatings", positiveRatings);
+        response.put("negativeRatings", negativeRatings);
+        response.put("helpfulPercent", helpfulPercent);
+        response.put("notHelpfulPercent", notHelpfulPercent);
+        response.put("lowRatedResponses", lowRatedList);
+
+        return ResponseEntity.ok(response);
     }
 }
