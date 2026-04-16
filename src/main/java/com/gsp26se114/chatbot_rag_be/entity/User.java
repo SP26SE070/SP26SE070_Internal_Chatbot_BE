@@ -79,6 +79,6 @@ public class User {
     private LocalDateTime lastLoginAt;
 
     /** Incremented on each new login to invalidate old tokens */
-    @Column(name = "token_version", nullable = false)
+    @Column(name = "token_version", nullable = false, columnDefinition = "integer default 1")
     private Integer tokenVersion = 1;
 }
