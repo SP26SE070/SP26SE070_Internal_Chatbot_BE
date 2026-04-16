@@ -66,6 +66,7 @@ public class MinioConfig {
         } catch (Exception e) {
             log.error("Failed to initialize MinIO client: {}", e.getMessage());
             log.warn("MinIO is unavailable — document upload/download will not work");
+            return null;
         }
     }
 }
