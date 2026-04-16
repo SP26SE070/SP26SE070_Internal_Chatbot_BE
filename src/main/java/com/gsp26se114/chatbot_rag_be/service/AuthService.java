@@ -59,6 +59,10 @@ public class AuthService {
         user.setLastLoginAt(LocalDateTime.now());
         userRepository.save(user);
 
+        // Increment token version to invalidate old tokens
+        user.setTokenVersion(user.getTokenVersion() + 1);
+        userRepository.save(user);
+
         // Check subscription grace period — block non-admin employees
         if (userDetails.getTenantId() != null) {
             com.gsp26se114.chatbot_rag_be.entity.Subscription subscription =

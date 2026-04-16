@@ -28,6 +28,7 @@ public class UserPrincipal implements UserDetails {
     private Integer departmentId; 
     private Integer roleId;
     private String roleCode;
+    private Integer tokenVersion;
     private Collection<? extends GrantedAuthority> authorities;
 
     private static void addPermissionWithAllExpansion(List<GrantedAuthority> authorities, String perm) {
@@ -78,6 +79,7 @@ public class UserPrincipal implements UserDetails {
                 user.getDepartmentId(),
                 user.getRoleId(),
                 roleCode,
+                user.getTokenVersion(),
                 authorities
         );
     }
@@ -89,4 +91,6 @@ public class UserPrincipal implements UserDetails {
     @Override public boolean isAccountNonLocked() { return true; }
     @Override public boolean isCredentialsNonExpired() { return true; }
     @Override public boolean isEnabled() { return true; }
+
+    public Integer getTokenVersion() { return tokenVersion; }
 }

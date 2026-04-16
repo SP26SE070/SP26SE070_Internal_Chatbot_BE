@@ -61,9 +61,19 @@ public class JwtAuthenticationFilter extends OncePerRequestFilter {
                     filterChain.doFilter(request, response);
                     return;
                 }
-                
+
+                // Check token version matches current user version
+                Integer tokenVersion = jwtUtils.getClaimFromJwtToken(jwt, "tokenVersion", Integer.class);
                 String username = jwtUtils.getUserNameFromJwtToken(jwt);
                 UserDetails userDetails = userDetailsService.loadUserByUsername(username);
+                UserPrincipal principal = (UserPrincipal) userDetails;
+                if (tokenVersion == null || !tokenVersion.equals(principal.getTokenVersion())) {
+                    log.warn("Token version mismatch — old token rejected for user {}", principal.getEmail());
+                    response.setStatus(HttpServletResponse.SC_UNAUTHORIZED);
+                    response.setContentType("application/json");
+                    response.getWriter().write("{\"error\": \"Session expired. Please login again.\"}");
+                    return;
+                }
 
                 // 3b. Check tenant suspension status
                 if (userDetails instanceof UserPrincipal principal && principal.getTenantId() != null) {

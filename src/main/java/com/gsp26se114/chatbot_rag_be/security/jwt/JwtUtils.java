@@ -24,6 +24,7 @@ public class JwtUtils {
                 .claim("id", userDetails.getId())
                 .claim("tenantId", userDetails.getTenantId())
                 .claim("departmentId", userDetails.getDepartmentId())
+                .claim("tokenVersion", userDetails.getTokenVersion())
                 .setIssuedAt(new Date())
                 .setExpiration(new Date(System.currentTimeMillis() + jwtExpirationMs))
                 .signWith(key(), SignatureAlgorithm.HS256)
@@ -46,5 +47,11 @@ public class JwtUtils {
             Jwts.parserBuilder().setSigningKey(key()).build().parseClaimsJws(authToken);
             return true;
         } catch (Exception e) { return false; }
+    }
+
+    public <T> T getClaimFromJwtToken(String token, String claimName, Class<T> clazz) {
+        Claims claims = Jwts.parserBuilder().setSigningKey(key()).build()
+                .parseClaimsJws(token).getBody();
+        return claims.get(claimName, clazz);
     }
 }
