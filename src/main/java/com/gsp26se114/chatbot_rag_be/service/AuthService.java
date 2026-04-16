@@ -82,7 +82,11 @@ public class AuthService {
         String accessToken = jwtUtils.generateJwtToken(authentication);
 
         // FIX HÌNH 4, 5: Dùng getId() thay vì id()
-        refreshTokenRepository.deleteByUser(userRepository.findById(userDetails.getId()).get());
+        try {
+            refreshTokenRepository.deleteByUser(userRepository.findById(userDetails.getId()).get());
+        } catch (Exception e) {
+            log.warn("Could not delete existing refresh token: {}", e.getMessage());
+        }
         RefreshToken refreshToken = createRefreshToken(userDetails.getId());
 
         List<String> roles = userDetails.getAuthorities().stream()
