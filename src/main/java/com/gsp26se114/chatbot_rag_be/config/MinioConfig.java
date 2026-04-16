@@ -35,6 +35,7 @@ public class MinioConfig {
     private String bucketName;
     
     @Bean
+    @ConditionalOnProperty(name = "minio.enabled", havingValue = "true")
     public MinioClient minioClient() {
         try {
             MinioClient client = MinioClient.builder()

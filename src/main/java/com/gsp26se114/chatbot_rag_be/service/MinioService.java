@@ -1,8 +1,8 @@
 package com.gsp26se114.chatbot_rag_be.service;
 
 import io.minio.*;
-import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
+import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.stereotype.Service;
 import org.springframework.web.multipart.MultipartFile;
@@ -15,11 +15,11 @@ import java.util.UUID;
  * Handles file upload, download, delete operations
  */
 @Service
-@RequiredArgsConstructor
 @Slf4j
 public class MinioService {
-    
-    private final MinioClient minioClient;
+
+    @Autowired(required = false)
+    private MinioClient minioClient;
     
     @Value("${minio.bucket-name}")
     private String bucketName;
@@ -32,6 +32,10 @@ public class MinioService {
      * @return Storage path: "tenant-123/documents/uuid_filename.pdf"
      */
     public String uploadDocument(MultipartFile file, String folder) {
+        if (minioClient == null) {
+            log.warn("MinIO is not available — skipping operation");
+            throw new RuntimeException("File storage service is currently unavailable");
+        }
         try {
             // Generate unique filename
             String originalFilename = file.getOriginalFilename();
@@ -66,6 +70,10 @@ public class MinioService {
      * @return byte[] file content
      */
     public byte[] downloadDocument(String storagePath) {
+        if (minioClient == null) {
+            log.warn("MinIO is not available — skipping operation");
+            throw new RuntimeException("File storage service is currently unavailable");
+        }
         try {
             InputStream stream = minioClient.getObject(
                 GetObjectArgs.builder()
@@ -92,6 +100,10 @@ public class MinioService {
      * @param storagePath Path trong MinIO
      */
     public void deleteDocument(String storagePath) {
+        if (minioClient == null) {
+            log.warn("MinIO is not available — skipping operation");
+            throw new RuntimeException("File storage service is currently unavailable");
+        }
         try {
             minioClient.removeObject(
                 RemoveObjectArgs.builder()
@@ -116,6 +128,10 @@ public class MinioService {
      * @return Pre-signed URL
      */
     public String getPresignedUrl(String storagePath) {
+        if (minioClient == null) {
+            log.warn("MinIO is not available — skipping operation");
+            throw new RuntimeException("File storage service is currently unavailable");
+        }
         try {
             String url = minioClient.getPresignedObjectUrl(
                 GetPresignedObjectUrlArgs.builder()
@@ -142,6 +158,10 @@ public class MinioService {
      * @return true if exists
      */
     public boolean documentExists(String storagePath) {
+        if (minioClient == null) {
+            log.warn("MinIO is not available — skipping operation");
+            throw new RuntimeException("File storage service is currently unavailable");
+        }
         try {
             minioClient.statObject(
                 StatObjectArgs.builder()
