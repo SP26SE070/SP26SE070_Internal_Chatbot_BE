@@ -35,7 +35,19 @@ public interface SubscriptionRepository extends JpaRepository<Subscription, UUID
     // Lấy các subscription sắp hết hạn (trong vòng X ngày)
     @Query("SELECT s FROM Subscription s WHERE s.status = 'ACTIVE' AND s.endDate <= :date AND s.autoRenew = true")
     List<Subscription> findSubscriptionsExpiringSoon(LocalDateTime date);
-    
+
+    // Lấy các subscription expiring trong khoảng thời gian (dùng cho reminder email)
+    @Query("""
+        SELECT s FROM Subscription s
+        WHERE s.status = 'ACTIVE'
+        AND s.endDate <= :expiryThreshold
+        AND s.endDate > :now
+        """)
+    List<Subscription> findSubscriptionsExpiringBefore(
+        @Param("expiryThreshold") LocalDateTime expiryThreshold,
+        @Param("now") LocalDateTime now
+    );
+
     // Lấy các subscription đang sắp expire (dùng cho auto-renewal)
     @Query("SELECT s FROM Subscription s WHERE s.status = 'ACTIVE' AND s.endDate <= :date AND s.autoRenew = true")
     List<Subscription> findExpiringSubscriptions(LocalDateTime date);
