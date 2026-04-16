@@ -61,6 +61,6 @@ minio:
   bucket-name: ${MINIO_BUCKET:chatbot-documents}
 
 jwt:
-  secret: "GSP26SE114_Super_Secret_Key_For_Internal_Chatbot_RAG_2026_FPTU"
+  secret: ${JWT_SECRET:GSP26SE114_Super_Secret_Key_For_Internal_Chatbot_RAG_2026_FPTU}
   expiration: 86400000 
   refreshExpiration: 604800000
