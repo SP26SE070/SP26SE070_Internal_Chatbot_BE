@@ -4,6 +4,7 @@ import com.gsp26se114.chatbot_rag_be.payload.request.CreateUserRequest;
 import com.gsp26se114.chatbot_rag_be.payload.request.UpdateUserPermissionsRequest;
 import com.gsp26se114.chatbot_rag_be.payload.request.UpdateUserRequest;
 import com.gsp26se114.chatbot_rag_be.payload.response.MessageResponse;
+import com.gsp26se114.chatbot_rag_be.payload.response.PageResponse;
 import com.gsp26se114.chatbot_rag_be.payload.response.TenantAnalyticsResponse;
 import com.gsp26se114.chatbot_rag_be.payload.response.UserResponse;
 import com.gsp26se114.chatbot_rag_be.service.TenantAdminService;
@@ -56,15 +57,17 @@ public class TenantAdminController {
                    **roleId:** tuỳ chọn — lọc user có `roleId` khớp (cùng giá trị `id` trong GET /tenant-admin/roles).
                    Mỗi user có đúng một `roleId` (không multi-role).
                    """)
-    public ResponseEntity<List<UserResponse>> getAllUsersInTenant(
+    public ResponseEntity<PageResponse<UserResponse>> getAllUsersInTenant(
             @AuthenticationPrincipal UserDetails userDetails,
             @Parameter(description = "ACTIVE | INACTIVE | ALL")
             @RequestParam(value = "status", defaultValue = "ACTIVE") String status,
             @Parameter(description = "Lọc theo roles.role_id (optional)")
-            @RequestParam(value = "roleId", required = false) Integer roleId) {
+            @RequestParam(value = "roleId", required = false) Integer roleId,
+            @RequestParam(defaultValue = "0") int page,
+            @RequestParam(defaultValue = "20") int size) {
         List<UserResponse> users = tenantAdminService.getAllUsersInTenant(
                 userDetails.getUsername(), status, roleId);
-        return ResponseEntity.ok(users);
+        return ResponseEntity.ok(PageResponse.of(users, page, size));
     }
     
     /**

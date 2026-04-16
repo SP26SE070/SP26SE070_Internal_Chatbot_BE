@@ -13,6 +13,7 @@ import com.gsp26se114.chatbot_rag_be.payload.response.DeletedDocumentResponse;
 import com.gsp26se114.chatbot_rag_be.payload.response.DocumentResponse;
 import com.gsp26se114.chatbot_rag_be.payload.response.DocumentTagResponse;
 import com.gsp26se114.chatbot_rag_be.payload.response.DocumentVersionResponse;
+import com.gsp26se114.chatbot_rag_be.payload.response.PageResponse;
 import com.gsp26se114.chatbot_rag_be.payload.response.PreviewErrorResponse;
 import com.gsp26se114.chatbot_rag_be.repository.DocumentCategoryRepository;
 import com.gsp26se114.chatbot_rag_be.repository.DocumentChunkRepository;
@@ -635,14 +636,16 @@ public class DocumentController {
             Hỗ trợ filter: keyword, categoryId, tagIds, status, fromDate, toDate
             """
     )
-    public ResponseEntity<List<DocumentResponse>> listDocuments(
+    public ResponseEntity<PageResponse<DocumentResponse>> listDocuments(
             @AuthenticationPrincipal UserPrincipal userDetails,
             @RequestParam(required = false) String keyword,
             @RequestParam(required = false) UUID categoryId,
             @RequestParam(required = false) List<UUID> tagIds,
             @RequestParam(required = false) String status,
             @RequestParam(required = false) @DateTimeFormat(iso = DateTimeFormat.ISO.DATE_TIME) LocalDateTime fromDate,
-            @RequestParam(required = false) @DateTimeFormat(iso = DateTimeFormat.ISO.DATE_TIME) LocalDateTime toDate
+            @RequestParam(required = false) @DateTimeFormat(iso = DateTimeFormat.ISO.DATE_TIME) LocalDateTime toDate,
+            @RequestParam(defaultValue = "0") int page,
+            @RequestParam(defaultValue = "20") int size
     ) {
         List<DocumentEntity> documents;
         if (isTenantAdmin(userDetails)) {
@@ -691,7 +694,7 @@ public class DocumentController {
                 .map(this::toResponse)
                 .toList();
 
-        return ResponseEntity.ok(responses);
+        return ResponseEntity.ok(PageResponse.of(responses, page, size));
     }
 
     @GetMapping("/deleted")
