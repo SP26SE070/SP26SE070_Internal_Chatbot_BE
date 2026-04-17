@@ -154,7 +154,30 @@ public class MinioService {
             throw new RuntimeException("Failed to generate download URL", e);
         }
     }
-    
+
+    /**
+     * Stream file from MinIO (for proxy download endpoint)
+     *
+     * @param storagePath Path in MinIO
+     * @return InputStream of file content
+     */
+    public InputStream getFileStream(String storagePath) {
+        if (minioClient == null) {
+            throw new RuntimeException("File storage service is currently unavailable");
+        }
+        try {
+            return minioClient.getObject(
+                GetObjectArgs.builder()
+                    .bucket(bucketName)
+                    .object(storagePath)
+                    .build()
+            );
+        } catch (Exception e) {
+            log.error("Failed to get file stream: {}", storagePath, e);
+            throw new RuntimeException("Failed to download file", e);
+        }
+    }
+
     /**
      * Check if document exists
      * 

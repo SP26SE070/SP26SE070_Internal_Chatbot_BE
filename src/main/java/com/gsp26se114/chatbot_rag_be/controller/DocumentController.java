@@ -50,6 +50,7 @@ import org.springframework.format.annotation.DateTimeFormat;
 import org.springframework.web.bind.annotation.*;
 import org.springframework.web.multipart.MultipartFile;
 
+import java.io.InputStream;
 import java.nio.charset.StandardCharsets;
 import java.time.LocalDateTime;
 import java.util.Arrays;
@@ -619,6 +620,33 @@ public class DocumentController {
 
         String url = minioService.getPresignedUrl(doc.getStoragePath());
         return ResponseEntity.ok(Map.of("url", url, "expiresInMinutes", "15"));
+    }
+
+    @GetMapping("/{id}/download-proxy")
+    @PreAuthorize("hasAuthority('DOCUMENT_READ')")
+    @SecurityRequirement(name = "bearerAuth")
+    @Operation(summary = "Download document with correct encoding")
+    public ResponseEntity<org.springframework.core.io.InputStreamResource> downloadDocumentProxy(
+            @PathVariable UUID id,
+            @AuthenticationPrincipal UserPrincipal userDetails) {
+
+        DocumentEntity doc = documentRepository.findByIdAndTenantId(id, userDetails.getTenantId())
+                .orElseThrow(() -> new RuntimeException("Document not found"));
+
+        String contentType = doc.getFileType();
+        if (contentType == null || contentType.isBlank()) {
+            contentType = "application/octet-stream";
+        }
+        if (contentType.startsWith("text/")) {
+            contentType = contentType + "; charset=UTF-8";
+        }
+
+        InputStream stream = minioService.getFileStream(doc.getStoragePath());
+
+        return ResponseEntity.ok()
+                .header("Content-Disposition", "inline; filename=\"" + doc.getOriginalFileName() + "\"")
+                .contentType(org.springframework.http.MediaType.parseMediaType(contentType))
+                .body(new org.springframework.core.io.InputStreamResource(stream));
     }
 
     @PostMapping("/{id}/reindex")
