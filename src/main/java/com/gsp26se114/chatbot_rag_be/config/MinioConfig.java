@@ -4,10 +4,12 @@ import io.minio.BucketExistsArgs;
 import io.minio.MakeBucketArgs;
 import io.minio.MinioClient;
 import lombok.extern.slf4j.Slf4j;
+import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
+import org.springframework.core.env.Environment;
 
 /**
  * MinIO Configuration
@@ -33,6 +35,9 @@ public class MinioConfig {
     
     @Value("${minio.bucket-name}")
     private String bucketName;
+
+    @Autowired
+    private Environment environment;
     
     @Bean
     @ConditionalOnProperty(name = "minio.enabled", havingValue = "true")
@@ -67,6 +72,25 @@ public class MinioConfig {
         } catch (Exception e) {
             log.error("Failed to initialize MinIO client: {}", e.getMessage());
             log.warn("MinIO is unavailable — document upload/download will not work");
+            return null;
+        }
+    }
+
+    @Bean(name = "publicMinioClient")
+    @ConditionalOnProperty(name = "minio.enabled", havingValue = "true")
+    public MinioClient publicMinioClient() {
+        try {
+            String publicEndpoint = environment.getProperty("minio.public-endpoint", endpoint);
+            String accessKey = environment.getProperty("minio.access-key", "minioadmin");
+            String secretKey = environment.getProperty("minio.secret-key", "minioadmin123");
+            MinioClient client = MinioClient.builder()
+                .endpoint(publicEndpoint)
+                .credentials(accessKey, secretKey)
+                .build();
+            log.info("Public MinIO client initialized: {}", publicEndpoint);
+            return client;
+        } catch (Exception e) {
+            log.warn("Public MinIO client not available: {}", e.getMessage());
             return null;
         }
     }

@@ -3,6 +3,7 @@ package com.gsp26se114.chatbot_rag_be.service;
 import io.minio.*;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.beans.factory.annotation.Qualifier;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.stereotype.Service;
 import org.springframework.web.multipart.MultipartFile;
@@ -20,15 +21,13 @@ public class MinioService {
 
     @Autowired(required = false)
     private MinioClient minioClient;
-    
+
+    @Autowired(required = false)
+    @Qualifier("publicMinioClient")
+    private MinioClient publicMinioClient;
+
     @Value("${minio.bucket-name}")
     private String bucketName;
-
-    @Value("${minio.public-endpoint:http://localhost:9000}")
-    private String publicEndpoint;
-
-    @Value("${minio.endpoint:http://localhost:9000}")
-    private String internalEndpoint;
     
     /**
      * Upload document vào MinIO
@@ -134,29 +133,22 @@ public class MinioService {
      * @return Pre-signed URL
      */
     public String getPresignedUrl(String storagePath) {
-        if (minioClient == null) {
+        MinioClient clientToUse = publicMinioClient != null ? publicMinioClient : minioClient;
+        if (clientToUse == null) {
             log.warn("MinIO is not available — skipping operation");
             throw new RuntimeException("File storage service is currently unavailable");
         }
         try {
-            String url = minioClient.getPresignedObjectUrl(
+            String url = clientToUse.getPresignedObjectUrl(
                 GetPresignedObjectUrlArgs.builder()
                     .method(io.minio.http.Method.GET)
                     .bucket(bucketName)
                     .object(storagePath)
-                    .expiry(15 * 60) // 15 minutes
+                    .expiry(15 * 60)
                     .build()
             );
-            
             log.debug("Pre-signed URL generated: path={}", storagePath);
-
-            // Replace internal hostname with public hostname for external access
-            if (!internalEndpoint.equals(publicEndpoint)) {
-                url = url.replace(internalEndpoint, publicEndpoint);
-            }
-
             return url;
-            
         } catch (Exception e) {
             log.error("Failed to generate pre-signed URL: {}", storagePath, e);
             throw new RuntimeException("Failed to generate download URL", e);
