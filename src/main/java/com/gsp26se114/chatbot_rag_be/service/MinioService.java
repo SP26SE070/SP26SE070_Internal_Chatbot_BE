@@ -23,6 +23,12 @@ public class MinioService {
     
     @Value("${minio.bucket-name}")
     private String bucketName;
+
+    @Value("${minio.public-endpoint:http://localhost:9000}")
+    private String publicEndpoint;
+
+    @Value("${minio.endpoint:http://localhost:9000}")
+    private String internalEndpoint;
     
     /**
      * Upload document vào MinIO
@@ -143,6 +149,12 @@ public class MinioService {
             );
             
             log.debug("Pre-signed URL generated: path={}", storagePath);
+
+            // Replace internal hostname with public hostname for external access
+            if (!internalEndpoint.equals(publicEndpoint)) {
+                url = url.replace(internalEndpoint, publicEndpoint);
+            }
+
             return url;
             
         } catch (Exception e) {
