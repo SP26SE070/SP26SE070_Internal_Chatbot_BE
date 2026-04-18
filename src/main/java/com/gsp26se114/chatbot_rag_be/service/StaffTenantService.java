@@ -26,7 +26,6 @@ public class StaffTenantService {
     private final UserRepository userRepository;
     private final RoleRepository roleRepository;
     private final PasswordEncoder passwordEncoder;
-    private final SubscriptionService subscriptionService;
 
     public record ApprovalResult(
             Tenant tenant,
@@ -72,16 +71,6 @@ public class StaffTenantService {
         tenantAdminUser.setCreatedAt(LocalDateTime.now());
 
         userRepository.save(tenantAdminUser);
-
-        // Automatically create trial subscription for new tenant
-        try {
-            subscriptionService.createTrialSubscription(tenantId, staffUserId);
-            log.info("Trial subscription created for tenant: {}", tenantId);
-        } catch (IllegalStateException e) {
-            // Tenant already has subscription or trial used — skip silently
-            log.warn("Could not create trial subscription for tenant {}: {}",
-                tenantId, e.getMessage());
-        }
 
         return new ApprovalResult(tenant, loginEmail, temporaryPassword);
     }
