@@ -63,13 +63,11 @@ public class TenantAdminController {
             @RequestParam(defaultValue = "20") int limit) {
 
         List<AuditLog> logs = auditLogRepository
-                .findRecentForDashboard(
+                .findRecentForTenant(
+                    userDetails.getTenantId(),
                     LocalDateTime.now().plusMinutes(1),
                     org.springframework.data.domain.PageRequest.of(0, limit)
-                )
-                .stream()
-                .filter(log -> userDetails.getTenantId().equals(log.getTenantId()))
-                .toList();
+                );
 
         return ResponseEntity.ok(logs);
     }
