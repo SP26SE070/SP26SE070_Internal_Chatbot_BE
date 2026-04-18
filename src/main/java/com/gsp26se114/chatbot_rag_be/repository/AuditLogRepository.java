@@ -37,4 +37,17 @@ public interface AuditLogRepository extends JpaRepository<AuditLog, UUID> {
             @Param("types") List<String> types,
             Pageable pageable
     );
+
+    @Query("""
+            SELECT a
+            FROM AuditLog a
+            WHERE a.tenantId = :tenantId
+            AND a.createdAt < :beforeTime
+            ORDER BY a.createdAt DESC, a.id DESC
+            """)
+    List<AuditLog> findRecentForTenant(
+            @Param("tenantId") UUID tenantId,
+            @Param("beforeTime") LocalDateTime beforeTime,
+            Pageable pageable
+    );
 }
