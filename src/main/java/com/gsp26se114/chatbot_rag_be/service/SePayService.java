@@ -19,6 +19,7 @@ import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.UUID;
+import java.util.ArrayList;
 
 /**
  * Service for SePay payment gateway integration.
@@ -32,10 +33,14 @@ import java.util.UUID;
 @RequiredArgsConstructor
 public class SePayService {
 
+    private static final DateTimeFormatter MAIL_DATE_TIME_FORMATTER = DateTimeFormatter.ofPattern("dd/MM/yyyy HH:mm");
+
     private final SePayConfig sePayConfig;
     private final PaymentTransactionRepository paymentTransactionRepository;
     private final SubscriptionRepository subscriptionRepository;
     private final TenantRepository tenantRepository;
+    private final EmailService emailService;
+    private final EmailTemplateService emailTemplateService;
     private final RestTemplate restTemplate = new RestTemplate();
 
     /**
@@ -88,6 +93,34 @@ public class SePayService {
         log.info("Successfully created payment with QR code: {}", qrImageUrl);
 
         return paymentTransactionRepository.save(payment);
+    }
+
+    /**
+     * Get active pending payment of a subscription (if any).
+     */
+    public PaymentTransaction getActivePendingPaymentBySubscription(UUID subscriptionId) {
+        return paymentTransactionRepository
+                .findBySubscriptionIdOrderByCreatedAtDesc(subscriptionId)
+                .stream()
+                .filter(payment -> payment.getStatus() == PaymentStatus.PENDING)
+                .filter(PaymentTransaction::isActive)
+                .findFirst()
+                .orElse(null);
+    }
+
+    /**
+     * Create a pending payment for subscription if none is active, otherwise reuse current active pending one.
+     */
+    @Transactional
+    public PaymentTransaction createOrReusePendingPayment(Subscription subscription, UUID userId, boolean isAutoRenewal) {
+        PaymentTransaction existing = getActivePendingPaymentBySubscription(subscription.getId());
+        if (existing != null) {
+            return existing;
+        }
+
+        PaymentTransaction created = createPayment(subscription, userId);
+        created.setIsAutoRenewal(isAutoRenewal);
+        return paymentTransactionRepository.save(created);
     }
 
     /**
@@ -281,6 +314,8 @@ public class SePayService {
                 tenant.setIsTrial(false);
                 tenant.setUpdatedAt(LocalDateTime.now());
                 tenantRepository.save(tenant);
+
+                sendPaymentSuccessEmail(tenant, subscription, payment);
             });
 
             log.info("Successfully processed payment: {}, Activated subscription: {} for tenant: {}", 
@@ -298,17 +333,67 @@ public class SePayService {
      * Check payment status by transaction code.
      * Used for polling by frontend.
      */
+    private void sendPaymentSuccessEmail(Tenant tenant, Subscription subscription, PaymentTransaction payment) {
+        if (tenant.getContactEmail() == null || tenant.getContactEmail().isBlank()) {
+            log.warn("Skip payment success email: tenant {} has no contact email", tenant.getId());
+            return;
+        }
+
+        try {
+            String paidAt = payment.getPaidAt() != null
+                    ? payment.getPaidAt().format(MAIL_DATE_TIME_FORMATTER)
+                    : LocalDateTime.now().format(MAIL_DATE_TIME_FORMATTER);
+            String startDate = subscription.getStartDate() != null
+                    ? subscription.getStartDate().format(MAIL_DATE_TIME_FORMATTER)
+                    : "—";
+            String endDate = subscription.getEndDate() != null
+                    ? subscription.getEndDate().format(MAIL_DATE_TIME_FORMATTER)
+                    : "—";
+
+            String html = emailTemplateService.generateSubscriptionPaymentSuccessEmail(
+                    tenant.getName(),
+                    subscription.getTier() != null ? subscription.getTier().name() : "—",
+                    subscription.getBillingCycle() != null ? subscription.getBillingCycle().name() : "—",
+                    subscription.getPrice() != null ? subscription.getPrice().toPlainString() : "0",
+                    payment.getTransactionCode() != null ? payment.getTransactionCode() : "—",
+                    paidAt,
+                    startDate,
+                    endDate
+            );
+
+            emailService.sendHtmlEmail(
+                    tenant.getContactEmail(),
+                    "✅ Thanh toán thành công - " + (subscription.getTier() != null ? subscription.getTier().name() : "SUBSCRIPTION"),
+                    html
+            );
+            log.info("Payment success email sent to {} for payment {}", tenant.getContactEmail(), payment.getId());
+        } catch (Exception e) {
+            log.error("Failed to send payment success email for payment {}", payment.getId(), e);
+        }
+    }
+
     public PaymentTransaction getPaymentStatus(String transactionCode) {
-        return paymentTransactionRepository.findByTransactionCode(transactionCode)
+        PaymentTransaction payment = paymentTransactionRepository.findByTransactionCode(transactionCode)
             .orElseThrow(() -> new RuntimeException("Payment not found: " + transactionCode));
+        return refreshExpiredPendingPayment(payment);
     }
 
     /**
      * Check payment status by ID.
      */
     public PaymentTransaction getPaymentById(UUID paymentId) {
-        return paymentTransactionRepository.findById(paymentId)
+        PaymentTransaction payment = paymentTransactionRepository.findById(paymentId)
             .orElseThrow(() -> new RuntimeException("Payment not found: " + paymentId));
+        return refreshExpiredPendingPayment(payment);
+    }
+
+    private PaymentTransaction refreshExpiredPendingPayment(PaymentTransaction payment) {
+        if (payment.getStatus() == PaymentStatus.PENDING && payment.isExpired()) {
+            payment.markAsExpired();
+            payment = paymentTransactionRepository.save(payment);
+            log.info("Payment {} auto-updated from PENDING to EXPIRED", payment.getId());
+        }
+        return payment;
     }
 
     /**
@@ -367,6 +452,21 @@ public class SePayService {
      * Get payment history for a tenant.
      */
     public List<PaymentTransaction> getPaymentHistory(UUID tenantId) {
-        return paymentTransactionRepository.findByTenantIdOrderByCreatedAtDesc(tenantId);
+        List<PaymentTransaction> payments = paymentTransactionRepository.findByTenantIdOrderByCreatedAtDesc(tenantId);
+        List<PaymentTransaction> changed = new ArrayList<>();
+
+        for (PaymentTransaction payment : payments) {
+            if (payment.getStatus() == PaymentStatus.PENDING && payment.isExpired()) {
+                payment.markAsExpired();
+                changed.add(payment);
+            }
+        }
+
+        if (!changed.isEmpty()) {
+            paymentTransactionRepository.saveAll(changed);
+            log.info("Auto-updated {} expired pending payments in tenant history for tenant {}", changed.size(), tenantId);
+        }
+
+        return payments;
     }
 }

@@ -113,7 +113,31 @@ public class EmailTemplateService {
             String qrImageUrl,
             String renewalDueDate,
             String expiresAt) {
-        String template = loadTemplate("subscription-renewal.html");
+        return generateSubscriptionPaymentReminderEmail(
+                tenantName,
+                tier,
+                billingCycle,
+                amount,
+                transactionCode,
+                qrImageUrl,
+                renewalDueDate,
+                expiresAt
+        );
+    }
+
+    /**
+     * Template 7b: Subscription Payment Reminder with ready-to-pay QR.
+     */
+    public String generateSubscriptionPaymentReminderEmail(
+                String tenantName,
+                String tier,
+                String billingCycle,
+                String amount,
+                String transactionCode,
+                String qrImageUrl,
+                String renewalDueDate,
+                String expiresAt) {
+        String template = loadTemplate("subscription-payment-reminder.html");
         return template
                 .replace("${tenantName}", tenantName)
                 .replace("${tier}", tier)
@@ -123,6 +147,30 @@ public class EmailTemplateService {
                 .replace("${qrImageUrl}", qrImageUrl != null ? qrImageUrl : "")
                 .replace("${renewalDueDate}", renewalDueDate)
                 .replace("${expiresAt}", expiresAt);
+    }
+
+    /**
+     * Template 7c: Payment Success - notify tenant after webhook confirms payment.
+     */
+    public String generateSubscriptionPaymentSuccessEmail(
+            String tenantName,
+            String tier,
+            String billingCycle,
+            String amount,
+            String transactionCode,
+            String paidAt,
+            String startDate,
+            String endDate) {
+        String template = loadTemplate("subscription-payment-success.html");
+        return template
+                .replace("${tenantName}", tenantName)
+                .replace("${tier}", tier)
+                .replace("${billingCycle}", billingCycle)
+                .replace("${amount}", amount)
+                .replace("${transactionCode}", transactionCode)
+                .replace("${paidAt}", paidAt)
+                .replace("${startDate}", startDate)
+                .replace("${endDate}", endDate);
     }
 
     /**

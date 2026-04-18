@@ -10,7 +10,10 @@ import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
 import java.math.BigDecimal;
+import java.time.LocalDate;
 import java.time.LocalDateTime;
+import java.time.format.DateTimeFormatter;
+import java.time.temporal.ChronoUnit;
 import java.util.List;
 import java.util.Optional;
 import java.util.UUID;
@@ -19,6 +22,9 @@ import java.util.UUID;
 @Service
 @RequiredArgsConstructor
 public class SubscriptionService {
+
+    private static final DateTimeFormatter DATE_TIME_FORMATTER = DateTimeFormatter.ofPattern("dd/MM/yyyy HH:mm");
+    private static final int UPCOMING_RENEWAL_DAYS_BEFORE = 7;
     
     private final SubscriptionRepository subscriptionRepository;
     private final SubscriptionPlanRepository subscriptionPlanRepository;
@@ -311,6 +317,119 @@ public class SubscriptionService {
     }
 
     /**
+     * Get active pending upcoming payment for current active subscription.
+     */
+    public PaymentTransaction getUpcomingRenewalPayment(UUID tenantId) {
+        Subscription subscription = getActiveSubscription(tenantId);
+        if (Boolean.TRUE.equals(subscription.getIsTrial())) {
+            return null;
+        }
+        if (!Boolean.TRUE.equals(subscription.getAutoRenew())) {
+            return null;
+        }
+        if (!isInUpcomingRenewalWindow(subscription)) {
+            return null;
+        }
+        return sePayService.getActivePendingPaymentBySubscription(subscription.getId());
+    }
+
+    /**
+     * Create (or reuse) upcoming renewal payment for current active subscription.
+     */
+    @Transactional
+    public PaymentTransaction createUpcomingRenewalPayment(UUID tenantId, UUID userId) {
+        Subscription subscription = getActiveSubscription(tenantId);
+
+        if (Boolean.TRUE.equals(subscription.getIsTrial())) {
+            throw new IllegalStateException("Trial subscriptions do not require renewal payment.");
+        }
+
+        if (!Boolean.TRUE.equals(subscription.getAutoRenew())) {
+            throw new IllegalStateException("Auto-renew is disabled. Enable auto-renew before generating upcoming payment.");
+        }
+
+        validateUpcomingRenewalWindow(subscription);
+
+        return sePayService.createOrReusePendingPayment(subscription, userId, true);
+    }
+
+    /**
+     * Send reminder email with QR code for upcoming payment.
+     */
+    @Transactional
+    public PaymentTransaction sendUpcomingRenewalReminderEmail(UUID tenantId, UUID userId) {
+        Subscription subscription = getActiveSubscription(tenantId);
+
+        if (Boolean.TRUE.equals(subscription.getIsTrial())) {
+            throw new IllegalStateException("Trial subscriptions do not require renewal payment.");
+        }
+
+        if (!Boolean.TRUE.equals(subscription.getAutoRenew())) {
+            throw new IllegalStateException("Auto-renew is disabled. Enable auto-renew before sending reminder.");
+        }
+
+        validateUpcomingRenewalWindow(subscription);
+
+        PaymentTransaction payment = sePayService.createOrReusePendingPayment(subscription, userId, true);
+        sendRenewalReminderEmail(subscription, payment);
+        return payment;
+    }
+
+    private boolean isInUpcomingRenewalWindow(Subscription subscription) {
+        if (subscription.getEndDate() == null) {
+            return false;
+        }
+
+        long daysUntilEndDate = ChronoUnit.DAYS.between(
+                LocalDate.now(),
+                subscription.getEndDate().toLocalDate()
+        );
+        return daysUntilEndDate == UPCOMING_RENEWAL_DAYS_BEFORE;
+    }
+
+    private void validateUpcomingRenewalWindow(Subscription subscription) {
+        if (!isInUpcomingRenewalWindow(subscription)) {
+            throw new IllegalStateException(
+                    "Upcoming renewal is available only when subscription has 7 days left before end date."
+            );
+        }
+    }
+
+    /**
+     * Shared helper to send renewal reminder email with plan information and payment QR.
+     */
+    public void sendRenewalReminderEmail(Subscription subscription, PaymentTransaction payment) {
+        tenantRepository.findById(subscription.getTenantId()).ifPresent(tenant -> {
+            if (tenant.getContactEmail() == null || tenant.getContactEmail().isBlank()) {
+                log.warn("Skip renewal reminder email: missing contact email for tenant {}", tenant.getId());
+                return;
+            }
+
+            try {
+                String html = emailTemplateService.generateSubscriptionPaymentReminderEmail(
+                        tenant.getName(),
+                        subscription.getTier().name(),
+                        subscription.getBillingCycle().name(),
+                        subscription.getPrice() != null ? subscription.getPrice().toPlainString() : "0",
+                        payment.getTransactionCode(),
+                        payment.getQrImageUrl(),
+                        subscription.getEndDate() != null ? subscription.getEndDate().format(DATE_TIME_FORMATTER) : "—",
+                        payment.getExpiresAt() != null ? payment.getExpiresAt().format(DATE_TIME_FORMATTER) : "—"
+                );
+
+                emailService.sendHtmlEmail(
+                        tenant.getContactEmail(),
+                        "🔔 Nhắc thanh toán gói " + subscription.getTier().name(),
+                        html
+                );
+                log.info("Renewal reminder email sent to {} for subscription {}", tenant.getContactEmail(), subscription.getId());
+            } catch (Exception emailEx) {
+                log.error("Failed to send renewal reminder email for subscription: {}", subscription.getId(), emailEx);
+            }
+        });
+    }
+
+    /**
      * Process auto-renewal for expiring subscriptions.
      * Should be called by scheduled job daily.
      *
@@ -327,39 +446,18 @@ public class SubscriptionService {
         for (Subscription subscription : expiringSubscriptions) {
             if (subscription.getAutoRenew() && !subscription.getIsTrial()) {
                 try {
-                    // Create renewal payment
-                    com.gsp26se114.chatbot_rag_be.entity.PaymentTransaction payment =
-                        sePayService.createPayment(subscription, subscription.getCreatedBy());
-                    payment.setIsAutoRenewal(true);
+                    UUID initiatedBy = subscription.getUpdatedBy() != null
+                            ? subscription.getUpdatedBy()
+                            : subscription.getCreatedBy();
+                    PaymentTransaction payment = sePayService.createOrReusePendingPayment(
+                            subscription,
+                            initiatedBy,
+                            true
+                    );
 
                     log.info("Created auto-renewal payment for subscription: {}", subscription.getId());
                     processedCount++;
-
-                    // Send email notification to tenant with QR code
-                    tenantRepository.findById(subscription.getTenantId()).ifPresent(tenant -> {
-                        if (tenant.getContactEmail() != null) {
-                            try {
-                                String html = emailTemplateService.generateSubscriptionRenewalEmail(
-                                    tenant.getName(),
-                                    subscription.getTier().name(),
-                                    subscription.getBillingCycle().name(),
-                                    subscription.getPrice().toPlainString(),
-                                    payment.getTransactionCode(),
-                                    payment.getQrImageUrl(),
-                                    subscription.getEndDate().format(java.time.format.DateTimeFormatter.ofPattern("dd/MM/yyyy HH:mm")),
-                                    payment.getExpiresAt().format(java.time.format.DateTimeFormatter.ofPattern("dd/MM/yyyy HH:mm"))
-                                );
-                                emailService.sendHtmlEmail(
-                                    tenant.getContactEmail(),
-                                    "🔔 Gia hạn subscription - " + subscription.getTier().name(),
-                                    html
-                                );
-                                log.info("Renewal email sent to: {}", tenant.getContactEmail());
-                            } catch (Exception emailEx) {
-                                log.error("Failed to send renewal email for subscription: {}", subscription.getId(), emailEx);
-                            }
-                        }
-                    });
+                    sendRenewalReminderEmail(subscription, payment);
                 } catch (Exception e) {
                     log.error("Failed to process auto-renewal for subscription: {}", subscription.getId(), e);
                 }

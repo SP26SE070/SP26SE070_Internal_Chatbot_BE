@@ -1,5 +1,6 @@
 package com.gsp26se114.chatbot_rag_be.service;
 
+import com.gsp26se114.chatbot_rag_be.entity.PaymentTransaction;
 import com.gsp26se114.chatbot_rag_be.entity.Subscription;
 import com.gsp26se114.chatbot_rag_be.entity.Tenant;
 import com.gsp26se114.chatbot_rag_be.repository.SubscriptionRepository;
@@ -9,6 +10,7 @@ import lombok.extern.slf4j.Slf4j;
 import org.springframework.scheduling.annotation.Scheduled;
 import org.springframework.stereotype.Service;
 
+import java.time.LocalDate;
 import java.time.LocalDateTime;
 import java.time.format.DateTimeFormatter;
 import java.util.List;
@@ -20,7 +22,8 @@ public class SubscriptionReminderService {
 
     private final SubscriptionRepository subscriptionRepository;
     private final TenantRepository tenantRepository;
-    private final EmailService emailService;
+    private final SePayService sePayService;
+    private final SubscriptionService subscriptionService;
 
     private static final int REMINDER_DAYS_BEFORE = 3;
     private static final DateTimeFormatter DATE_FORMATTER =
@@ -28,18 +31,23 @@ public class SubscriptionReminderService {
 
     /**
      * Daily job at 09:00 AM — send reminder emails for subscriptions
-     * expiring within 3 days.
+         * exactly 3 days before end date.
      */
     @Scheduled(cron = "0 0 9 * * *")
     public void sendExpiryReminders() {
         LocalDateTime now = LocalDateTime.now();
-        LocalDateTime threshold = now.plusDays(REMINDER_DAYS_BEFORE);
+        LocalDate reminderTargetDate = now.toLocalDate().plusDays(REMINDER_DAYS_BEFORE);
+        LocalDateTime threshold = now.plusDays(REMINDER_DAYS_BEFORE + 1L);
 
-        List<Subscription> expiringSoon = subscriptionRepository
+        List<Subscription> candidates = subscriptionRepository
                 .findSubscriptionsExpiringBefore(threshold, now);
+        List<Subscription> expiringSoon = candidates.stream()
+            .filter(subscription -> subscription.getEndDate() != null)
+            .filter(subscription -> subscription.getEndDate().toLocalDate().isEqual(reminderTargetDate))
+            .toList();
 
         if (expiringSoon.isEmpty()) {
-            log.info("Subscription reminder check: no subscriptions expiring within {} days",
+            log.info("Subscription reminder check: no subscriptions hitting {}-day reminder window today",
                     REMINDER_DAYS_BEFORE);
             return;
         }
@@ -49,6 +57,14 @@ public class SubscriptionReminderService {
 
         for (Subscription subscription : expiringSoon) {
             try {
+                if (Boolean.TRUE.equals(subscription.getIsTrial())) {
+                    continue;
+                }
+
+                if (!Boolean.TRUE.equals(subscription.getAutoRenew())) {
+                    continue;
+                }
+
                 Tenant tenant = tenantRepository.findById(subscription.getTenantId())
                         .orElse(null);
                 if (tenant == null) {
@@ -56,29 +72,24 @@ public class SubscriptionReminderService {
                     continue;
                 }
 
-                String expiryDate = subscription.getEndDate().format(DATE_FORMATTER);
-                String subject = "⚠️ Gói đăng ký của " + tenant.getName() +
-                                 " sắp hết hạn vào " + expiryDate;
-                String body = String.format("""
-                        <html><body style='font-family: Arial; padding: 20px;'>
-                        <h2>⚠️ Thông báo gia hạn gói dịch vụ</h2>
-                        <p>Xin chào <strong>%s</strong>,</p>
-                        <p>Gói <strong>%s</strong> của công ty bạn sẽ hết hạn vào <strong>%s</strong>.</p>
-                        <p>Vui lòng đăng nhập vào hệ thống và gia hạn gói dịch vụ để tiếp tục sử dụng.</p>
-                        <p>Sau khi hết hạn, bạn sẽ có <strong>7 ngày</strong> (grace period) để gia hạn
-                        trước khi tài khoản bị khóa hoàn toàn.</p>
-                        <br/>
-                        <p>Trân trọng,<br/>Chatbot RAG Team</p>
-                        </body></html>
-                        """,
-                        tenant.getRepresentativeName() != null
-                            ? tenant.getRepresentativeName() : tenant.getName(),
-                        subscription.getTier().name(),
-                        expiryDate
+                if (tenant.getContactEmail() == null || tenant.getContactEmail().isBlank()) {
+                    log.warn("Skip reminder: tenant {} has no contact email", tenant.getId());
+                    continue;
+                }
+
+                PaymentTransaction payment = sePayService.createOrReusePendingPayment(
+                        subscription,
+                        subscription.getUpdatedBy() != null ? subscription.getUpdatedBy() : subscription.getCreatedBy(),
+                        Boolean.TRUE.equals(subscription.getAutoRenew())
                 );
 
-                emailService.sendHtmlEmail(tenant.getContactEmail(), subject, body);
-                log.info("Sent expiry reminder to tenant: {} ({}), expires: {}",
+                subscriptionService.sendRenewalReminderEmail(subscription, payment);
+
+                String expiryDate = subscription.getEndDate() != null
+                        ? subscription.getEndDate().format(DATE_FORMATTER)
+                        : "—";
+                log.info("Sent {}-day reminder (with QR) to tenant: {} ({}), expires: {}",
+                    REMINDER_DAYS_BEFORE,
                         tenant.getName(), tenant.getContactEmail(), expiryDate);
                 sent++;
 
@@ -89,6 +100,7 @@ public class SubscriptionReminderService {
             }
         }
 
-        log.info("Subscription reminder job complete: {} sent, {} failed", sent, failed);
+        log.info("Subscription reminder job complete ({}-day window): {} sent, {} failed",
+            REMINDER_DAYS_BEFORE, sent, failed);
     }
 }

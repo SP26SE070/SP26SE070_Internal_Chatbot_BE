@@ -50,4 +50,21 @@ public interface AuditLogRepository extends JpaRepository<AuditLog, UUID> {
             @Param("beforeTime") LocalDateTime beforeTime,
             Pageable pageable
     );
+
+    @Query("""
+            SELECT a
+            FROM AuditLog a
+            WHERE a.tenantId = :tenantId
+              AND a.createdAt < :beforeTime
+              AND (
+                    a.userRole IS NULL
+                    OR UPPER(a.userRole) NOT IN ('SUPER_ADMIN', 'STAFF')
+                  )
+            ORDER BY a.createdAt DESC, a.id DESC
+            """)
+    List<AuditLog> findRecentForTenantAdmin(
+            @Param("tenantId") UUID tenantId,
+            @Param("beforeTime") LocalDateTime beforeTime,
+            Pageable pageable
+    );
 }

@@ -658,6 +658,7 @@ public class TenantAdminService {
         logEntry.setTenantId(actor.getTenantId());
         logEntry.setUserId(actor.getId());
         logEntry.setUserEmail(actor.getEmail());
+        logEntry.setUserRole(resolveActorRoleCode(actor));
         logEntry.setAction(action);
         logEntry.setEntityType("User");
         logEntry.setEntityId(String.valueOf(target.getId()));
@@ -676,6 +677,7 @@ public class TenantAdminService {
         logEntry.setTenantId(actor.getTenantId());
         logEntry.setUserId(actor.getId());
         logEntry.setUserEmail(actor.getEmail());
+        logEntry.setUserRole(resolveActorRoleCode(actor));
         logEntry.setAction(action);
         logEntry.setEntityType(entityType);
         logEntry.setEntityId(entityId);
@@ -685,6 +687,15 @@ public class TenantAdminService {
         logEntry.setStatus("SUCCESS");
         logEntry.setCreatedAt(LocalDateTime.now());
         auditLogRepository.save(logEntry);
+    }
+
+    private String resolveActorRoleCode(User actor) {
+        if (actor.getRoleId() == null) {
+            return null;
+        }
+        return roleRepository.findById(actor.getRoleId())
+                .map(RoleEntity::getCode)
+                .orElse(null);
     }
 
     private enum StatusFilter {

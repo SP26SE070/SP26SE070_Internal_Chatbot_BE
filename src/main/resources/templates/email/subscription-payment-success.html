@@ -1,0 +1,277 @@
+<!DOCTYPE html>
+<html lang="vi">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <meta http-equiv="X-UA-Compatible" content="IE=edge">
+    <title>Thanh toán thành công</title>
+    <style>
+        body {
+            margin: 0;
+            padding: 0;
+            background-color: #eef2f7;
+            font-family: Arial, Helvetica, sans-serif;
+            color: #1f2937;
+        }
+
+        table {
+            border-spacing: 0;
+            border-collapse: collapse;
+        }
+
+        .wrapper {
+            width: 100%;
+            background-color: #eef2f7;
+            padding: 24px 12px;
+        }
+
+        .container {
+            width: 100%;
+            max-width: 600px;
+            background-color: #ffffff;
+            border: 1px solid #dbe4f0;
+            border-radius: 12px;
+            overflow: hidden;
+        }
+
+        .header {
+            background: linear-gradient(135deg, #16a34a 0%, #0ea5e9 100%);
+            color: #ffffff;
+            text-align: center;
+            padding: 28px 24px;
+        }
+
+        .header-title {
+            margin: 0;
+            font-size: 24px;
+            line-height: 1.3;
+            font-weight: 700;
+        }
+
+        .header-subtitle {
+            margin: 8px 0 0;
+            font-size: 14px;
+            line-height: 1.5;
+            opacity: 0.95;
+        }
+
+        .content {
+            padding: 24px;
+        }
+
+        .greeting {
+            margin: 0 0 12px;
+            font-size: 17px;
+            line-height: 1.5;
+        }
+
+        .paragraph {
+            margin: 0 0 16px;
+            font-size: 14px;
+            line-height: 1.65;
+            color: #334155;
+        }
+
+        .info-box {
+            width: 100%;
+            background: #f8fffb;
+            border: 1px solid #dcfce7;
+            border-left: 4px solid #16a34a;
+            border-radius: 8px;
+            margin: 0 0 18px;
+        }
+
+        .info-cell {
+            padding: 14px 14px 6px;
+        }
+
+        .info-row {
+            margin: 0 0 8px;
+            font-size: 14px;
+            line-height: 1.5;
+        }
+
+        .label {
+            color: #166534;
+            font-weight: 700;
+            display: inline-block;
+            min-width: 170px;
+        }
+
+        .value-strong {
+            color: #0f172a;
+            font-weight: 700;
+        }
+
+        .transaction-box {
+            width: 100%;
+            border: 1px solid #e2e8f0;
+            border-radius: 8px;
+            background-color: #ffffff;
+            text-align: center;
+            margin: 0 0 18px;
+        }
+
+        .transaction-title {
+            margin: 0;
+            padding: 14px 14px 6px;
+            font-size: 13px;
+            color: #475569;
+        }
+
+        .transaction-code {
+            display: inline-block;
+            margin: 0 0 14px;
+            padding: 8px 12px;
+            border-radius: 6px;
+            background: #f1f5f9;
+            border: 1px solid #e2e8f0;
+            font-family: "Courier New", Courier, monospace;
+            font-size: 13px;
+            color: #0f172a;
+            letter-spacing: 0.5px;
+            word-break: break-all;
+        }
+
+        .success-note {
+            width: 100%;
+            background: #ecfdf5;
+            border: 1px solid #bbf7d0;
+            border-left: 4px solid #22c55e;
+            border-radius: 8px;
+            margin: 0 0 18px;
+        }
+
+        .success-cell {
+            padding: 14px;
+            color: #166534;
+            font-size: 14px;
+            line-height: 1.65;
+        }
+
+        .success-title {
+            margin: 0 0 6px;
+            font-size: 15px;
+            font-weight: 700;
+        }
+
+        .footer {
+            border-top: 1px solid #e5e7eb;
+            background-color: #f8fafc;
+            text-align: center;
+            padding: 18px 16px 20px;
+            color: #64748b;
+            font-size: 12px;
+            line-height: 1.6;
+        }
+
+        .footer a {
+            color: #0284c7;
+            text-decoration: none;
+        }
+
+        .preheader {
+            display: none;
+            font-size: 1px;
+            color: #eef2f7;
+            line-height: 1px;
+            max-height: 0;
+            max-width: 0;
+            opacity: 0;
+            overflow: hidden;
+        }
+
+        @media screen and (max-width: 620px) {
+            .wrapper {
+                padding: 12px 6px;
+            }
+
+            .content {
+                padding: 18px;
+            }
+
+            .header {
+                padding: 22px 16px;
+            }
+
+            .label {
+                min-width: 130px;
+                display: inline;
+            }
+        }
+    </style>
+</head>
+<body>
+<div class="preheader">Thanh toán đã được ghi nhận thành công. Bạn có thể tiếp tục sử dụng dịch vụ bình thường.</div>
+
+<table role="presentation" class="wrapper" width="100%">
+    <tr>
+        <td align="center">
+            <table role="presentation" class="container" width="600">
+                <tr>
+                    <td class="header" bgcolor="#16a34a">
+                        <p class="header-title">Thanh toán thành công</p>
+                        <p class="header-subtitle">Hệ thống đã xác nhận giao dịch và cập nhật trạng thái gói dịch vụ của bạn</p>
+                    </td>
+                </tr>
+
+                <tr>
+                    <td class="content">
+                        <p class="greeting">Xin chào <strong>${tenantName}</strong>,</p>
+                        <p class="paragraph">
+                            Chúng tôi đã ghi nhận <strong>thanh toán thành công</strong> cho gói subscription của tổ chức bạn.
+                            Email này là xác nhận giao dịch, áp dụng cho cả trường hợp thanh toán gói mới và thanh toán gia hạn.
+                        </p>
+
+                        <table role="presentation" class="info-box" width="100%">
+                            <tr>
+                                <td class="info-cell">
+                                    <p class="info-row"><span class="label">Gói dịch vụ:</span> <span class="value-strong">${tier}</span></p>
+                                    <p class="info-row"><span class="label">Chu kỳ thanh toán:</span> ${billingCycle}</p>
+                                    <p class="info-row"><span class="label">Số tiền đã thanh toán:</span> <span class="value-strong">${amount} VND</span></p>
+                                    <p class="info-row"><span class="label">Thời điểm thanh toán:</span> ${paidAt}</p>
+                                    <p class="info-row"><span class="label">Hiệu lực từ:</span> ${startDate}</p>
+                                    <p class="info-row" style="margin-bottom: 2px;"><span class="label">Hiệu lực đến:</span> ${endDate}</p>
+                                </td>
+                            </tr>
+                        </table>
+
+                        <table role="presentation" class="transaction-box" width="100%">
+                            <tr>
+                                <td>
+                                    <p class="transaction-title">Mã giao dịch</p>
+                                    <span class="transaction-code">${transactionCode}</span>
+                                </td>
+                            </tr>
+                        </table>
+
+                        <table role="presentation" class="success-note" width="100%">
+                            <tr>
+                                <td class="success-cell">
+                                    <p class="success-title">Hoàn tất</p>
+                                    Dịch vụ của bạn đang ở trạng thái hoạt động bình thường. Cảm ơn bạn đã sử dụng Chatbot RAG.
+                                </td>
+                            </tr>
+                        </table>
+
+                        <p class="paragraph" style="margin-bottom: 0;">
+                            Nếu cần hỗ trợ, vui lòng liên hệ đội ngũ qua email
+                            <a href="mailto:support@chatbot-rag.com" style="color: #0284c7; text-decoration: none;">support@chatbot-rag.com</a>.
+                        </p>
+                    </td>
+                </tr>
+
+                <tr>
+                    <td class="footer">
+                        <strong>Chatbot RAG Team</strong><br>
+                        Email: <a href="mailto:support@chatbot-rag.com">support@chatbot-rag.com</a> | Website:
+                        <a href="http://localhost:3000">chatbot-rag.com</a><br>
+                        <span style="font-size: 11px; color: #94a3b8;">Email tự động từ hệ thống. Vui lòng không trả lời email này.</span>
+                    </td>
+                </tr>
+            </table>
+        </td>
+    </tr>
+</table>
+</body>
+</html>

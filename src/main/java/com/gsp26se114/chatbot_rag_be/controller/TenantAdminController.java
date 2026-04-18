@@ -63,7 +63,7 @@ public class TenantAdminController {
             @RequestParam(defaultValue = "20") int limit) {
 
         List<AuditLog> logs = auditLogRepository
-                .findRecentForTenant(
+                .findRecentForTenantAdmin(
                     userDetails.getTenantId(),
                     LocalDateTime.now().plusMinutes(1),
                     org.springframework.data.domain.PageRequest.of(0, limit)

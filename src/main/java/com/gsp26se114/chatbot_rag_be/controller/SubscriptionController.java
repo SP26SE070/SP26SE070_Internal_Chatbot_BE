@@ -211,6 +211,71 @@ public class SubscriptionController {
     }
 
     /**
+     * Get upcoming renewal payment (if any active pending payment exists).
+     */
+    @GetMapping("/api/v1/subscriptions/upcoming-payment")
+    @PreAuthorize("hasRole('TENANT_ADMIN')")
+    @Tag(name = "16. 💳 Tenant Admin - Subscription Plans", description = "Quản lý gói subscription (TENANT_ADMIN)")
+    @Operation(summary = "📌 Get Upcoming Renewal Payment")
+    public ResponseEntity<Map<String, Object>> getUpcomingRenewalPayment(
+            @AuthenticationPrincipal UserPrincipal userPrincipal
+    ) {
+        try {
+            Subscription subscription = subscriptionService.getActiveSubscription(userPrincipal.getTenantId());
+            PaymentTransaction payment = subscriptionService.getUpcomingRenewalPayment(userPrincipal.getTenantId());
+            return ResponseEntity.ok(buildUpcomingPaymentResponse(subscription, payment));
+        } catch (Exception e) {
+            return ResponseEntity.badRequest().body(Map.of("error", e.getMessage()));
+        }
+    }
+
+    /**
+     * Create (or reuse) upcoming renewal payment and return QR details.
+     */
+    @PostMapping("/api/v1/subscriptions/upcoming-payment")
+    @PreAuthorize("hasRole('TENANT_ADMIN')")
+    @Tag(name = "16. 💳 Tenant Admin - Subscription Plans", description = "Quản lý gói subscription (TENANT_ADMIN)")
+    @Operation(summary = "💳 Create Upcoming Renewal Payment")
+    public ResponseEntity<Map<String, Object>> createUpcomingRenewalPayment(
+            @AuthenticationPrincipal UserPrincipal userPrincipal
+    ) {
+        try {
+            PaymentTransaction payment = subscriptionService.createUpcomingRenewalPayment(
+                    userPrincipal.getTenantId(),
+                    userPrincipal.getId()
+            );
+            Subscription subscription = subscriptionService.getActiveSubscription(userPrincipal.getTenantId());
+            return ResponseEntity.ok(buildUpcomingPaymentResponse(subscription, payment));
+        } catch (Exception e) {
+            return ResponseEntity.badRequest().body(Map.of("error", e.getMessage()));
+        }
+    }
+
+    /**
+     * Send reminder email for upcoming payment with QR info.
+     */
+    @PostMapping("/api/v1/subscriptions/upcoming-payment/reminder-email")
+    @PreAuthorize("hasRole('TENANT_ADMIN')")
+    @Tag(name = "16. 💳 Tenant Admin - Subscription Plans", description = "Quản lý gói subscription (TENANT_ADMIN)")
+    @Operation(summary = "📧 Send Upcoming Payment Reminder Email")
+    public ResponseEntity<Map<String, Object>> sendUpcomingPaymentReminderEmail(
+            @AuthenticationPrincipal UserPrincipal userPrincipal
+    ) {
+        try {
+            PaymentTransaction payment = subscriptionService.sendUpcomingRenewalReminderEmail(
+                    userPrincipal.getTenantId(),
+                    userPrincipal.getId()
+            );
+            Subscription subscription = subscriptionService.getActiveSubscription(userPrincipal.getTenantId());
+            Map<String, Object> response = buildUpcomingPaymentResponse(subscription, payment);
+            response.put("message", "Reminder email sent successfully");
+            return ResponseEntity.ok(response);
+        } catch (Exception e) {
+            return ResponseEntity.badRequest().body(Map.of("error", e.getMessage()));
+        }
+    }
+
+    /**
      * Get available subscription plans (All authenticated users)
      */
     @GetMapping("/api/v1/subscriptions/plans")
@@ -278,5 +343,34 @@ public class SubscriptionController {
                 .updatedBy(s.getUpdatedBy())
                 .notes(s.getNotes())
                 .build();
+    }
+
+    private Map<String, Object> buildUpcomingPaymentResponse(Subscription subscription, PaymentTransaction payment) {
+        Map<String, Object> response = new HashMap<>();
+        response.put("subscription_id", subscription.getId());
+        response.put("tier", subscription.getTier() != null ? subscription.getTier().name() : null);
+        response.put("billing_cycle", subscription.getBillingCycle() != null ? subscription.getBillingCycle().name() : null);
+        response.put("amount", subscription.getPrice());
+        response.put("currency", subscription.getCurrency());
+        response.put("next_billing_date", subscription.getNextBillingDate());
+        response.put("auto_renew", subscription.getAutoRenew());
+        response.put("payment_available", payment != null);
+
+        if (payment != null) {
+            response.put("payment_id", payment.getId());
+            response.put("status", payment.getStatus() != null ? payment.getStatus().name() : null);
+            response.put("transaction_code", payment.getTransactionCode());
+            response.put("qr_image_url", payment.getQrImageUrl());
+            response.put("qr_content", payment.getQrContent());
+            response.put("expires_at", payment.getExpiresAt());
+            response.put("created_at", payment.getCreatedAt());
+            response.put("is_expired", payment.isExpired());
+            response.put("polling_interval_seconds", 5);
+            response.put("bank_account", "02317500402");
+            response.put("bank_name", "TPBANK");
+            response.put("account_name", "PHAM HONG QUAN");
+        }
+
+        return response;
     }
 }

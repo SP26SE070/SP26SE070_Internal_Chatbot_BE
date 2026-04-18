@@ -1,0 +1,330 @@
+<!DOCTYPE html>
+<html lang="vi">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <meta http-equiv="X-UA-Compatible" content="IE=edge">
+    <title>Nhắc thanh toán subscription</title>
+    <style>
+        body {
+            margin: 0;
+            padding: 0;
+            background-color: #eef2f7;
+            font-family: Arial, Helvetica, sans-serif;
+            color: #1f2937;
+        }
+
+        table {
+            border-spacing: 0;
+            border-collapse: collapse;
+        }
+
+        img {
+            border: 0;
+            display: block;
+            max-width: 100%;
+            height: auto;
+        }
+
+        .wrapper {
+            width: 100%;
+            background-color: #eef2f7;
+            padding: 24px 12px;
+        }
+
+        .container {
+            width: 100%;
+            max-width: 600px;
+            background-color: #ffffff;
+            border: 1px solid #dbe4f0;
+            border-radius: 12px;
+            overflow: hidden;
+        }
+
+        .header {
+            background: linear-gradient(135deg, #0ea5e9 0%, #14b8a6 100%);
+            color: #ffffff;
+            text-align: center;
+            padding: 28px 24px;
+        }
+
+        .header-title {
+            margin: 0;
+            font-size: 24px;
+            line-height: 1.3;
+            font-weight: 700;
+        }
+
+        .header-subtitle {
+            margin: 8px 0 0;
+            font-size: 14px;
+            line-height: 1.5;
+            opacity: 0.95;
+        }
+
+        .content {
+            padding: 24px;
+        }
+
+        .greeting {
+            margin: 0 0 12px;
+            font-size: 17px;
+            line-height: 1.5;
+        }
+
+        .paragraph {
+            margin: 0 0 16px;
+            font-size: 14px;
+            line-height: 1.65;
+            color: #334155;
+        }
+
+        .info-box {
+            width: 100%;
+            background: #f8fbff;
+            border: 1px solid #dbeafe;
+            border-left: 4px solid #0ea5e9;
+            border-radius: 8px;
+            margin: 0 0 18px;
+        }
+
+        .info-cell {
+            padding: 14px 14px 6px;
+        }
+
+        .info-row {
+            margin: 0 0 8px;
+            font-size: 14px;
+            line-height: 1.5;
+        }
+
+        .label {
+            color: #0f766e;
+            font-weight: 700;
+            display: inline-block;
+            min-width: 190px;
+        }
+
+        .value-strong {
+            color: #0f172a;
+            font-weight: 700;
+        }
+
+        .qr-box {
+            width: 100%;
+            border: 1px solid #e2e8f0;
+            border-radius: 10px;
+            background-color: #ffffff;
+            text-align: center;
+            margin: 0 0 18px;
+        }
+
+        .qr-title {
+            margin: 0;
+            padding: 16px 16px 8px;
+            font-size: 15px;
+            line-height: 1.5;
+            font-weight: 700;
+            color: #111827;
+        }
+
+        .qr-image-wrap {
+            padding: 8px 16px;
+        }
+
+        .qr-image {
+            width: 220px;
+            max-width: 100%;
+            border: 1px solid #d1d5db;
+            border-radius: 8px;
+            margin: 0 auto;
+        }
+
+        .transaction-label {
+            margin: 8px 0 0;
+            font-size: 13px;
+            color: #475569;
+        }
+
+        .transaction-code {
+            display: inline-block;
+            margin: 8px 0 4px;
+            padding: 8px 12px;
+            border-radius: 6px;
+            background: #f1f5f9;
+            border: 1px solid #e2e8f0;
+            font-family: "Courier New", Courier, monospace;
+            font-size: 13px;
+            color: #0f172a;
+            letter-spacing: 0.5px;
+            word-break: break-all;
+        }
+
+        .qr-note {
+            margin: 6px 0 16px;
+            padding: 0 16px;
+            font-size: 12px;
+            color: #dc2626;
+            line-height: 1.6;
+        }
+
+        .warning-box {
+            width: 100%;
+            background: #fff7ed;
+            border: 1px solid #fed7aa;
+            border-left: 4px solid #f97316;
+            border-radius: 8px;
+            margin: 0 0 18px;
+        }
+
+        .warning-cell {
+            padding: 14px;
+            color: #9a3412;
+            font-size: 13px;
+            line-height: 1.65;
+        }
+
+        .warning-title {
+            margin: 0 0 6px;
+            font-size: 14px;
+            font-weight: 700;
+        }
+
+        .warning-list {
+            margin: 0;
+            padding-left: 18px;
+        }
+
+        .warning-list li {
+            margin: 0 0 6px;
+        }
+
+        .footer {
+            border-top: 1px solid #e5e7eb;
+            background-color: #f8fafc;
+            text-align: center;
+            padding: 18px 16px 20px;
+            color: #64748b;
+            font-size: 12px;
+            line-height: 1.6;
+        }
+
+        .footer a {
+            color: #0284c7;
+            text-decoration: none;
+        }
+
+        .preheader {
+            display: none;
+            font-size: 1px;
+            color: #eef2f7;
+            line-height: 1px;
+            max-height: 0;
+            max-width: 0;
+            opacity: 0;
+            overflow: hidden;
+        }
+
+        @media screen and (max-width: 620px) {
+            .wrapper {
+                padding: 12px 6px;
+            }
+
+            .content {
+                padding: 18px;
+            }
+
+            .header {
+                padding: 22px 16px;
+            }
+
+            .label {
+                min-width: 140px;
+                display: inline;
+            }
+        }
+    </style>
+</head>
+<body>
+<div class="preheader">Nhắc thanh toán subscription: thông tin gói, số tiền và mã QR thanh toán của bạn.</div>
+
+<table role="presentation" class="wrapper" width="100%">
+    <tr>
+        <td align="center">
+            <table role="presentation" class="container" width="600">
+                <tr>
+                    <td class="header" bgcolor="#0ea5e9">
+                        <p class="header-title">Nhắc thanh toán subscription</p>
+                        <p class="header-subtitle">Bạn có thể thanh toán ngay bằng QR để dịch vụ luôn hoạt động liên tục</p>
+                    </td>
+                </tr>
+
+                <tr>
+                    <td class="content">
+                        <p class="greeting">Xin chào <strong>${tenantName}</strong>,</p>
+                        <p class="paragraph">
+                            Gói dịch vụ của tổ chức bạn sắp tới kỳ thanh toán tiếp theo. Hệ thống đã chuẩn bị sẵn thông tin thanh toán
+                            và mã QR để bạn thao tác nhanh khi cần.
+                        </p>
+
+                        <table role="presentation" class="info-box" width="100%">
+                            <tr>
+                                <td class="info-cell">
+                                    <p class="info-row"><span class="label">Gói dịch vụ:</span> <span class="value-strong">${tier}</span></p>
+                                    <p class="info-row"><span class="label">Chu kỳ thanh toán:</span> ${billingCycle}</p>
+                                    <p class="info-row"><span class="label">Số tiền cần thanh toán:</span> <span class="value-strong">${amount} VND</span></p>
+                                    <p class="info-row"><span class="label">Kỳ thanh toán tiếp theo:</span> ${renewalDueDate}</p>
+                                    <p class="info-row" style="margin-bottom: 2px;"><span class="label">QR có hiệu lực đến:</span> ${expiresAt}</p>
+                                </td>
+                            </tr>
+                        </table>
+
+                        <table role="presentation" class="qr-box" width="100%">
+                            <tr>
+                                <td>
+                                    <p class="qr-title">Quét mã QR để thanh toán</p>
+                                    <div class="qr-image-wrap">
+                                        <img class="qr-image" src="${qrImageUrl}" alt="QR Code thanh toán subscription">
+                                    </div>
+                                    <p class="transaction-label">Mã giao dịch chuyển khoản</p>
+                                    <span class="transaction-code">${transactionCode}</span>
+                                    <p class="qr-note">Vui lòng nhập đúng nội dung chuyển khoản để hệ thống tự động xác nhận thanh toán.</p>
+                                </td>
+                            </tr>
+                        </table>
+
+                        <table role="presentation" class="warning-box" width="100%">
+                            <tr>
+                                <td class="warning-cell">
+                                    <p class="warning-title">Lưu ý quan trọng</p>
+                                    <ul class="warning-list">
+                                        <li>Bạn có thể thanh toán qua ứng dụng ngân hàng hỗ trợ VietQR hoặc chuyển khoản thủ công.</li>
+                                        <li>Nội dung chuyển khoản bắt buộc: <strong>${transactionCode}</strong>.</li>
+                                        <li>Sau khi thanh toán thành công, hệ thống sẽ tự động cập nhật trạng thái trong vài phút.</li>
+                                        <li>Nếu chưa cần thanh toán ngay, bạn có thể bỏ qua email này.</li>
+                                    </ul>
+                                </td>
+                            </tr>
+                        </table>
+
+                        <p class="paragraph" style="margin-bottom: 0;">
+                            Nếu cần hỗ trợ, vui lòng liên hệ đội ngũ qua email
+                            <a href="mailto:support@chatbot-rag.com" style="color: #0284c7; text-decoration: none;">support@chatbot-rag.com</a>.
+                        </p>
+                    </td>
+                </tr>
+
+                <tr>
+                    <td class="footer">
+                        <strong>Chatbot RAG Team</strong><br>
+                        Email: <a href="mailto:support@chatbot-rag.com">support@chatbot-rag.com</a> | Website:
+                        <a href="http://localhost:3000">chatbot-rag.com</a><br>
+                        <span style="font-size: 11px; color: #94a3b8;">Email tự động từ hệ thống. Vui lòng không trả lời email này.</span>
+                    </td>
+                </tr>
+            </table>
+        </td>
+    </tr>
+</table>
+</body>
+</html>

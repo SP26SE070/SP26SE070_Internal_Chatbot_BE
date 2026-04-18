@@ -537,6 +537,7 @@ public class DocumentController {
                 auditLog.setTenantId(userDetails.getTenantId());
                 auditLog.setUserId(userDetails.getId());
                 auditLog.setUserEmail(userDetails.getUsername());
+                auditLog.setUserRole(userDetails.getRoleCode());
                 auditLog.setAction("DOCUMENT_UPLOAD");
                 auditLog.setEntityType("Document");
                 auditLog.setEntityId(String.valueOf(document.getId()));
@@ -1010,6 +1011,7 @@ public class DocumentController {
             auditLog.setTenantId(userDetails.getTenantId());
             auditLog.setUserId(userDetails.getId());
             auditLog.setUserEmail(userDetails.getUsername());
+            auditLog.setUserRole(userDetails.getRoleCode());
             auditLog.setAction("DOCUMENT_DELETE");
             auditLog.setEntityType("Document");
             auditLog.setEntityId(String.valueOf(id));
