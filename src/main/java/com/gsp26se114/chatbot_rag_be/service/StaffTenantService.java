@@ -9,6 +9,7 @@ import com.gsp26se114.chatbot_rag_be.repository.TenantRepository;
 import com.gsp26se114.chatbot_rag_be.repository.UserRepository;
 import com.gsp26se114.chatbot_rag_be.util.UserUtil;
 import lombok.RequiredArgsConstructor;
+import lombok.extern.slf4j.Slf4j;
 import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
@@ -16,6 +17,7 @@ import org.springframework.transaction.annotation.Transactional;
 import java.time.LocalDateTime;
 import java.util.UUID;
 
+@Slf4j
 @Service
 @RequiredArgsConstructor
 public class StaffTenantService {
@@ -24,6 +26,7 @@ public class StaffTenantService {
     private final UserRepository userRepository;
     private final RoleRepository roleRepository;
     private final PasswordEncoder passwordEncoder;
+    private final SubscriptionService subscriptionService;
 
     public record ApprovalResult(
             Tenant tenant,
@@ -69,6 +72,16 @@ public class StaffTenantService {
         tenantAdminUser.setCreatedAt(LocalDateTime.now());
 
         userRepository.save(tenantAdminUser);
+
+        // Automatically create trial subscription for new tenant
+        try {
+            subscriptionService.createTrialSubscription(tenantId, staffUserId);
+            log.info("Trial subscription created for tenant: {}", tenantId);
+        } catch (IllegalStateException e) {
+            // Tenant already has subscription or trial used — skip silently
+            log.warn("Could not create trial subscription for tenant {}: {}",
+                tenantId, e.getMessage());
+        }
 
         return new ApprovalResult(tenant, loginEmail, temporaryPassword);
     }
