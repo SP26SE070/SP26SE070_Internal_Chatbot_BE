@@ -34,60 +34,55 @@ import java.util.UUID;
 @RestController
 @RequestMapping("/api/v1/staff/onboarding")
 @RequiredArgsConstructor
-@Tag(name = "18. 🧠 Staff - Onboarding Content", description = "Quản lý onboarding content theo tenant (STAFF)")
+@Tag(name = "18. 🧠 Staff - Onboarding Content", description = "Quản lý onboarding content toàn hệ thống (STAFF)")
 @SecurityRequirement(name = "bearerAuth")
 @PreAuthorize("hasRole('STAFF')")
 public class StaffOnboardingController {
 
     private final OnboardingService onboardingService;
 
-    @GetMapping("/tenants/{tenantId}/modules")
-    @Operation(summary = "Lấy danh sách onboarding modules theo tenant")
-    public ResponseEntity<List<OnboardingModuleResponse>> getTenantModules(
-            @PathVariable UUID tenantId,
+    @GetMapping("/modules")
+    @Operation(summary = "Lấy danh sách onboarding modules dùng chung toàn hệ thống")
+    public ResponseEntity<List<OnboardingModuleResponse>> getGlobalModules(
             @RequestParam(value = "includeInactive", defaultValue = "false") boolean includeInactive) {
-        return ResponseEntity.ok(onboardingService.getModulesForTenant(tenantId, includeInactive));
+        return ResponseEntity.ok(onboardingService.getGlobalModules(includeInactive));
     }
 
-    @PostMapping("/tenants/{tenantId}/modules")
-    @Operation(summary = "Tạo onboarding module theo tenant")
+    @PostMapping("/modules")
+    @Operation(summary = "Tạo onboarding module dùng chung toàn hệ thống")
     public ResponseEntity<OnboardingModuleResponse> createModule(
             @AuthenticationPrincipal UserDetails userDetails,
-            @PathVariable UUID tenantId,
             @Valid @RequestBody CreateOnboardingModuleRequest request) {
         OnboardingModuleResponse module = onboardingService
-                .createModuleForTenantByStaff(userDetails.getUsername(), tenantId, request);
+                .createGlobalModuleByStaff(userDetails.getUsername(), request);
         return ResponseEntity.status(HttpStatus.CREATED).body(module);
     }
 
-    @PutMapping("/tenants/{tenantId}/modules/{moduleId}")
-    @Operation(summary = "Cập nhật onboarding module theo tenant")
+    @PutMapping("/modules/{moduleId}")
+    @Operation(summary = "Cập nhật onboarding module dùng chung toàn hệ thống")
     public ResponseEntity<OnboardingModuleResponse> updateModule(
             @AuthenticationPrincipal UserDetails userDetails,
-            @PathVariable UUID tenantId,
             @PathVariable UUID moduleId,
             @Valid @RequestBody UpdateOnboardingModuleRequest request) {
-        return ResponseEntity.ok(onboardingService.updateModuleForTenantByStaff(
-                userDetails.getUsername(), tenantId, moduleId, request));
+        return ResponseEntity.ok(onboardingService.updateGlobalModuleByStaff(
+                userDetails.getUsername(), moduleId, request));
     }
 
-    @DeleteMapping("/tenants/{tenantId}/modules/{moduleId}")
-    @Operation(summary = "Vô hiệu hóa onboarding module theo tenant")
+    @DeleteMapping("/modules/{moduleId}")
+    @Operation(summary = "Vô hiệu hóa onboarding module dùng chung toàn hệ thống")
     public ResponseEntity<MessageResponse> deactivateModule(
-            @PathVariable UUID tenantId,
             @PathVariable UUID moduleId) {
-        onboardingService.deactivateModuleForTenantByStaff(tenantId, moduleId);
+        onboardingService.deactivateGlobalModuleByStaff(moduleId);
         return ResponseEntity.ok(new MessageResponse("Onboarding module đã được vô hiệu hóa"));
     }
 
-    @PostMapping(value = "/tenants/{tenantId}/modules/{moduleId}/attachment", consumes = MediaType.MULTIPART_FORM_DATA_VALUE)
-    @Operation(summary = "Upload file chi tiết onboarding (.txt/.pdf) theo tenant")
+    @PostMapping(value = "/modules/{moduleId}/attachment", consumes = MediaType.MULTIPART_FORM_DATA_VALUE)
+    @Operation(summary = "Upload file chi tiết onboarding (.txt/.pdf) dùng chung toàn hệ thống")
     public ResponseEntity<OnboardingModuleResponse> uploadModuleAttachment(
             @AuthenticationPrincipal UserDetails userDetails,
-            @PathVariable UUID tenantId,
             @PathVariable UUID moduleId,
             @RequestPart("file") MultipartFile file) {
-        return ResponseEntity.ok(onboardingService.uploadModuleAttachmentForTenantByStaff(
-                userDetails.getUsername(), tenantId, moduleId, file));
+        return ResponseEntity.ok(onboardingService.uploadGlobalModuleAttachmentByStaff(
+                userDetails.getUsername(), moduleId, file));
     }
 }

@@ -13,6 +13,7 @@ import com.gsp26se114.chatbot_rag_be.payload.response.OnboardingMyOverviewRespon
 import com.gsp26se114.chatbot_rag_be.payload.response.OnboardingProgressResponse;
 import com.gsp26se114.chatbot_rag_be.repository.OnboardingModuleRepository;
 import com.gsp26se114.chatbot_rag_be.repository.OnboardingProgressRepository;
+import com.gsp26se114.chatbot_rag_be.repository.TenantRepository;
 import com.gsp26se114.chatbot_rag_be.repository.UserRepository;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
@@ -44,17 +45,17 @@ public class OnboardingService {
 
     private final OnboardingModuleRepository onboardingModuleRepository;
     private final OnboardingProgressRepository onboardingProgressRepository;
+    private final TenantRepository tenantRepository;
     private final UserRepository userRepository;
     private final PermissionService permissionService;
     private final MinioService minioService;
 
     public List<OnboardingModuleResponse> getTenantModules(String userEmail, boolean includeInactive) {
-        User actor = requireTenantUser(userEmail);
-        UUID tenantId = actor.getTenantId();
+        requireTenantUser(userEmail);
 
         List<OnboardingModule> modules = includeInactive
-                ? onboardingModuleRepository.findByTenantIdOrderByDisplayOrderAscCreatedAtAsc(tenantId)
-                : onboardingModuleRepository.findByTenantIdAndIsActiveTrueOrderByDisplayOrderAscCreatedAtAsc(tenantId);
+            ? onboardingModuleRepository.findByOrderByDisplayOrderAscCreatedAtAsc()
+            : onboardingModuleRepository.findByIsActiveTrueOrderByDisplayOrderAscCreatedAtAsc();
 
         return modules.stream()
                 .map(this::toModuleResponse)
@@ -69,7 +70,7 @@ public class OnboardingService {
         validatePermissions(requiredPermissions);
 
         OnboardingModule module = new OnboardingModule();
-        module.setTenantId(actor.getTenantId());
+        module.setTenantId(resolveGlobalTenantId(actor));
         module.setTitle(request.title().trim());
         module.setSummary(request.summary() != null ? request.summary().trim() : null);
         module.setContent(request.content().trim());
@@ -81,7 +82,7 @@ public class OnboardingService {
         module.setCreatedAt(LocalDateTime.now());
 
         OnboardingModule saved = onboardingModuleRepository.save(module);
-        log.info("Created onboarding module {} for tenant {}", saved.getId(), actor.getTenantId());
+        log.info("Created global onboarding module {}", saved.getId());
         return toModuleResponse(saved);
     }
 
@@ -92,7 +93,7 @@ public class OnboardingService {
             UpdateOnboardingModuleRequest request
     ) {
         User actor = requireTenantUser(userEmail);
-        OnboardingModule module = onboardingModuleRepository.findByIdAndTenantId(moduleId, actor.getTenantId())
+        OnboardingModule module = onboardingModuleRepository.findById(moduleId)
                 .orElseThrow(() -> new RuntimeException("Onboarding module không tồn tại"));
 
         if (request.title() != null) {
@@ -129,31 +130,42 @@ public class OnboardingService {
 
         module.setUpdatedAt(LocalDateTime.now());
         OnboardingModule saved = onboardingModuleRepository.save(module);
-        log.info("Updated onboarding module {} for tenant {}", saved.getId(), actor.getTenantId());
+        log.info("Updated global onboarding module {}", saved.getId());
         return toModuleResponse(saved);
     }
 
     @Transactional
     public void deactivateTenantModule(String userEmail, UUID moduleId) {
-        User actor = requireTenantUser(userEmail);
-        OnboardingModule module = onboardingModuleRepository.findByIdAndTenantId(moduleId, actor.getTenantId())
+        requireTenantUser(userEmail);
+        OnboardingModule module = onboardingModuleRepository.findById(moduleId)
                 .orElseThrow(() -> new RuntimeException("Onboarding module không tồn tại"));
 
         module.setIsActive(false);
         module.setUpdatedAt(LocalDateTime.now());
         onboardingModuleRepository.save(module);
-        log.info("Deactivated onboarding module {} for tenant {}", module.getId(), actor.getTenantId());
+        log.info("Deactivated global onboarding module {}", module.getId());
     }
 
     public List<OnboardingModuleResponse> getModulesForTenant(UUID tenantId, boolean includeInactive) {
+        // Backward-compatible method name; onboarding modules are global for all tenants.
         List<OnboardingModule> modules = includeInactive
-                ? onboardingModuleRepository.findByTenantIdOrderByDisplayOrderAscCreatedAtAsc(tenantId)
-                : onboardingModuleRepository.findByTenantIdAndIsActiveTrueOrderByDisplayOrderAscCreatedAtAsc(tenantId);
+            ? onboardingModuleRepository.findByOrderByDisplayOrderAscCreatedAtAsc()
+            : onboardingModuleRepository.findByIsActiveTrueOrderByDisplayOrderAscCreatedAtAsc();
 
         return modules.stream()
                 .map(this::toModuleResponse)
                 .collect(Collectors.toList());
     }
+
+        public List<OnboardingModuleResponse> getGlobalModules(boolean includeInactive) {
+        List<OnboardingModule> modules = includeInactive
+            ? onboardingModuleRepository.findByOrderByDisplayOrderAscCreatedAtAsc()
+            : onboardingModuleRepository.findByIsActiveTrueOrderByDisplayOrderAscCreatedAtAsc();
+
+        return modules.stream()
+            .map(this::toModuleResponse)
+            .collect(Collectors.toList());
+        }
 
     @Transactional
     public OnboardingModuleResponse createModuleForTenantByStaff(
@@ -161,13 +173,22 @@ public class OnboardingService {
             UUID tenantId,
             CreateOnboardingModuleRequest request
     ) {
+        // Backward-compatible method signature; tenantId is ignored because onboarding is global.
+        return createGlobalModuleByStaff(actorEmail, request);
+        }
+
+        @Transactional
+        public OnboardingModuleResponse createGlobalModuleByStaff(
+            String actorEmail,
+            CreateOnboardingModuleRequest request
+        ) {
         User actor = requireExistingUser(actorEmail);
 
         List<String> requiredPermissions = normalizePermissions(request.requiredPermissions());
         validatePermissions(requiredPermissions);
 
         OnboardingModule module = new OnboardingModule();
-        module.setTenantId(tenantId);
+        module.setTenantId(resolveGlobalTenantId(actor));
         module.setTitle(request.title().trim());
         module.setSummary(request.summary() != null ? request.summary().trim() : null);
         module.setContent(request.content().trim());
@@ -179,7 +200,7 @@ public class OnboardingService {
         module.setCreatedAt(LocalDateTime.now());
 
         OnboardingModule saved = onboardingModuleRepository.save(module);
-        log.info("Staff {} created onboarding module {} for tenant {}", actor.getEmail(), saved.getId(), tenantId);
+        log.info("Staff {} created global onboarding module {}", actor.getEmail(), saved.getId());
         return toModuleResponse(saved);
     }
 
@@ -190,8 +211,18 @@ public class OnboardingService {
             UUID moduleId,
             UpdateOnboardingModuleRequest request
     ) {
+        // Backward-compatible method signature; tenantId is ignored because onboarding is global.
+        return updateGlobalModuleByStaff(actorEmail, moduleId, request);
+        }
+
+        @Transactional
+        public OnboardingModuleResponse updateGlobalModuleByStaff(
+            String actorEmail,
+            UUID moduleId,
+            UpdateOnboardingModuleRequest request
+        ) {
         User actor = requireExistingUser(actorEmail);
-        OnboardingModule module = onboardingModuleRepository.findByIdAndTenantId(moduleId, tenantId)
+        OnboardingModule module = onboardingModuleRepository.findById(moduleId)
                 .orElseThrow(() -> new RuntimeException("Onboarding module không tồn tại"));
 
         if (request.title() != null) {
@@ -228,19 +259,25 @@ public class OnboardingService {
 
         module.setUpdatedAt(LocalDateTime.now());
         OnboardingModule saved = onboardingModuleRepository.save(module);
-        log.info("Staff {} updated onboarding module {} for tenant {}", actor.getEmail(), saved.getId(), tenantId);
+        log.info("Staff {} updated global onboarding module {}", actor.getEmail(), saved.getId());
         return toModuleResponse(saved);
     }
 
     @Transactional
     public void deactivateModuleForTenantByStaff(UUID tenantId, UUID moduleId) {
-        OnboardingModule module = onboardingModuleRepository.findByIdAndTenantId(moduleId, tenantId)
+        // Backward-compatible method signature; tenantId is ignored because onboarding is global.
+        deactivateGlobalModuleByStaff(moduleId);
+        }
+
+        @Transactional
+        public void deactivateGlobalModuleByStaff(UUID moduleId) {
+        OnboardingModule module = onboardingModuleRepository.findById(moduleId)
                 .orElseThrow(() -> new RuntimeException("Onboarding module không tồn tại"));
 
         module.setIsActive(false);
         module.setUpdatedAt(LocalDateTime.now());
         onboardingModuleRepository.save(module);
-        log.info("Deactivated onboarding module {} for tenant {} by staff action", module.getId(), tenantId);
+        log.info("Deactivated global onboarding module {} by staff action", module.getId());
     }
 
     @Transactional
@@ -250,14 +287,24 @@ public class OnboardingService {
             UUID moduleId,
             MultipartFile file
     ) {
+        // Backward-compatible method signature; tenantId is ignored because onboarding is global.
+        return uploadGlobalModuleAttachmentByStaff(actorEmail, moduleId, file);
+        }
+
+        @Transactional
+        public OnboardingModuleResponse uploadGlobalModuleAttachmentByStaff(
+            String actorEmail,
+            UUID moduleId,
+            MultipartFile file
+        ) {
         User actor = requireExistingUser(actorEmail);
         validateAttachmentFile(file);
 
-        OnboardingModule module = onboardingModuleRepository.findByIdAndTenantId(moduleId, tenantId)
+        OnboardingModule module = onboardingModuleRepository.findById(moduleId)
                 .orElseThrow(() -> new RuntimeException("Onboarding module không tồn tại"));
 
         String oldPath = module.getDetailFilePath();
-        String folder = "tenant-" + tenantId + "/onboarding";
+        String folder = "system/onboarding";
         String storagePath = minioService.uploadDocument(file, folder);
 
         if (oldPath != null && !oldPath.isBlank()) {
@@ -275,8 +322,8 @@ public class OnboardingService {
         module.setUpdatedAt(LocalDateTime.now());
 
         OnboardingModule saved = onboardingModuleRepository.save(module);
-        log.info("Staff {} uploaded onboarding attachment for module {} (tenant {})",
-                actor.getEmail(), moduleId, tenantId);
+        log.info("Staff {} uploaded onboarding attachment for global module {}",
+            actor.getEmail(), moduleId);
         return toModuleResponse(saved);
     }
 
@@ -302,14 +349,14 @@ public class OnboardingService {
         User user = requireTenantUser(userEmail);
 
         List<OnboardingModule> activeModules = onboardingModuleRepository
-                .findByTenantIdAndIsActiveTrueOrderByDisplayOrderAscCreatedAtAsc(user.getTenantId());
+                .findByIsActiveTrueOrderByDisplayOrderAscCreatedAtAsc();
 
         List<OnboardingModule> visibleModules = activeModules.stream()
                 .filter(module -> isVisibleForUser(module, user))
                 .collect(Collectors.toList());
 
         Map<UUID, OnboardingProgress> progressByModuleId = onboardingProgressRepository
-                .findByUserIdAndTenantId(user.getId(), user.getTenantId())
+            .findByUserId(user.getId())
                 .stream()
                 .collect(Collectors.toMap(OnboardingProgress::getModuleId, p -> p, (left, right) -> left, HashMap::new));
 
@@ -430,7 +477,7 @@ public class OnboardingService {
     }
 
     private OnboardingModule findVisibleModuleForUser(User user, UUID moduleId) {
-        OnboardingModule module = onboardingModuleRepository.findByIdAndTenantId(moduleId, user.getTenantId())
+        OnboardingModule module = onboardingModuleRepository.findById(moduleId)
                 .orElseThrow(() -> new RuntimeException("Onboarding module không tồn tại"));
 
         if (!Boolean.TRUE.equals(module.getIsActive())) {
@@ -551,6 +598,21 @@ public class OnboardingService {
                 .map(String::trim)
                 .map(String::toUpperCase)
                 .collect(Collectors.collectingAndThen(Collectors.toCollection(LinkedHashSet::new), ArrayList::new));
+    }
+
+    private UUID resolveGlobalTenantId(User actor) {
+        if (actor.getTenantId() != null) {
+            return actor.getTenantId();
+        }
+
+        return onboardingModuleRepository.findByOrderByDisplayOrderAscCreatedAtAsc().stream()
+                .map(OnboardingModule::getTenantId)
+                .filter(id -> id != null)
+                .findFirst()
+                .or(() -> tenantRepository.findAll().stream().map(tenant -> tenant.getId()).findFirst())
+                .orElseThrow(() -> new RuntimeException(
+                        "Không tìm thấy tenant tham chiếu để tạo onboarding toàn hệ thống"
+                ));
     }
 
     private User requireTenantUser(String userEmail) {

@@ -9,6 +9,10 @@ import java.util.UUID;
 
 public interface OnboardingModuleRepository extends JpaRepository<OnboardingModule, UUID> {
 
+    List<OnboardingModule> findByIsActiveTrueOrderByDisplayOrderAscCreatedAtAsc();
+
+    List<OnboardingModule> findByOrderByDisplayOrderAscCreatedAtAsc();
+
     List<OnboardingModule> findByTenantIdAndIsActiveTrueOrderByDisplayOrderAscCreatedAtAsc(UUID tenantId);
 
     List<OnboardingModule> findByTenantIdOrderByDisplayOrderAscCreatedAtAsc(UUID tenantId);

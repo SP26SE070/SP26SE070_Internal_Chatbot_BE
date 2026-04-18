@@ -11,5 +11,7 @@ public interface OnboardingProgressRepository extends JpaRepository<OnboardingPr
 
     Optional<OnboardingProgress> findByUserIdAndModuleId(UUID userId, UUID moduleId);
 
+    List<OnboardingProgress> findByUserId(UUID userId);
+
     List<OnboardingProgress> findByUserIdAndTenantId(UUID userId, UUID tenantId);
 }
