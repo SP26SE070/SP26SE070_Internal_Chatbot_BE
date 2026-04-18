@@ -6,15 +6,11 @@ import org.springframework.stereotype.Service;
 import org.springframework.util.StreamUtils;
 
 import java.nio.charset.StandardCharsets;
-import java.time.LocalDateTime;
-import java.time.format.DateTimeFormatter;
 
 @Slf4j
 @Service
 public class EmailTemplateService {
-    
-    private static final DateTimeFormatter FORMATTER = DateTimeFormatter.ofPattern("dd/MM/yyyy HH:mm");
-    
+
     /**
      * Load HTML template from resources
      */
@@ -59,33 +55,7 @@ public class EmailTemplateService {
         // But keeping the method for future use
         return "Transfer request admin email - not implemented yet";
     }
-    
-    /**
-     * Template 4: Department Transfer Approved - Notify User
-     */
-    public String generateTransferApprovedEmail(
-            String userName, String newDepartment, 
-            LocalDateTime reviewedAt, String reviewNote) {
-        String template = loadTemplate("transfer-approved.html");
-        return template
-                .replace("${userName}", userName)
-                .replace("${newDepartment}", newDepartment)
-                .replace("${reviewedAt}", reviewedAt.format(FORMATTER))
-                .replace("${reviewNote}", reviewNote != null ? reviewNote : "Không có ghi chú");
-    }
-    
-    /**
-     * Template 5: Department Transfer Rejected - Notify User
-     */
-    public String generateTransferRejectedEmail(
-            String userName, LocalDateTime reviewedAt, String reviewNote) {
-        String template = loadTemplate("transfer-rejected.html");
-        return template
-                .replace("${userName}", userName)
-                .replace("${reviewedAt}", reviewedAt.format(FORMATTER))
-                .replace("${reviewNote}", reviewNote);
-    }
-    
+
     /**
      * Template 6: Tenant Approved - Send Credentials
      */

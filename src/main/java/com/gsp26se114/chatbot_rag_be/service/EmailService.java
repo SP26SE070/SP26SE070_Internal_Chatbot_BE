@@ -19,21 +19,6 @@ public class EmailService {
     private final JavaMailSender mailSender;
     private final TemplateEngine templateEngine;
     private final EmailTemplateService emailTemplateService;
-
-    /**
-     * Gửi OTP để reset password
-     */
-    public void sendOtp(String to, String otp) {
-        sendHtmlEmail(to, "🔐 Xác Thực OTP - Đặt Lại Mật Khẩu", 
-            "<html><body style='font-family: Arial; padding: 20px;'>" +
-            "<h2 style='color: #667eea;'>Mã OTP Của Bạn</h2>" +
-            "<div style='background: #f8f9fa; padding: 20px; border-radius: 8px; text-align: center;'>" +
-            "<p style='font-size: 36px; font-weight: bold; letter-spacing: 8px; color: #667eea; margin: 0;'>" + otp + "</p>" +
-            "</div>" +
-            "<p style='margin-top: 20px;'>⏰ Mã OTP có hiệu lực trong <strong>15 phút</strong></p>" +
-            "<p style='color: #dc3545;'>⚠️ KHÔNG chia sẻ mã này với bất kỳ ai!</p>" +
-            "</body></html>");
-    }
     
     /**
      * Gửi email tùy chỉnh với subject và body (plain text - backward compatibility)
