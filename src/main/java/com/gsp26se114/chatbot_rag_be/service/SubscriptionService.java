@@ -50,6 +50,14 @@ public class SubscriptionService {
         if (Boolean.TRUE.equals(tenant.getTrialUsed())) {
             throw new IllegalStateException("Tenant đã dùng trial trước đó, không thể cấp lại.");
         }
+
+        boolean hadConfirmedPaidSubscription = subscriptionRepository.findByTenantId(tenantId)
+                .stream()
+                .anyMatch(s -> !Boolean.TRUE.equals(s.getIsTrial())
+                        && s.getStatus() != SubscriptionStatus.SUSPENDED);
+        if (hadConfirmedPaidSubscription) {
+            throw new IllegalStateException("Tenant đã từng mua gói trả phí, không thể kích hoạt trial.");
+        }
         
         LocalDateTime now = LocalDateTime.now();
         LocalDateTime trialEnd = now.plusDays(14); // 14 ngày trial
