@@ -2,6 +2,7 @@ package com.gsp26se114.chatbot_rag_be.controller;
 
 import com.gsp26se114.chatbot_rag_be.entity.PaymentTransaction;
 import com.gsp26se114.chatbot_rag_be.entity.Subscription;
+import com.gsp26se114.chatbot_rag_be.entity.SubscriptionStatus;
 import com.gsp26se114.chatbot_rag_be.entity.SubscriptionTier;
 import com.gsp26se114.chatbot_rag_be.entity.Tenant;
 import com.gsp26se114.chatbot_rag_be.payload.request.CancelSubscriptionRequest;
@@ -281,7 +282,7 @@ public class SubscriptionController {
     @GetMapping("/api/v1/subscriptions/plans")
     @PreAuthorize("hasRole('TENANT_ADMIN')")
     @Tag(name = "16. 💳 Tenant Admin - Subscription Plans", description = "Quản lý gói subscription (TENANT_ADMIN)")
-    @Operation(summary = "📋 Get Available Plans", description = "Lấy danh sách các gói subscription khả dụng (isActive = true). Tenant đã từng dùng trial (trialUsed = true) sẽ không thấy plan TRIAL nữa.")
+    @Operation(summary = "📋 Get Available Plans", description = "Lấy danh sách các gói subscription khả dụng (isActive = true). Tenant đã từng dùng trial (trialUsed = true) hoặc đã từng có gói trả phí được xác nhận sẽ không thấy plan TRIAL nữa.")
     public ResponseEntity<List<SubscriptionPlanResponse>> getAvailablePlans(
             @AuthenticationPrincipal UserPrincipal userPrincipal) {
         log.info("Fetching available subscription plans for tenant: {}", userPrincipal.getTenantId());
@@ -292,14 +293,15 @@ public class SubscriptionController {
                 .orElseThrow(() -> new RuntimeException("Tenant không tồn tại: " + userPrincipal.getTenantId()));
 
         // Business rule: mỗi tenant chỉ trial 1 lần trong đời.
-        // Nếu đã từng dùng trial (trialUsed=true) HOẶC đã từng có subscription trả phí,
-        // ẩn TRIAL plan vĩnh viễn.
-        boolean hadPaidSubscription = subscriptionRepository
+        // Ẩn TRIAL nếu tenant đã dùng trial hoặc đã từng có gói trả phí được xác nhận.
+        // Gói trả phí đang chờ thanh toán (SUSPENDED) chưa được coi là "đã mua".
+        boolean hadConfirmedPaidSubscription = subscriptionRepository
                 .findByTenantId(userPrincipal.getTenantId())
                 .stream()
-                .anyMatch(s -> !Boolean.TRUE.equals(s.getIsTrial()));
+                .anyMatch(s -> !Boolean.TRUE.equals(s.getIsTrial())
+                    && s.getStatus() != SubscriptionStatus.SUSPENDED);
 
-        if (Boolean.TRUE.equals(tenant.getTrialUsed()) || hadPaidSubscription) {
+        if (Boolean.TRUE.equals(tenant.getTrialUsed()) || hadConfirmedPaidSubscription) {
             plans = plans.stream()
                     .filter(p -> !"TRIAL".equalsIgnoreCase(p.getCode()))
                     .toList();
