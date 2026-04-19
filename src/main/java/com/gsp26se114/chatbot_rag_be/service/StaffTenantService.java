@@ -1,5 +1,7 @@
 package com.gsp26se114.chatbot_rag_be.service;
 
+import com.gsp26se114.chatbot_rag_be.exception.ConflictException;
+import com.gsp26se114.chatbot_rag_be.exception.ResourceNotFoundException;
 import com.gsp26se114.chatbot_rag_be.entity.RoleEntity;
 import com.gsp26se114.chatbot_rag_be.entity.Tenant;
 import com.gsp26se114.chatbot_rag_be.entity.TenantStatus;
@@ -90,6 +92,30 @@ public class StaffTenantService {
         tenant.setRejectionReason(reason);
         tenantRepository.save(tenant);
 
+        return tenant;
+    }
+
+    @Transactional
+    public Tenant markTenantForDeletion(UUID tenantId, UUID staffUserId) {
+        Tenant tenant = tenantRepository.findById(tenantId)
+                .orElseThrow(() -> new ResourceNotFoundException("Không tìm thấy tenant"));
+
+        if (Boolean.TRUE.equals(tenant.getMarkedForDeletion())) {
+            throw new ConflictException("Tenant đã được đánh dấu xóa trước đó");
+        }
+
+        LocalDateTime now = LocalDateTime.now();
+        tenant.setMarkedForDeletion(true);
+        tenant.setInactiveAt(tenant.getInactiveAt() != null ? tenant.getInactiveAt() : now);
+        tenant.setUpdatedAt(now);
+        tenant.setReviewedAt(now);
+        tenant.setReviewedBy(staffUserId);
+
+        if (tenant.getStatus() != TenantStatus.REJECTED) {
+            tenant.setStatus(TenantStatus.SUSPENDED);
+        }
+
+        tenantRepository.save(tenant);
         return tenant;
     }
 

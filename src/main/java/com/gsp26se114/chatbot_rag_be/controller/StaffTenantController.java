@@ -36,14 +36,20 @@ public class StaffTenantController {
     @GetMapping
     @Operation(summary = "Lấy tất cả tenants", description = "Xem danh sách tất cả tenants trong hệ thống")
     public ResponseEntity<List<Tenant>> getAllTenants() {
-        List<Tenant> tenants = tenantRepository.findAll();
+        List<Tenant> tenants = tenantRepository.findAll()
+                .stream()
+                .filter(tenant -> !Boolean.TRUE.equals(tenant.getMarkedForDeletion()))
+                .toList();
         return ResponseEntity.ok(tenants);
     }
 
     @GetMapping("/pending")
     @Operation(summary = "Lấy danh sách tenants đang chờ duyệt", description = "Filter tenants theo trạng thái PENDING")
     public ResponseEntity<List<Tenant>> getPendingTenants() {
-        List<Tenant> tenants = tenantRepository.findByStatus(TenantStatus.PENDING);
+        List<Tenant> tenants = tenantRepository.findByStatus(TenantStatus.PENDING)
+                .stream()
+                .filter(tenant -> !Boolean.TRUE.equals(tenant.getMarkedForDeletion()))
+                .toList();
         return ResponseEntity.ok(tenants);
     }
 
@@ -51,6 +57,7 @@ public class StaffTenantController {
     @Operation(summary = "Xem chi tiết tenant", description = "Lấy thông tin chi tiết của một tenant")
     public ResponseEntity<Tenant> getTenantById(@PathVariable UUID tenantId) {
         return tenantRepository.findById(tenantId)
+                .filter(tenant -> !Boolean.TRUE.equals(tenant.getMarkedForDeletion()))
                 .map(ResponseEntity::ok)
                 .orElse(ResponseEntity.notFound().build());
     }
@@ -115,13 +122,12 @@ public class StaffTenantController {
     }
 
     @DeleteMapping("/{tenantId}")
-    @Operation(summary = "Xóa tenant", description = "Xóa tenant khỏi hệ thống (cẩn thận!)")
-    public ResponseEntity<MessageResponse> deleteTenant(@PathVariable UUID tenantId) {
-        if (!tenantRepository.existsById(tenantId)) {
-            return ResponseEntity.notFound().build();
-        }
-
-        tenantRepository.deleteById(tenantId);
-        return ResponseEntity.ok(new MessageResponse("Tenant đã được xóa"));
+    @Operation(summary = "Xóa tenant", description = "Đánh dấu tenant để xóa theo chính sách lưu trữ dữ liệu")
+    public ResponseEntity<MessageResponse> deleteTenant(
+            @PathVariable UUID tenantId,
+            @AuthenticationPrincipal UserPrincipal principal) {
+        UUID staffUserId = principal.getId();
+        staffTenantService.markTenantForDeletion(tenantId, staffUserId);
+        return ResponseEntity.ok(new MessageResponse("Tenant đã được đánh dấu xóa"));
     }
 }
