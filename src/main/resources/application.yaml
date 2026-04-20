@@ -14,7 +14,7 @@ spring:
   mail:
     host: smtp.gmail.com
     port: 587
-    username: ${MAIL_USERNAME:}
+    username: ${MAIL_USERNAME:anhphamle2002@gmail.com}
     password: ${MAIL_PASSWORD:}
     properties:
       mail:
@@ -37,7 +37,8 @@ app:
 
   sql:
     init:
-      mode: always
+      mode: ${SQL_INIT_MODE:always}
+    # old default: never
     # mode: never
 
   jpa:
