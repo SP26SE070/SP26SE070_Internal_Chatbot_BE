@@ -14,7 +14,7 @@ spring:
   mail:
     host: smtp.gmail.com
     port: 587
-    username: ${MAIL_USERNAME:anhphamle2002@gmail.com}
+    username: ${MAIL_USERNAME:}
     password: ${MAIL_PASSWORD:}
     properties:
       mail:
@@ -24,11 +24,21 @@ spring:
             trust: "*"
           starttls:
             enable: true
+            required: true
+          connectiontimeout: 5000
+          timeout: 5000
+          writetimeout: 5000
+
+app:
+  mail:
+    from: ${MAIL_FROM:${MAIL_USERNAME:}}
+    from-name: ${MAIL_FROM_NAME:Chatbot RAG Platform}
+  server-url: ${APP_SERVER_URL:http://localhost:8080}
 
   sql:
     init:
-      mode: never
-    # mode: always
+      mode: always
+    # mode: never
 
   jpa:
     database-platform: org.hibernate.dialect.PostgreSQLDialect
@@ -52,6 +62,11 @@ server:
   forward-headers-strategy: framework
   port: 8080
 
+management:
+  health:
+    mail:
+      enabled: false
+
 # MinIO Configuration (S3-compatible object storage)
 minio:
   enabled: true  # Đã có Docker, enable MinIO
@@ -65,6 +80,3 @@ jwt:
   secret: ${JWT_SECRET:GSP26SE114_Super_Secret_Key_For_Internal_Chatbot_RAG_2026_FPTU}
   expiration: 86400000
   refreshExpiration: 604800000
-
-app:
-  server-url: ${APP_SERVER_URL:http://localhost:8080}

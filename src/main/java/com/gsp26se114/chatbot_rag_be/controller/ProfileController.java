@@ -21,8 +21,14 @@ import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
 import org.springframework.http.ResponseEntity;
 import org.springframework.security.access.prepost.PreAuthorize;
+import org.springframework.security.core.GrantedAuthority;
 import org.springframework.security.core.annotation.AuthenticationPrincipal;
 import org.springframework.web.bind.annotation.*;
+
+import java.util.LinkedHashSet;
+import java.util.List;
+import java.util.Map;
+import java.util.Set;
 
 @RestController
 @RequestMapping("/api/v1/profile")
@@ -47,6 +53,29 @@ public class ProfileController {
         
         User user = profileService.getProfile(userPrincipal.getId());
         return ResponseEntity.ok(mapToResponse(user));
+    }
+
+    /**
+     * Trả danh sách permission code hiện tại của user (không bao gồm ROLE_*).
+     */
+    @GetMapping("/permissions")
+    @PreAuthorize("isAuthenticated()")
+    @Operation(
+            summary = "Xem danh sách quyền hiện tại",
+            description = "Trả về các permission code của user đang đăng nhập, ví dụ DOCUMENT_READ, ANALYTICS_VIEW."
+    )
+    public ResponseEntity<Map<String, List<String>>> getMyPermissions(
+            @AuthenticationPrincipal UserPrincipal userPrincipal) {
+        Set<String> permissionCodes = new LinkedHashSet<>();
+        if (userPrincipal != null && userPrincipal.getAuthorities() != null) {
+            for (GrantedAuthority authority : userPrincipal.getAuthorities()) {
+                if (authority == null || authority.getAuthority() == null) continue;
+                String code = authority.getAuthority().trim();
+                if (code.isEmpty() || code.startsWith("ROLE_")) continue;
+                permissionCodes.add(code);
+            }
+        }
+        return ResponseEntity.ok(Map.of("permissions", List.copyOf(permissionCodes)));
     }
     
     /**
