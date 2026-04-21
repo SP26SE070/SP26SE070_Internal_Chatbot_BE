@@ -63,22 +63,22 @@ public interface ChatMessageRepository extends JpaRepository<ChatMessage, UUID> 
     @Query("SELECT COUNT(m) FROM ChatMessage m WHERE m.tenantId = :tenantId AND m.role = 'ASSISTANT' AND m.rating IS NOT NULL")
     Long countRatedMessagesByTenant(@Param("tenantId") UUID tenantId);
 
-    @Query("SELECT COUNT(m) FROM ChatMessage m WHERE m.tenantId = :tenantId AND m.role = 'ASSISTANT' AND m.rating >= 4")
+    @Query("SELECT COUNT(m) FROM ChatMessage m WHERE m.tenantId = :tenantId AND m.role = 'ASSISTANT' AND m.rating = 5")
     Long countPositiveRatingsByTenant(@Param("tenantId") UUID tenantId);
 
-    @Query("SELECT COUNT(m) FROM ChatMessage m WHERE m.tenantId = :tenantId AND m.role = 'ASSISTANT' AND m.rating <= 2 AND m.rating IS NOT NULL")
+    @Query("SELECT COUNT(m) FROM ChatMessage m WHERE m.tenantId = :tenantId AND m.role = 'ASSISTANT' AND m.rating = 1")
     Long countNegativeRatingsByTenant(@Param("tenantId") UUID tenantId);
 
-    @Query("SELECT m FROM ChatMessage m WHERE m.tenantId = :tenantId AND m.role = 'ASSISTANT' AND m.rating <= 2 AND m.rating IS NOT NULL ORDER BY m.rating ASC, m.createdAt DESC")
+    @Query("SELECT m FROM ChatMessage m WHERE m.tenantId = :tenantId AND m.role = 'ASSISTANT' AND m.rating = 1 ORDER BY m.createdAt DESC")
     List<ChatMessage> findLowRatedMessagesByTenant(@Param("tenantId") UUID tenantId, Pageable pageable);
 
     @Query("SELECT COUNT(m) FROM ChatMessage m WHERE m.role = 'ASSISTANT' AND m.rating IS NOT NULL")
     Long countAllRatedMessages();
 
-    @Query("SELECT COUNT(m) FROM ChatMessage m WHERE m.role = 'ASSISTANT' AND m.rating >= 4")
+    @Query("SELECT COUNT(m) FROM ChatMessage m WHERE m.role = 'ASSISTANT' AND m.rating = 5")
     Long countAllPositiveRatings();
 
-    @Query("SELECT COUNT(m) FROM ChatMessage m WHERE m.role = 'ASSISTANT' AND m.rating <= 2 AND m.rating IS NOT NULL")
+    @Query("SELECT COUNT(m) FROM ChatMessage m WHERE m.role = 'ASSISTANT' AND m.rating = 1")
     Long countAllNegativeRatings();
 
     @Query("SELECT DISTINCT m.tenantId FROM ChatMessage m WHERE m.role = 'ASSISTANT'")

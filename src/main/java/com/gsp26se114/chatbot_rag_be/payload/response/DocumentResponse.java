@@ -33,6 +33,11 @@ public class DocumentResponse {
     private Integer chunkCount;
     private LocalDateTime uploadedAt;
 
+    // Uploader info for FE permission/UI
+    private String uploadedBy;
+    private String uploadedByEmail;
+    private String uploadedByName;
+
     // Display field
     private String documentTitle;
 }

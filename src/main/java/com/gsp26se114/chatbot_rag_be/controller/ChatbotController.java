@@ -436,7 +436,7 @@ public class ChatbotController {
 
     @PostMapping("/messages/{messageId}/rate")
     @PreAuthorize("isAuthenticated()")
-    @Operation(summary = "Rate an assistant message", description = "Rate a chatbot response (1-5 stars) with optional feedback")
+    @Operation(summary = "Rate an assistant message", description = "Rate a chatbot response as helpful (5) or not-helpful (1), with optional feedback")
     public ResponseEntity<ChatMessageResponse> rateMessage(
             @PathVariable UUID messageId,
             @Valid @RequestBody RateMessageRequest request,

@@ -22,6 +22,7 @@ import com.gsp26se114.chatbot_rag_be.repository.DocumentTagRepository;
 import com.gsp26se114.chatbot_rag_be.repository.DocumentVersionRepository;
 import com.gsp26se114.chatbot_rag_be.repository.DepartmentRepository;
 import com.gsp26se114.chatbot_rag_be.repository.RoleRepository;
+import com.gsp26se114.chatbot_rag_be.repository.UserRepository;
 import com.gsp26se114.chatbot_rag_be.service.SubscriptionValidationService;
 import com.gsp26se114.chatbot_rag_be.service.DocumentPreviewService;
 import com.gsp26se114.chatbot_rag_be.security.service.UserPrincipal;
@@ -80,6 +81,7 @@ public class DocumentController {
     private final DocumentVersionRepository documentVersionRepository;
     private final DepartmentRepository departmentRepository;
     private final RoleRepository roleRepository;
+    private final UserRepository userRepository;
     private final DocumentProcessingService documentProcessingService;
     private final DocumentPreviewService documentPreviewService;
     private final TextExtractorService textExtractorService;
@@ -315,6 +317,19 @@ public class DocumentController {
 
     /** Convert DocumentEntity → DocumentResponse (full fields). */
     private DocumentResponse toResponse(DocumentEntity doc) {
+        String uploadedBy = doc.getUploadedBy() == null ? null : doc.getUploadedBy().toString();
+        String uploadedByEmail = null;
+        String uploadedByName = null;
+        if (doc.getUploadedBy() != null) {
+            var uploader = userRepository.findById(doc.getUploadedBy()).orElse(null);
+            if (uploader != null) {
+                uploadedByEmail = uploader.getEmail();
+                uploadedByName = (uploader.getFullName() != null && !uploader.getFullName().isBlank())
+                        ? uploader.getFullName()
+                        : uploader.getEmail();
+            }
+        }
+
         return DocumentResponse.builder()
                 .id(doc.getId())
                 .originalFileName(doc.getOriginalFileName())
@@ -322,16 +337,19 @@ public class DocumentController {
                 .fileSize(doc.getFileSize())
                 .categoryId(doc.getCategoryId())
                 .description(doc.getDescription())
-            .tags(doc.getTags() == null ? List.of() : doc.getTags().stream()
-                .map(this::toTagResponse)
-                .sorted((left, right) -> left.getName().compareToIgnoreCase(right.getName()))
-                .toList())
+                .tags(doc.getTags() == null ? List.of() : doc.getTags().stream()
+                        .map(this::toTagResponse)
+                        .sorted((left, right) -> left.getName().compareToIgnoreCase(right.getName()))
+                        .toList())
                 .visibility(doc.getVisibility())
                 .accessibleDepartments(doc.getAccessibleDepartments())
                 .accessibleRoles(doc.getAccessibleRoles())
                 .embeddingStatus(doc.getEmbeddingStatus())
                 .chunkCount(doc.getChunkCount())
                 .uploadedAt(doc.getUploadedAt())
+                .uploadedBy(uploadedBy)
+                .uploadedByEmail(uploadedByEmail)
+                .uploadedByName(uploadedByName)
                 .documentTitle(doc.getDocumentTitle())
                 .build();
     }
@@ -696,27 +714,40 @@ public class DocumentController {
             @RequestParam(defaultValue = "0") int page,
             @RequestParam(defaultValue = "20") int size
     ) {
-        List<DocumentEntity> documents;
-        if (isTenantAdmin(userDetails)) {
-            documents = documentRepository.findByTenantIdWithFilters(
-                    userDetails.getTenantId(),
-                    keyword,
-                    categoryId,
-                    status
-            );
-        } else {
-            documents = documentRepository.findAccessibleDocumentsWithFilters(
-                    userDetails.getTenantId(),
-                    userDetails.getId(),
-                    userDetails.getDepartmentId(),
-                    userDetails.getRoleId(),
-                    keyword,
-                    categoryId != null ? categoryId.toString() : null,
-                    status
-            );
+        List<DocumentEntity> documents = isTenantAdmin(userDetails)
+                ? documentRepository.findByTenantIdAndIsActiveOrderByUploadedAtDesc(userDetails.getTenantId(), true)
+                : documentRepository.findAccessibleDocuments(
+                        userDetails.getTenantId(),
+                        userDetails.getId(),
+                        userDetails.getDepartmentId(),
+                        userDetails.getRoleId()
+                );
+
+        String normalizedKeyword = keyword == null ? null : keyword.trim();
+        if (normalizedKeyword != null && normalizedKeyword.isBlank()) {
+            normalizedKeyword = null;
         }
 
-        // Tag filtering in Java (tags use JSONB join — handled post-query)
+        if (normalizedKeyword != null) {
+            String searchTerm = normalizedKeyword.toLowerCase();
+            documents = documents.stream()
+                    .filter(doc -> matchesKeyword(doc, searchTerm))
+                    .toList();
+        }
+
+        if (categoryId != null) {
+            documents = documents.stream()
+                    .filter(doc -> categoryId.equals(doc.getCategoryId()))
+                    .toList();
+        }
+
+        if (status != null && !status.isBlank()) {
+            String normalizedStatus = status.trim();
+            documents = documents.stream()
+                    .filter(doc -> normalizedStatus.equalsIgnoreCase(doc.getEmbeddingStatus()))
+                    .toList();
+        }
+
         if (tagIds != null && !tagIds.isEmpty()) {
             documents = documents.stream()
                     .filter(doc -> doc.getTags() != null &&
@@ -725,7 +756,6 @@ public class DocumentController {
                     .toList();
         }
 
-        // Date filtering in Java
         if (fromDate != null) {
             LocalDateTime fd = fromDate;
             documents = documents.stream()
@@ -766,6 +796,16 @@ public class DocumentController {
                 .toList();
 
         return ResponseEntity.ok(responses);
+    }
+
+    @GetMapping("/trash")
+    @PreAuthorize("hasAuthority('DOCUMENT_READ')")
+    @SecurityRequirement(name = "bearerAuth")
+    @Operation(summary = "Alias cho danh sách tài liệu đã xóa mềm", description = "Tương thích với Document Dashboard tenant admin")
+    public ResponseEntity<List<DeletedDocumentResponse>> listTrashDocuments(
+            @AuthenticationPrincipal UserPrincipal userDetails
+    ) {
+        return listDeletedDocuments(userDetails);
     }
 
     /**
@@ -1464,6 +1504,21 @@ public class DocumentController {
 
         String fileName = doc.getOriginalFileName() + ".v" + version.getVersionNumber();
         return buildFileResponse(version.getStoragePath(), fileName, doc.getFileType(), false);
+    }
+
+    private boolean matchesKeyword(DocumentEntity doc, String searchTerm) {
+        String title = doc.getDocumentTitle();
+        String originalFileName = doc.getOriginalFileName();
+        String description = doc.getDescription();
+        String fileName = doc.getFileName();
+        return containsIgnoreCase(title, searchTerm)
+                || containsIgnoreCase(originalFileName, searchTerm)
+                || containsIgnoreCase(description, searchTerm)
+                || containsIgnoreCase(fileName, searchTerm);
+    }
+
+    private boolean containsIgnoreCase(String value, String searchTerm) {
+        return value != null && value.toLowerCase().contains(searchTerm);
     }
 
     private Set<DocumentTag> resolveTags(UUID tenantId, List<UUID> tagIds) {

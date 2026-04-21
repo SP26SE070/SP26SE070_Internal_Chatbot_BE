@@ -187,9 +187,12 @@ public class ChatHistoryService {
             throw new IllegalArgumentException("Only assistant messages can be rated");
         }
 
-        if (request.getRating() != null) {
-            message.setRating(request.getRating());
+        Short rating = request.getRating();
+        if (!isBinaryFeedbackRating(rating)) {
+            throw new IllegalArgumentException("Rating must be 5 (helpful) or 1 (not-helpful)");
         }
+
+        message.setRating(rating);
         if (request.getFeedbackText() != null) {
             message.setFeedbackText(request.getFeedbackText());
         }
@@ -203,6 +206,10 @@ public class ChatHistoryService {
     private boolean isAdmin(UserPrincipal user) {
         return "TENANT_ADMIN".equals(user.getRoleCode())
             || "SUPER_ADMIN".equals(user.getRoleCode());
+    }
+
+    private boolean isBinaryFeedbackRating(Short rating) {
+        return rating != null && (rating == 5 || rating == 1);
     }
 
     private ConversationSummaryResponse toSummary(ChatSession session) {
