@@ -7,6 +7,7 @@ import com.gsp26se114.chatbot_rag_be.entity.DocumentEntity;
 import com.gsp26se114.chatbot_rag_be.entity.DocumentTag;
 import com.gsp26se114.chatbot_rag_be.entity.DocumentVersion;
 import com.gsp26se114.chatbot_rag_be.entity.DocumentVisibility;
+import com.gsp26se114.chatbot_rag_be.entity.Department;
 import com.gsp26se114.chatbot_rag_be.entity.RoleEntity;
 import com.gsp26se114.chatbot_rag_be.payload.request.UpdateDocumentAccessRequest;
 import com.gsp26se114.chatbot_rag_be.payload.response.DeletedDocumentResponse;
@@ -776,6 +777,40 @@ public class DocumentController {
         return ResponseEntity.ok(PageResponse.of(responses, page, size));
     }
 
+    @GetMapping("/access-scope/departments")
+    @PreAuthorize("hasAuthority('DOCUMENT_WRITE')")
+    @SecurityRequirement(name = "bearerAuth")
+    @Operation(
+        summary = "Danh sách phòng ban cho Access Scope",
+        description = "Trả về phòng ban active trong tenant để user có DOCUMENT_WRITE chọn phạm vi truy cập khi upload."
+    )
+    public ResponseEntity<List<Map<String, Object>>> listAccessScopeDepartments(
+            @AuthenticationPrincipal UserPrincipal userDetails) {
+        List<Map<String, Object>> departments = departmentRepository
+                .findByTenantIdAndIsActive(userDetails.getTenantId(), true)
+                .stream()
+                .map(this::toAccessScopeDepartment)
+                .toList();
+        return ResponseEntity.ok(departments);
+    }
+
+    @GetMapping("/access-scope/roles")
+    @PreAuthorize("hasAuthority('DOCUMENT_WRITE')")
+    @SecurityRequirement(name = "bearerAuth")
+    @Operation(
+        summary = "Danh sách role cho Access Scope",
+        description = "Trả về role active (fixed + custom) trong tenant để user có DOCUMENT_WRITE chọn phạm vi truy cập khi upload."
+    )
+    public ResponseEntity<List<Map<String, Object>>> listAccessScopeRoles(
+            @AuthenticationPrincipal UserPrincipal userDetails) {
+        List<Map<String, Object>> roles = roleRepository
+                .findAvailableRolesForTenant(userDetails.getTenantId())
+                .stream()
+                .map(this::toAccessScopeRole)
+                .toList();
+        return ResponseEntity.ok(roles);
+    }
+
     @GetMapping("/deleted")
     @PreAuthorize("hasAuthority('DOCUMENT_READ')")
     @SecurityRequirement(name = "bearerAuth")
@@ -1533,5 +1568,23 @@ public class DocumentController {
         }
 
         return new LinkedHashSet<>(tags);
+    }
+
+    private Map<String, Object> toAccessScopeDepartment(Department department) {
+        Map<String, Object> out = new LinkedHashMap<>();
+        out.put("id", department.getId());
+        out.put("code", department.getCode());
+        out.put("name", department.getName());
+        out.put("isActive", department.getIsActive());
+        return out;
+    }
+
+    private Map<String, Object> toAccessScopeRole(RoleEntity role) {
+        Map<String, Object> out = new LinkedHashMap<>();
+        out.put("id", role.getId());
+        out.put("code", role.getCode());
+        out.put("name", role.getName());
+        out.put("isActive", role.getIsActive());
+        return out;
     }
 }
