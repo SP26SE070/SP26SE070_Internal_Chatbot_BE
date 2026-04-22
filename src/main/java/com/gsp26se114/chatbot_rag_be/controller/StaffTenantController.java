@@ -79,6 +79,28 @@ public class StaffTenantController {
         return ResponseEntity.ok(new MessageResponse("Tenant đã được phê duyệt"));
     }
 
+    @PutMapping("/{tenantId}/resend-credentials")
+    @Operation(
+            summary = "Gửi lại thông tin đăng nhập tenant admin",
+            description = "Tạo mật khẩu tạm mới cho tài khoản TENANT_ADMIN của tenant và gửi lại email thông tin đăng nhập."
+    )
+    public ResponseEntity<MessageResponse> resendTenantCredentials(
+            @PathVariable UUID tenantId,
+            @AuthenticationPrincipal UserPrincipal principal) {
+        UUID staffUserId = principal.getId();
+        StaffTenantService.ApprovalResult result =
+                staffTenantService.resendTenantAdminCredentials(tenantId, staffUserId);
+
+        try {
+            emailService.sendTenantApprovalEmail(result.tenant(), result.loginEmail(), result.temporaryPassword());
+        } catch (Exception e) {
+            log.warn("Failed to resend credentials email for tenant {}: {}", tenantId, e.getMessage());
+            throw new RuntimeException("Không thể gửi lại email thông tin đăng nhập. Vui lòng thử lại.");
+        }
+
+        return ResponseEntity.ok(new MessageResponse("Đã gửi lại thông tin đăng nhập cho tenant"));
+    }
+
     @PutMapping("/{tenantId}/suspend")
     @Operation(summary = "Tạm ngưng tenant", description = "Chuyển trạng thái tenant sang SUSPENDED")
     public ResponseEntity<MessageResponse> suspendTenant(@PathVariable UUID tenantId) {

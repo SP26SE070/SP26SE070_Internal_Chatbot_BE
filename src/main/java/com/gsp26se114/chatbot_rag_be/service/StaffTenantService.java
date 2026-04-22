@@ -1,6 +1,7 @@
 package com.gsp26se114.chatbot_rag_be.service;
 
 import com.gsp26se114.chatbot_rag_be.exception.ConflictException;
+import com.gsp26se114.chatbot_rag_be.exception.ForbiddenException;
 import com.gsp26se114.chatbot_rag_be.exception.ResourceNotFoundException;
 import com.gsp26se114.chatbot_rag_be.entity.RoleEntity;
 import com.gsp26se114.chatbot_rag_be.entity.Tenant;
@@ -75,6 +76,35 @@ public class StaffTenantService {
         userRepository.save(tenantAdminUser);
 
         return new ApprovalResult(tenant, loginEmail, temporaryPassword);
+    }
+
+    @Transactional
+    public ApprovalResult resendTenantAdminCredentials(UUID tenantId, UUID staffUserId) {
+        Tenant tenant = tenantRepository.findById(tenantId)
+                .orElseThrow(() -> new ResourceNotFoundException("Tenant not found"));
+
+        if (tenant.getStatus() != TenantStatus.ACTIVE && tenant.getStatus() != TenantStatus.SUSPENDED) {
+            throw new ForbiddenException("Chỉ có thể gửi lại thông tin đăng nhập cho tenant ACTIVE hoặc SUSPENDED");
+        }
+
+        RoleEntity tenantAdminRole = roleRepository.findByCode("TENANT_ADMIN")
+                .orElseThrow(() -> new RuntimeException("Role TENANT_ADMIN không tồn tại"));
+
+        User tenantAdminUser = userRepository
+                .findFirstByTenantIdAndRoleIdAndIsActive(tenant.getId(), tenantAdminRole.getId(), true)
+                .orElseThrow(() -> new ResourceNotFoundException("Không tìm thấy tài khoản TENANT_ADMIN đang hoạt động của tenant"));
+
+        String temporaryPassword = UserUtil.generateRandomPassword();
+        tenantAdminUser.setPassword(passwordEncoder.encode(temporaryPassword));
+        tenantAdminUser.setMustChangePassword(true);
+        tenantAdminUser.setUpdatedAt(LocalDateTime.now());
+        userRepository.save(tenantAdminUser);
+
+        tenant.setReviewedAt(LocalDateTime.now());
+        tenant.setReviewedBy(staffUserId);
+        tenantRepository.save(tenant);
+
+        return new ApprovalResult(tenant, tenantAdminUser.getEmail(), temporaryPassword);
     }
 
     @Transactional

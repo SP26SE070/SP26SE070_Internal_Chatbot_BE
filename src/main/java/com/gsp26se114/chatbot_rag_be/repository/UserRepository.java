@@ -23,6 +23,7 @@ public interface UserRepository extends JpaRepository<User, UUID> {
     List<User> findByTenantIdAndDepartmentId(UUID tenantId, Integer departmentId);
     List<User> findByTenantIdAndDepartmentIdAndIsActive(UUID tenantId, Integer departmentId, Boolean isActive);
     List<User> findByRoleId(Integer roleId);
+    Optional<User> findFirstByTenantIdAndRoleIdAndIsActive(UUID tenantId, Integer roleId, Boolean isActive);
     long countByRoleId(Integer roleId);
     long countByTenantId(UUID tenantId);
 
