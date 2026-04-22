@@ -1,16 +1,27 @@
 package com.gsp26se114.chatbot_rag_be.service;
 
+import com.google.gson.Gson;
+import com.google.gson.JsonArray;
+import com.google.gson.JsonObject;
 import jakarta.mail.MessagingException;
 import jakarta.mail.internet.MimeMessage;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
+import okhttp3.MediaType;
+import okhttp3.OkHttpClient;
+import okhttp3.Request;
+import okhttp3.RequestBody;
+import okhttp3.Response;
+import org.springframework.beans.factory.annotation.Value;
 import org.springframework.mail.javamail.JavaMailSender;
 import org.springframework.mail.javamail.MimeMessageHelper;
 import org.springframework.stereotype.Service;
 import org.thymeleaf.TemplateEngine;
 import org.thymeleaf.context.Context;
 
+import java.io.IOException;
 import java.io.UnsupportedEncodingException;
+import java.time.Duration;
 
 @Slf4j
 @Service
@@ -19,7 +30,27 @@ public class EmailService {
     private final JavaMailSender mailSender;
     private final TemplateEngine templateEngine;
     private final EmailTemplateService emailTemplateService;
-    
+    private static final MediaType JSON_MEDIA_TYPE = MediaType.get("application/json; charset=utf-8");
+    private static final String BREVO_SEND_API_URL = "https://api.brevo.com/v3/smtp/email";
+    private static final Gson GSON = new Gson();
+    private final OkHttpClient httpClient = new OkHttpClient.Builder()
+            .connectTimeout(Duration.ofSeconds(20))
+            .readTimeout(Duration.ofSeconds(20))
+            .writeTimeout(Duration.ofSeconds(20))
+            .build();
+
+    @Value("${MAIL_PROVIDER:SMTP}")
+    private String mailProvider;
+
+    @Value("${BREVO_API_KEY:}")
+    private String brevoApiKey;
+
+    @Value("${app.mail.from:${MAIL_FROM:noreply@chatbot-rag.com}}")
+    private String fromEmail;
+
+    @Value("${app.mail.from-name:${MAIL_FROM_NAME:Chatbot RAG Platform}}")
+    private String fromName;
+
     /**
      * Gửi email tùy chỉnh với subject và body (plain text - backward compatibility)
      * @param to Địa chỉ email người nhận
@@ -37,6 +68,14 @@ public class EmailService {
      * @param htmlContent Nội dung HTML
      */
     public void sendHtmlEmail(String to, String subject, String htmlContent) {
+        if (shouldUseBrevoApi()) {
+            sendHtmlEmailViaBrevoApi(to, subject, htmlContent);
+            return;
+        }
+        sendHtmlEmailViaSmtp(to, subject, htmlContent);
+    }
+
+    private void sendHtmlEmailViaSmtp(String to, String subject, String htmlContent) {
         try {
             MimeMessage message = mailSender.createMimeMessage();
             MimeMessageHelper helper = new MimeMessageHelper(message, true, "UTF-8");
@@ -44,14 +83,58 @@ public class EmailService {
             helper.setTo(to);
             helper.setSubject(subject);
             helper.setText(htmlContent, true); // true = HTML content
-            helper.setFrom("noreply@chatbot-rag.com", "Chatbot RAG Platform");
+            helper.setFrom(fromEmail, fromName);
             
             mailSender.send(message);
-            log.info("HTML email sent successfully to: {}", to);
+            log.info("HTML email sent successfully to: {} (via SMTP)", to);
         } catch (MessagingException | UnsupportedEncodingException e) {
             log.error("Failed to send HTML email to: {}", to, e);
             throw new RuntimeException("Failed to send email", e);
         }
+    }
+
+    private void sendHtmlEmailViaBrevoApi(String to, String subject, String htmlContent) {
+        if (brevoApiKey == null || brevoApiKey.isBlank()) {
+            throw new RuntimeException("BREVO_API_KEY is missing while MAIL_PROVIDER=BREVO_API");
+        }
+
+        JsonObject payload = new JsonObject();
+        JsonObject sender = new JsonObject();
+        sender.addProperty("name", fromName);
+        sender.addProperty("email", fromEmail);
+        payload.add("sender", sender);
+
+        JsonArray toArray = new JsonArray();
+        JsonObject toObj = new JsonObject();
+        toObj.addProperty("email", to);
+        toArray.add(toObj);
+        payload.add("to", toArray);
+        payload.addProperty("subject", subject);
+        payload.addProperty("htmlContent", htmlContent);
+
+        RequestBody requestBody = RequestBody.create(GSON.toJson(payload), JSON_MEDIA_TYPE);
+        Request request = new Request.Builder()
+                .url(BREVO_SEND_API_URL)
+                .addHeader("api-key", brevoApiKey)
+                .addHeader("accept", "application/json")
+                .post(requestBody)
+                .build();
+
+        try (Response response = httpClient.newCall(request).execute()) {
+            if (!response.isSuccessful()) {
+                String body = response.body() != null ? response.body().string() : "";
+                log.error("Brevo API send failed. status={}, body={}", response.code(), body);
+                throw new RuntimeException("Failed to send email via Brevo API (status=" + response.code() + ")");
+            }
+            log.info("HTML email sent successfully to: {} (via Brevo API)", to);
+        } catch (IOException e) {
+            log.error("Failed to call Brevo API for recipient: {}", to, e);
+            throw new RuntimeException("Failed to send email via Brevo API", e);
+        }
+    }
+
+    private boolean shouldUseBrevoApi() {
+        return "BREVO_API".equalsIgnoreCase((mailProvider == null ? "" : mailProvider).trim());
     }
     
     /**
@@ -84,32 +167,18 @@ public class EmailService {
             String department,
             String tenantName) {
         
-        try {
-            Context context = new Context();
-            context.setVariable("employeeName", employeeName);
-            context.setVariable("loginEmail", loginEmail);
-            context.setVariable("temporaryPassword", temporaryPassword);
-            context.setVariable("role", role);
-            context.setVariable("department", department);
-            context.setVariable("tenantName", tenantName);
-            context.setVariable("contactEmail", contactEmail);
-            
-            String htmlContent = templateEngine.process("email/employee-welcome", context);
-            
-            MimeMessage message = mailSender.createMimeMessage();
-            MimeMessageHelper helper = new MimeMessageHelper(message, true, "UTF-8");
-            
-            helper.setTo(contactEmail);
-            helper.setSubject("Chào mừng bạn tham gia " + tenantName);
-            helper.setText(htmlContent, true);
-            helper.setFrom("noreply@chatbot-rag.com", "Chatbot RAG Platform");
-            
-            mailSender.send(message);
-            log.info("Employee welcome email sent successfully to: {}", contactEmail);
-        } catch (MessagingException | UnsupportedEncodingException e) {
-            log.error("Failed to send employee welcome email to: {}", contactEmail, e);
-            throw new RuntimeException("Failed to send welcome email", e);
-        }
+        Context context = new Context();
+        context.setVariable("employeeName", employeeName);
+        context.setVariable("loginEmail", loginEmail);
+        context.setVariable("temporaryPassword", temporaryPassword);
+        context.setVariable("role", role);
+        context.setVariable("department", department);
+        context.setVariable("tenantName", tenantName);
+        context.setVariable("contactEmail", contactEmail);
+
+        String htmlContent = templateEngine.process("email/employee-welcome", context);
+        sendHtmlEmail(contactEmail, "Chào mừng bạn tham gia " + tenantName, htmlContent);
+        log.info("Employee welcome email sent successfully to: {}", contactEmail);
     }
     
     /**
@@ -144,26 +213,12 @@ public class EmailService {
      * @param variables Template variables as Map
      */
     public void sendTemplateMessage(String to, String subject, String templateName, java.util.Map<String, Object> variables) {
-        try {
-            Context context = new Context();
-            variables.forEach(context::setVariable);
-            
-            String htmlContent = templateEngine.process("email/" + templateName, context);
-            
-            MimeMessage message = mailSender.createMimeMessage();
-            MimeMessageHelper helper = new MimeMessageHelper(message, true, "UTF-8");
-            
-            helper.setTo(to);
-            helper.setSubject(subject);
-            helper.setText(htmlContent, true);
-            helper.setFrom("noreply@chatbot-rag.com", "Chatbot RAG Platform");
-            
-            mailSender.send(message);
-            log.info("Template email ({}) sent successfully to: {}", templateName, to);
-        } catch (MessagingException | UnsupportedEncodingException e) {
-            log.error("Failed to send template email ({}) to: {}", templateName, to, e);
-            throw new RuntimeException("Failed to send template email", e);
-        }
+        Context context = new Context();
+        variables.forEach(context::setVariable);
+
+        String htmlContent = templateEngine.process("email/" + templateName, context);
+        sendHtmlEmail(to, subject, htmlContent);
+        log.info("Template email ({}) sent successfully to: {}", templateName, to);
     }
 
     /**
