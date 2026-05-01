@@ -27,6 +27,7 @@ public class UserPrincipal implements UserDetails {
     private UUID tenantId;
     private Integer departmentId; 
     private Integer roleId;
+    private Integer roleLevel;
     private String roleCode;
     private Integer tokenVersion;
     private Collection<? extends GrantedAuthority> authorities;
@@ -78,6 +79,7 @@ public class UserPrincipal implements UserDetails {
                 user.getTenantId(),
                 user.getDepartmentId(),
                 user.getRoleId(),
+                clampRoleLevel(role != null ? role.getLevel() : 4),
                 roleCode,
                 user.getTokenVersion(),
                 authorities
@@ -93,4 +95,9 @@ public class UserPrincipal implements UserDetails {
     @Override public boolean isEnabled() { return true; }
 
     public Integer getTokenVersion() { return tokenVersion; }
+
+    private static int clampRoleLevel(Integer level) {
+        int v = level != null ? level : 4;
+        return Math.max(1, Math.min(5, v));
+    }
 }

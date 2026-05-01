@@ -54,16 +54,17 @@ public class ChatbotConfig {
     @Column(name = "session_timeout_minutes")
     private Integer sessionTimeoutMinutes = 30;
 
-    /** Number of chunks to retrieve from vector DB (default 3) */
+    /** Number of chunks to retrieve from vector DB (default 7) */
     @Column(name = "top_k")
-    private Integer topK = 3;
+    private Integer topK = 7;
 
     /** Similarity threshold for RAG chunk retrieval (default 0.7) */
     @Column(name = "similarity_threshold")
     private Double similarityThreshold = 0.7;
 
     /** Chatbot response mode: BALANCED (default), STRICT, FLEXIBLE */
-    @Column(name = "mode", length = 20)
+    // Use chat_mode to avoid PostgreSQL MODE keyword conflict.
+    @Column(name = "chat_mode", length = 20)
     private String mode = "BALANCED";
 
     @Column(name = "is_active", nullable = false)

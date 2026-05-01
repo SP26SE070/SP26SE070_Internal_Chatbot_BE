@@ -59,6 +59,15 @@ public class Tenant {
     
     @Column(name = "reviewed_by")
     private UUID reviewedBy; // UUID của SUPER_ADMIN đã review
+
+    @Transient
+    private String reviewedByName;
+
+    @Transient
+    private String approvedByName;
+
+    @Transient
+    private String rejectedByName;
     
     private LocalDateTime reviewedAt; // Thời gian approve/reject
     

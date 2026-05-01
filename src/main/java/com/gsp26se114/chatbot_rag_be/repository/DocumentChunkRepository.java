@@ -36,11 +36,13 @@ public interface DocumentChunkRepository extends JpaRepository<DocumentChunkEnti
         FROM document_chunks c
         JOIN documents d ON c.document_id = d.document_id
         WHERE c.tenant_id = :tenantId
+          AND c.minimum_role_level >= :userRoleLevel
                     AND (:categoryId IS NULL OR c.category_id = :categoryId)
                     AND (:tagIds IS NULL OR c.tag_ids @> CAST(:tagIds AS jsonb))
           AND (c.embedding <=> CAST(:queryEmbedding AS vector)) < :maxDistance
           AND (
               d.uploaded_by = CAST(:userId AS uuid)
+              OR :userRoleLevel < c.minimum_role_level
               OR c.visibility = 'COMPANY_WIDE'
               OR (
                   (d.active_version_id IS NULL OR c.version_id = d.active_version_id)
@@ -61,6 +63,7 @@ public interface DocumentChunkRepository extends JpaRepository<DocumentChunkEnti
     List<DocumentChunkEntity> findSimilarChunksWithAccessControl(
             @Param("tenantId") UUID tenantId,
             @Param("userId") UUID userId,
+            @Param("userRoleLevel") Integer userRoleLevel,
             @Param("queryEmbedding") String queryEmbedding,
             @Param("userDepartmentId") Integer userDepartmentId,
             @Param("userRoleId") Integer userRoleId,
@@ -93,14 +96,16 @@ public interface DocumentChunkRepository extends JpaRepository<DocumentChunkEnti
         UPDATE document_chunks
         SET visibility = :visibility,
             accessible_departments = CAST(:accessibleDepartments AS jsonb),
-            accessible_roles = CAST(:accessibleRoles AS jsonb)
+            accessible_roles = CAST(:accessibleRoles AS jsonb),
+            minimum_role_level = :minimumRoleLevel
         WHERE document_id = :documentId
         """, nativeQuery = true)
     void updateChunkAccessControl(
             @Param("documentId") UUID documentId,
             @Param("visibility") String visibility,
             @Param("accessibleDepartments") String accessibleDepartments,
-            @Param("accessibleRoles") String accessibleRoles
+            @Param("accessibleRoles") String accessibleRoles,
+            @Param("minimumRoleLevel") Integer minimumRoleLevel
     );
 
     /**
@@ -114,13 +119,13 @@ public interface DocumentChunkRepository extends JpaRepository<DocumentChunkEnti
             document_chunk_id, document_id, tenant_id, chunk_index, content,
             embedding, embedding_model, token_count,
             visibility, accessible_departments, accessible_roles, owner_department_id,
-            category_id, tag_ids, version_id,
+            category_id, tag_ids, version_id, minimum_role_level,
             created_at
         ) VALUES (
             :id, :documentId, :tenantId, :chunkIndex, :content,
             CAST(:embedding AS vector(768)), :embeddingModel, :tokenCount,
             :visibility, CAST(:accessibleDepartments AS jsonb), CAST(:accessibleRoles AS jsonb), :ownerDepartmentId,
-            :categoryId, CAST(:tagIds AS jsonb), :versionId,
+            :categoryId, CAST(:tagIds AS jsonb), :versionId, :minimumRoleLevel,
             :createdAt
         )
         """, nativeQuery = true)
@@ -140,6 +145,7 @@ public interface DocumentChunkRepository extends JpaRepository<DocumentChunkEnti
                 @Param("tagIds") String tagIds,
             @Param("versionId") UUID versionId,
             @Param("ownerDepartmentId") Integer ownerDepartmentId,
+            @Param("minimumRoleLevel") Integer minimumRoleLevel,
             @Param("createdAt") java.time.LocalDateTime createdAt
     );
 

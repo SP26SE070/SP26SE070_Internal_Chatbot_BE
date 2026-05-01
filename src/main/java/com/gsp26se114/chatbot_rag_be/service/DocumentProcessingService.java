@@ -117,7 +117,10 @@ public class DocumentProcessingService {
 
             // 4. Split into chunks
             log.info("[STEP 4] Splitting text into chunks");
-            List<String> chunks = chunkingService.splitText(text);
+            List<String> chunks = chunkingService.splitText(
+                    text,
+                    document.getFileType(),
+                    document.getOriginalFileName());
             log.info("[STEP 4] ✓ Created {} chunks", chunks.size());
 
             if (chunks.isEmpty()) {
@@ -155,6 +158,7 @@ public class DocumentProcessingService {
                             .ownerDepartmentId(document.getOwnerDepartmentId())
                             .categoryId(document.getCategoryId())
                             .tagIds(extractTagIds(document))
+                            .minimumRoleLevel(document.getMinimumRoleLevel())
                             .createdAt(java.time.LocalDateTime.now())
                             .build();
 
@@ -169,7 +173,9 @@ public class DocumentProcessingService {
                             chunk.getCategoryId(),
                             gson.toJson(chunk.getTagIds()),
                             chunk.getVersionId(),
-                            chunk.getOwnerDepartmentId(), chunk.getCreatedAt()
+                            chunk.getOwnerDepartmentId(),
+                            chunk.getMinimumRoleLevel(),
+                            chunk.getCreatedAt()
                     );
                     chunkRepository.flush();
                     savedCount++;

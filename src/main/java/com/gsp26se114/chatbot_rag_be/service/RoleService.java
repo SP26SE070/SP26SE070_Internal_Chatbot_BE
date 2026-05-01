@@ -89,6 +89,7 @@ public class RoleService {
         RoleEntity role = new RoleEntity();
         role.setCode(request.code());
         role.setName(request.name());
+        role.setLevel(request.level());
         role.setDescription(request.description());
         role.setTenantId(null); // System role by default
         role.setPermissions(request.permissions());
@@ -116,6 +117,9 @@ public class RoleService {
         }
         if (request.description() != null) {
             role.setDescription(request.description());
+        }
+        if (request.level() != null) {
+            role.setLevel(request.level());
         }
         if (request.permissions() != null) {
             role.setPermissions(request.permissions());
@@ -170,6 +174,7 @@ public class RoleService {
                 .id(role.getId())
                 .code(role.getCode())
                 .name(role.getName())
+                .level(role.getLevel())
                 .description(role.getDescription())
                 .tenantId(role.getTenantId())
                 .tenantName(tenantName)

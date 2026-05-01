@@ -21,6 +21,7 @@ public class RoleResponse {
     private Integer id;
     private String code;
     private String name;
+    private Integer level;
     private String description;
     private UUID tenantId;
     private String tenantName; // For display purposes

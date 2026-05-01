@@ -88,6 +88,7 @@ CREATE TABLE roles (
     role_id SERIAL PRIMARY KEY,
     code VARCHAR(50) NOT NULL,
     name VARCHAR(100) NOT NULL,
+    level INTEGER NOT NULL CHECK (level BETWEEN 1 AND 5),
     description VARCHAR(500),
     tenant_id UUID REFERENCES tenants(tenant_id) ON DELETE CASCADE,
     role_type VARCHAR(20) NOT NULL DEFAULT 'FIXED',
@@ -135,6 +136,7 @@ CREATE TABLE users (
     token_expiry TIMESTAMP,
     password_reset_session_token VARCHAR(255),
     password_reset_session_expiry TIMESTAMP,
+    token_version INTEGER NOT NULL DEFAULT 1,
     must_change_password BOOLEAN DEFAULT FALSE NOT NULL,
     is_active BOOLEAN DEFAULT TRUE NOT NULL,
     created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP NOT NULL,
@@ -245,6 +247,7 @@ CREATE TABLE IF NOT EXISTS documents (
     
     -- Access Control
     visibility VARCHAR(30) NOT NULL DEFAULT 'COMPANY_WIDE',
+    minimum_role_level INTEGER NOT NULL DEFAULT 4 CHECK (minimum_role_level BETWEEN 1 AND 5),
     owner_department_id INTEGER REFERENCES departments(department_id),
     accessible_departments JSONB,
     accessible_roles JSONB,
@@ -301,6 +304,8 @@ CREATE TABLE IF NOT EXISTS document_chunks (
     accessible_departments JSONB,
     accessible_roles JSONB,
     owner_department_id INTEGER REFERENCES departments(department_id),
+
+    minimum_role_level INTEGER NOT NULL DEFAULT 4 CHECK (minimum_role_level BETWEEN 1 AND 5),
     
     created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
     
@@ -398,6 +403,7 @@ CREATE TABLE subscriptions (
     -- Trial Information
     is_trial BOOLEAN NOT NULL DEFAULT FALSE,
     trial_end_date TIMESTAMP,
+    grace_period_days INTEGER DEFAULT 7,
 
     -- Usage Limits (snapshot from plan, may be overridden)
     max_users INTEGER,
@@ -660,6 +666,9 @@ CREATE TABLE chatbot_configs (
     max_messages_per_day INTEGER DEFAULT 100,         -- Mỗi user/ngày
     max_message_length INTEGER DEFAULT 500,           -- Max ký tự per message
     session_timeout_minutes INTEGER DEFAULT 30,       -- Auto end session sau bao lâu
+    top_k INTEGER DEFAULT 7,
+    similarity_threshold DOUBLE PRECISION DEFAULT 0.7,
+    chat_mode VARCHAR(20) DEFAULT 'BALANCED',
 
     is_active BOOLEAN DEFAULT TRUE NOT NULL,
     updated_by UUID REFERENCES users(user_id),
@@ -876,17 +885,17 @@ INSERT INTO tenants (
 -- User-specific permissions are stored in user_permissions table
 -------------------------------------------------------
 -- System Roles (tenant_id = NULL, role_type = 'SYSTEM')
-INSERT INTO roles (code, name, description, tenant_id, role_type) VALUES
-('SUPER_ADMIN', 'Super Administrator', 'System administrator with full access to platform', NULL, 'SYSTEM'),
-('STAFF', 'Platform Staff', 'Staff member who approves tenant registrations', NULL, 'SYSTEM');
+INSERT INTO roles (code, name, level, description, tenant_id, role_type) VALUES
+('SUPER_ADMIN', 'Super Administrator', 1, 'System administrator with full access to platform', NULL, 'SYSTEM'),
+('STAFF', 'Platform Staff', 2, 'Platform staff member', NULL, 'SYSTEM');
 
 -- Tenant Fixed Roles (tenant_id = NULL, role_type = 'FIXED')
 -- Note: TENANT_ADMIN can manage all organization features including documents
 --       EMPLOYEE has basic access and can use chatbot
 --       TENANT_ADMIN can grant additional permissions to specific users via user_permissions table
-INSERT INTO roles (code, name, description, tenant_id, role_type) VALUES
-('TENANT_ADMIN', 'Tenant Administrator', 'Organization administrator with full tenant access', NULL, 'FIXED'),
-('EMPLOYEE', 'Employee', 'Regular employee with basic access', NULL, 'FIXED');
+INSERT INTO roles (code, name, level, description, tenant_id, role_type) VALUES
+('TENANT_ADMIN', 'Tenant Administrator', 2, 'Organization administrator with full tenant access', NULL, 'FIXED'),
+('EMPLOYEE', 'Employee', 4, 'Regular employee with basic access', NULL, 'FIXED');
 
 -------------------------------------------------------
 -- 4. SEED DATA: DEPARTMENTS (FPT University)
@@ -1468,7 +1477,7 @@ INSERT INTO document_categories (category_id, tenant_id, parent_id, name, code, 
 -------------------------------------------------------
 INSERT INTO documents (
     document_id, file_name, original_file_name, file_type, file_size,
-    storage_path, tenant_id, description, visibility,
+    storage_path, tenant_id, description, visibility, minimum_role_level,
     owner_department_id, accessible_departments, accessible_roles,
     uploaded_by,
     uploaded_at, embedding_status, is_active,
@@ -1481,7 +1490,7 @@ INSERT INTO documents (
  'tenant-550e8400-e29b-41d4-a716-446655440000/documents/noi_quy_cong_ty_2026.pdf',
  '550e8400-e29b-41d4-a716-446655440000',
  'Nội quy lao động, quy định về giờ giấc, ứng xử, trang phục và kỷ luật',
- 'COMPANY_WIDE',
+ 'COMPANY_WIDE', 4,
  NULL, '[]'::jsonb, '[]'::jsonb,
  (SELECT user_id FROM users WHERE email = 'admin@fpt.com'),
  CURRENT_TIMESTAMP - interval '8 days',
@@ -1494,7 +1503,7 @@ INSERT INTO documents (
  'tenant-550e8400-e29b-41d4-a716-446655440000/documents/huong_dan_onboarding.pdf',
  '550e8400-e29b-41d4-a716-446655440000',
  'Hướng dẫn từng bước cho nhân viên mới: đăng ký hệ thống, làm quen môi trường làm việc, các đầu mối liên hệ',
- 'COMPANY_WIDE',
+ 'COMPANY_WIDE', 4,
  NULL, '[]'::jsonb, '[]'::jsonb,
  (SELECT user_id FROM users WHERE email = 'admin@fpt.com'),
  CURRENT_TIMESTAMP - interval '7 days',
@@ -1507,7 +1516,7 @@ INSERT INTO documents (
  'tenant-550e8400-e29b-41d4-a716-446655440000/documents/chinh_sach_nghi_phep_2026.pdf',
  '550e8400-e29b-41d4-a716-446655440000',
  'Quy định ngày phép năm, phép ốm, phép thai sản và các loại phép đặc biệt',
- 'COMPANY_WIDE',
+ 'COMPANY_WIDE', 4,
  NULL, '[]'::jsonb, '[]'::jsonb,
  (SELECT user_id FROM users WHERE email = 'admin@fpt.com'),
  CURRENT_TIMESTAMP - interval '6 days',
@@ -1520,7 +1529,7 @@ INSERT INTO documents (
  'tenant-550e8400-e29b-41d4-a716-446655440000/documents/system_architecture_v2.pdf',
  '550e8400-e29b-41d4-a716-446655440000',
  'Tài liệu kiến trúc hệ thống nội bộ phiên bản 2.0: microservices, database schema, API contracts',
- 'SPECIFIC_DEPARTMENTS',
+ 'SPECIFIC_DEPARTMENTS', 3,
  (SELECT department_id FROM departments WHERE tenant_id = '550e8400-e29b-41d4-a716-446655440000' AND code = 'DEV'),
  (SELECT jsonb_agg(department_id) FROM departments WHERE tenant_id = '550e8400-e29b-41d4-a716-446655440000' AND code = 'DEV'),
  '[]'::jsonb,
@@ -1535,7 +1544,7 @@ INSERT INTO documents (
  'tenant-550e8400-e29b-41d4-a716-446655440000/documents/coding_standards_java.pdf',
  '550e8400-e29b-41d4-a716-446655440000',
  'Tiêu chuẩn code Java và Spring Boot: đặt tên, cấu trúc package, xử lý lỗi, logging',
- 'COMPANY_WIDE',
+ 'COMPANY_WIDE', 4,
  NULL, '[]'::jsonb, '[]'::jsonb,
  (SELECT user_id FROM users WHERE email = 'admin@fpt.com'),
  CURRENT_TIMESTAMP - interval '4 days',
@@ -1620,3 +1629,4 @@ INSERT INTO chat_messages (
  NULL,
  'ASSISTANT', 'Ưu tiên clean architecture, response chuẩn hóa và log correlation-id.', '[]'::jsonb, 280,
  NULL, NULL, NULL, CURRENT_TIMESTAMP - interval '7 hours');
+

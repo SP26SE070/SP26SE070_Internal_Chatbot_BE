@@ -13,6 +13,7 @@ import com.gsp26se114.chatbot_rag_be.repository.UserRepository;
 import com.gsp26se114.chatbot_rag_be.util.UserUtil;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
+import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
@@ -29,6 +30,7 @@ public class StaffTenantService {
     private final UserRepository userRepository;
     private final RoleRepository roleRepository;
     private final PasswordEncoder passwordEncoder;
+    private final JdbcTemplate jdbcTemplate;
 
     public record ApprovalResult(
             Tenant tenant,
@@ -147,6 +149,48 @@ public class StaffTenantService {
 
         tenantRepository.save(tenant);
         return tenant;
+    }
+
+    @Transactional
+    public void hardDeleteTenant(UUID tenantId) {
+        Tenant tenant = tenantRepository.findById(tenantId)
+                .orElseThrow(() -> new ResourceNotFoundException("Không tìm thấy tenant"));
+        purgeTenantDependencies(tenantId);
+        tenantRepository.delete(tenant);
+    }
+
+    private void purgeTenantDependencies(UUID tenantId) {
+        // Delete high-risk FK dependencies first to avoid hard delete failures in dev.
+        safeDeleteByTenant("DELETE FROM invoices WHERE tenant_id = ?", tenantId);
+        safeDeleteByTenant("DELETE FROM payment_transactions WHERE tenant_id = ?", tenantId);
+        safeDeleteByTenant("DELETE FROM renewal_reminders WHERE tenant_id = ?", tenantId);
+        safeDeleteByTenant("DELETE FROM notifications WHERE tenant_id = ?", tenantId);
+        safeDeleteByTenant("DELETE FROM audit_logs WHERE tenant_id = ?", tenantId);
+        safeDeleteByTenant("DELETE FROM user_permission_grants WHERE tenant_id = ?", tenantId);
+        safeDeleteByTenant("DELETE FROM chat_messages WHERE tenant_id = ?", tenantId);
+        safeDeleteByTenant("DELETE FROM chat_sessions WHERE tenant_id = ?", tenantId);
+        safeDeleteByTenant("DELETE FROM chatbot_configs WHERE tenant_id = ?", tenantId);
+        safeDeleteByTenant("DELETE FROM document_summaries WHERE tenant_id = ?", tenantId);
+        safeDeleteByTenant("DELETE FROM document_versions WHERE tenant_id = ?", tenantId);
+        safeDeleteByTenant("DELETE FROM document_chunks WHERE tenant_id = ?", tenantId);
+        safeDeleteByTenant("DELETE FROM document_tag_mappings WHERE document_id IN (SELECT document_id FROM documents WHERE tenant_id = ?)", tenantId);
+        safeDeleteByTenant("DELETE FROM documents WHERE tenant_id = ?", tenantId);
+        safeDeleteByTenant("DELETE FROM document_tags WHERE tenant_id = ?", tenantId);
+        safeDeleteByTenant("DELETE FROM document_categories WHERE tenant_id = ?", tenantId);
+        safeDeleteByTenant("DELETE FROM onboarding_progress WHERE tenant_id = ?", tenantId);
+        safeDeleteByTenant("DELETE FROM onboarding_modules WHERE tenant_id = ?", tenantId);
+        safeDeleteByTenant("DELETE FROM departments WHERE tenant_id = ?", tenantId);
+        safeDeleteByTenant("DELETE FROM roles WHERE tenant_id = ?", tenantId);
+        safeDeleteByTenant("DELETE FROM users WHERE tenant_id = ?", tenantId);
+        safeDeleteByTenant("DELETE FROM subscriptions WHERE tenant_id = ?", tenantId);
+    }
+
+    private void safeDeleteByTenant(String sql, UUID tenantId) {
+        try {
+            jdbcTemplate.update(sql, tenantId);
+        } catch (Exception ex) {
+            log.debug("Skip hard-delete cleanup for SQL [{}]: {}", sql, ex.getMessage());
+        }
     }
 
     private String generateTenantAdminLoginEmail(String tenantName) {

@@ -134,7 +134,9 @@ public class EmailService {
     }
 
     private boolean shouldUseBrevoApi() {
-        return "BREVO_API".equalsIgnoreCase((mailProvider == null ? "" : mailProvider).trim());
+        String raw = mailProvider == null ? "" : mailProvider.trim();
+        String normalized = raw.replace("\"", "").replace("'", "").trim();
+        return "BREVO_API".equalsIgnoreCase(normalized) || "BREVO".equalsIgnoreCase(normalized);
     }
     
     /**

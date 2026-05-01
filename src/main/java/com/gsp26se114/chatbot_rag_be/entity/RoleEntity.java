@@ -27,6 +27,9 @@ public class RoleEntity {
     @Column(nullable = false, length = 100)
     private String name; // Super Admin, Platform Staff, Tenant Admin, Employee
 
+    @Column(name = "level", nullable = false)
+    private Integer level = 4;
+
     @Column(length = 500)
     private String description;
 

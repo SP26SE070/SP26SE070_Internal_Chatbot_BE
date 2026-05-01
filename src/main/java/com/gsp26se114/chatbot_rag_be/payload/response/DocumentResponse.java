@@ -27,6 +27,7 @@ public class DocumentResponse {
     private String description;
     private List<DocumentTagResponse> tags;
     private DocumentVisibility visibility;
+    private Integer minimumRoleLevel;
     private List<Integer> accessibleDepartments;
     private List<Integer> accessibleRoles;
     private String embeddingStatus;

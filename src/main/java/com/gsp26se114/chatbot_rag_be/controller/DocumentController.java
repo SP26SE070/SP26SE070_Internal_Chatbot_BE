@@ -63,6 +63,7 @@ import java.util.Map;
 import java.util.Set;
 import java.util.UUID;
 import java.net.URLConnection;
+import java.util.Optional;
 
 /**
  * Controller for document upload and management in Document Dashboard
@@ -100,11 +101,43 @@ public class DocumentController {
             "text/csv"
     );
 
-    private static final long MAX_FILE_SIZE = 50 * 1024 * 1024; // 50MB
+    /** Per-file-type size limits (bytes). */
+    private static final Map<String, Long> MAX_FILE_SIZE_BY_CONTENT_TYPE = Map.of(
+            "application/pdf", 30L * 1024 * 1024, // 30MB
+            "application/vnd.openxmlformats-officedocument.wordprocessingml.document", 20L * 1024 * 1024, // 20MB
+            "application/vnd.openxmlformats-officedocument.presentationml.presentation", 30L * 1024 * 1024, // 30MB
+            "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet", 15L * 1024 * 1024, // 15MB
+            "text/csv", 15L * 1024 * 1024, // 15MB
+            "text/plain", 5L * 1024 * 1024, // 5MB
+            "text/markdown", 5L * 1024 * 1024 // 5MB
+    );
 
     private boolean isTenantAdmin(UserPrincipal userDetails) {
         return userDetails.getAuthorities().stream()
                 .anyMatch(a -> "ROLE_TENANT_ADMIN".equals(a.getAuthority()));
+    }
+
+    private static String formatMb(long bytes) {
+        return (bytes / (1024 * 1024)) + "MB";
+    }
+
+    private static String getMaxSizePolicyMessage() {
+        return "PDF/PPTX: 30MB, DOCX: 20MB, XLSX/CSV: 15MB, TXT/MD: 5MB";
+    }
+
+    private Optional<String> validateUploadFile(MultipartFile file) {
+        if (file.isEmpty()) {
+            return Optional.of("File is empty");
+        }
+        String contentType = file.getContentType();
+        if (!ALLOWED_CONTENT_TYPES.contains(contentType)) {
+            return Optional.of("Unsupported file type. Allowed: PDF, DOCX, XLSX, PPTX, TXT, MD, CSV");
+        }
+        long maxAllowed = MAX_FILE_SIZE_BY_CONTENT_TYPE.getOrDefault(contentType, 10L * 1024 * 1024);
+        if (file.getSize() > maxAllowed) {
+            return Optional.of("File size exceeds limit for this type (" + formatMb(maxAllowed) + "). Policy: " + getMaxSizePolicyMessage());
+        }
+        return Optional.empty();
     }
 
     private boolean canManageDocument(UserPrincipal userDetails, DocumentEntity document) {
@@ -115,6 +148,16 @@ public class DocumentController {
     }
 
     private boolean canReadDocument(UserPrincipal userDetails, DocumentEntity doc) {
+        if (!doc.isAccessibleByLevel(userDetails.getRoleLevel())) {
+            return false;
+        }
+        // Role hierarchy override: smaller level number means higher privilege (1 highest).
+        // Example: CEO level 1 can read docs scoped for Employee level 4.
+        if (userDetails.getRoleLevel() != null
+                && doc.getMinimumRoleLevel() != null
+                && userDetails.getRoleLevel() < doc.getMinimumRoleLevel()) {
+            return true;
+        }
         if (isTenantAdmin(userDetails)) {
             return true;
         }
@@ -343,6 +386,7 @@ public class DocumentController {
                         .sorted((left, right) -> left.getName().compareToIgnoreCase(right.getName()))
                         .toList())
                 .visibility(doc.getVisibility())
+                .minimumRoleLevel(doc.getMinimumRoleLevel())
                 .accessibleDepartments(doc.getAccessibleDepartments())
                 .accessibleRoles(doc.getAccessibleRoles())
                 .embeddingStatus(doc.getEmbeddingStatus())
@@ -387,7 +431,8 @@ public class DocumentController {
         description = """
             Upload file lên MinIO và kích hoạt embedding tự động (async).
 
-            **File hỗ trợ:** PDF, DOCX, XLSX, PPTX, TXT, MD, CSV (tối đa 50MB)
+            **File hỗ trợ:** PDF, DOCX, XLSX, PPTX, TXT, MD, CSV
+            **Giới hạn theo loại:** PDF/PPTX 30MB, DOCX 20MB, XLSX/CSV 15MB, TXT/MD 5MB
 
             **visibility:**
             - `COMPANY_WIDE` — tất cả nhân viên trong tenant đều xài được (không cần accessibleDepartments / accessibleRoles)
@@ -399,11 +444,11 @@ public class DocumentController {
     )
     @ApiResponses({
         @ApiResponse(responseCode = "200", description = "Upload thành công, trả về DocumentResponse"),
-        @ApiResponse(responseCode = "400", description = "File rỗng / vượt 50MB / loại file không hỗ trợ / visibility không hợp lệ"),
+        @ApiResponse(responseCode = "400", description = "File rỗng / vượt giới hạn theo loại / loại file không hỗ trợ / visibility không hợp lệ"),
         @ApiResponse(responseCode = "500", description = "Lỗi server khi upload")
     })
     public ResponseEntity<?> uploadDocument(
-            @Parameter(description = "File cần upload (PDF/DOCX/XLSX/PPTX/TXT/MD/CSV, tối đa 50MB)", required = true)
+            @Parameter(description = "File cần upload (PDF/DOCX/XLSX/PPTX/TXT/MD/CSV). Size policy: PDF/PPTX 30MB, DOCX 20MB, XLSX/CSV 15MB, TXT/MD 5MB", required = true)
             @RequestPart("file") MultipartFile file,
             @Parameter(description = "UUID của document category (tùy chọn, lấy từ API /categories)")
             @RequestParam(value = "categoryId", required = false) UUID categoryId,
@@ -419,24 +464,17 @@ public class DocumentController {
             @RequestParam(value = "accessibleDepartments", required = false) List<Integer> accessibleDepartments,
             @Parameter(description = "Danh sách role ID được xem (bắt buộc khi visibility = SPECIFIC_ROLES)")
             @RequestParam(value = "accessibleRoles", required = false) List<Integer> accessibleRoles,
+            @Parameter(description = "Ngưỡng phân cấp (1–5). User level X chỉ thấy khi minimumRoleLevel >= X. 1=Executive … 5=Intern/External")
+            @RequestParam(value = "minimumRoleLevel", defaultValue = "4") Integer minimumRoleLevel,
             @AuthenticationPrincipal UserPrincipal userDetails
     ) {
         try {
             // Validate file
-            if (file.isEmpty()) {
-                return ResponseEntity.badRequest().body("File is empty");
+            Optional<String> validationError = validateUploadFile(file);
+            if (validationError.isPresent()) {
+                return ResponseEntity.badRequest().body(validationError.get());
             }
-
-            if (file.getSize() > MAX_FILE_SIZE) {
-                return ResponseEntity.badRequest().body("File size exceeds 50MB limit");
-            }
-
             String contentType = file.getContentType();
-            if (!ALLOWED_CONTENT_TYPES.contains(contentType)) {
-                return ResponseEntity.badRequest().body(
-                    "Unsupported file type. Allowed: PDF, DOCX, XLSX, PPTX, TXT, MD, CSV"
-                );
-            }
 
             // Validate visibility settings
             if (visibility == DocumentVisibility.COMPANY_WIDE) {
@@ -475,6 +513,9 @@ public class DocumentController {
                         "Khi chọn SPECIFIC_DEPARTMENTS_AND_ROLES, bạn phải chỉ định ít nhất 1 role trong accessibleRoles"
                     );
                 }
+            }
+            if (minimumRoleLevel == null || minimumRoleLevel < 1 || minimumRoleLevel > 5) {
+                return ResponseEntity.badRequest().body("minimumRoleLevel phải trong khoảng 1-5");
             }
 
             log.info("Uploading document: {} ({})", file.getOriginalFilename(), contentType);
@@ -524,6 +565,7 @@ public class DocumentController {
             document.setDescription(description);
             document.setTags(tags);
             document.setVisibility(visibility);
+            document.setMinimumRoleLevel(minimumRoleLevel);
             
             // Force null for COMPANY_WIDE to ensure data integrity
             if (visibility == DocumentVisibility.COMPANY_WIDE) {
@@ -720,6 +762,7 @@ public class DocumentController {
                 : documentRepository.findAccessibleDocuments(
                         userDetails.getTenantId(),
                         userDetails.getId(),
+                        userDetails.getRoleLevel(),
                         userDetails.getDepartmentId(),
                         userDetails.getRoleId()
                 );
@@ -986,6 +1029,7 @@ public class DocumentController {
 
         // Update document access control
         document.setVisibility(request.visibility());
+        document.setMinimumRoleLevel(request.minimumRoleLevel());
         
         // Force null for COMPANY_WIDE to ensure data integrity
         if (request.visibility() == DocumentVisibility.COMPANY_WIDE) {
@@ -1026,7 +1070,8 @@ public class DocumentController {
                     id,
                     request.visibility().name(),
                     accessibleDepartmentsJson,
-                    accessibleRolesJson
+                    accessibleRolesJson,
+                    request.minimumRoleLevel()
             );
 
             log.info("Updated access control for document {} and all its chunks. New visibility: {}", 
@@ -1187,7 +1232,7 @@ public class DocumentController {
     )
     @ApiResponses({
         @ApiResponse(responseCode = "200", description = "Upload phiên bản mới thành công, trả về DocumentResponse với version_number mới"),
-        @ApiResponse(responseCode = "400", description = "File rỗng / vượt 50MB / loại file không hỗ trợ"),
+        @ApiResponse(responseCode = "400", description = "File rỗng / vượt giới hạn theo loại / loại file không hỗ trợ"),
         @ApiResponse(responseCode = "403", description = "Tài liệu thuộc tenant khác"),
         @ApiResponse(responseCode = "404", description = "Không tìm thấy tài liệu")
     })
@@ -1219,10 +1264,9 @@ public class DocumentController {
                 return ResponseEntity.badRequest().body("Tài liệu đã bị xóa mềm, không thể upload phiên bản mới");
             }
 
-            if (file.isEmpty()) return ResponseEntity.badRequest().body("File rỗng");
-            if (file.getSize() > MAX_FILE_SIZE) return ResponseEntity.badRequest().body("File vượt quá 50MB");
-            if (!ALLOWED_CONTENT_TYPES.contains(file.getContentType())) {
-                return ResponseEntity.badRequest().body("Loại file không được hỗ trợ");
+            Optional<String> validationError = validateUploadFile(file);
+            if (validationError.isPresent()) {
+                return ResponseEntity.badRequest().body(validationError.get());
             }
 
                 // --- 2. Upload file mới lên MinIO ---
@@ -1584,6 +1628,7 @@ public class DocumentController {
         out.put("id", role.getId());
         out.put("code", role.getCode());
         out.put("name", role.getName());
+        out.put("level", role.getLevel());
         out.put("isActive", role.getIsActive());
         return out;
     }

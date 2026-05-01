@@ -32,6 +32,7 @@ public interface DocumentRepository extends JpaRepository<DocumentEntity, UUID> 
         SELECT * FROM documents 
         WHERE tenant_id = :tenantId 
         AND is_active = true
+        AND minimum_role_level >= :userRoleLevel
         AND (
             uploaded_by = CAST(:userId AS uuid)
             OR visibility = 'COMPANY_WIDE'
@@ -48,6 +49,7 @@ public interface DocumentRepository extends JpaRepository<DocumentEntity, UUID> 
     List<DocumentEntity> findAccessibleDocuments(
         @Param("tenantId") UUID tenantId,
         @Param("userId") UUID userId,
+        @Param("userRoleLevel") Integer userRoleLevel,
         @Param("userDepartmentId") Integer userDepartmentId,
         @Param("userRoleId") Integer userRoleId
     );
@@ -80,6 +82,7 @@ public interface DocumentRepository extends JpaRepository<DocumentEntity, UUID> 
         SELECT * FROM documents
         WHERE tenant_id = :tenantId
         AND is_active = true
+        AND minimum_role_level >= :userRoleLevel
         AND (
             uploaded_by = CAST(:userId AS uuid)
             OR visibility = 'COMPANY_WIDE'
@@ -101,6 +104,7 @@ public interface DocumentRepository extends JpaRepository<DocumentEntity, UUID> 
     List<DocumentEntity> findAccessibleDocumentsWithFilters(
         @Param("tenantId") UUID tenantId,
         @Param("userId") UUID userId,
+        @Param("userRoleLevel") Integer userRoleLevel,
         @Param("userDepartmentId") Integer userDepartmentId,
         @Param("userRoleId") Integer userRoleId,
         @Param("keyword") String keyword,

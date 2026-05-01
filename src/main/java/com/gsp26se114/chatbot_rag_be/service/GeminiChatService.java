@@ -23,6 +23,30 @@ public class GeminiChatService {
 
     public record AnswerWithTokens(String answer, int tokensUsed) {}
 
+    /** Hướng dẫn định dạng & an toàn cho câu trả lời có tài liệu (RAG). */
+    private static final String RESPONSE_GUIDELINES_RAG = """
+            # HƯỚNG DẪN TRẢ LỜI
+            1. Trực tiếp và chính xác: ưu tiên câu ngắn, đi thẳng vấn đề; dùng số liệu/mốc thời gian cụ thể lấy từ tài liệu khi có.
+            2. Cấu trúc: dùng bullet rõ ràng; với quy trình nhiều bước hoặc nhiều nhánh điều kiện, bắt buộc dùng danh sách đa tầng (nested): mỗi ý bổ trợ/điều kiện con thụt 2 khoảng trắng so với dòng cha; không gom tất cả thành một danh sách phẳng; không dùng định dạng in đậm.
+            3. Trích dẫn: nếu cần nguồn thì gom ngắn gọn ở cuối; không chèn nguồn vào từng dòng nội dung.
+            4. Đầy đủ: với quy trình, kiểm tra điều kiện kèm theo (hạn, cấp phê duyệt, ngoại lệ) trong tài liệu; nếu tài liệu không nói thì nêu rõ là không có trong tài liệu.
+            5. Nếu câu hỏi dạng đúng/sai: mở đầu bằng kết luận ngắn gọn "Đúng." hoặc "Không đúng." (hoặc "Đúng."/"Sai."), sau đó tối đa 1 câu giải thích trọng tâm.
+            6. Tuyệt đối không hiển thị metadata kỹ thuật trong câu trả lời (ví dụ: chunk, index, vector, embedding, id nội bộ).
+            7. Không lặp lại tên file trong từng bullet nội dung; nếu cần nguồn thì gom 1 dòng nguồn ngắn ở cuối.
+            8. Không rút gọn URL; luôn in đầy đủ link (ví dụ https://...) để người dùng bấm/copy được nguyên vẹn.
+            9. Nếu câu hỏi về kênh phản ánh ẩn danh và context có thông tin tương ứng, phải liệt kê đầy đủ 2 hình thức:
+               - Link trực tuyến: ethicsreporting.fpt-software.com
+               - Gửi thư ẩn danh: Bộ phận tuân thủ (LRC) - FPT Software, Tòa nhà FPT Cầu Giấy, Phố Duy Tân, Hà Nội.
+            10. Khi trả lời dựa trên tài liệu, luôn trích xuất đầy đủ các điều kiện pháp lý đi kèm: bộ phận phê duyệt cụ thể (vd: LRC, ISM), yêu cầu phê duyệt bằng văn bản, và giới hạn thời gian/gia hạn (vd: gia hạn hằng năm). Không được bỏ sót các điều kiện này nếu context có nêu.
+            11. Khi câu hỏi có nhiều vế, bắt buộc tách và trả lời đầy đủ từng vế; không được trả lời nửa chừng hay bỏ sót vế nào.
+            12. Tránh lặp ý: không nhắc lại cùng một nội dung ở nhiều bullet cùng cấp; nếu cần chi tiết hóa thì đưa chi tiết vào bullet con (thụt dòng) thay vì lặp lại câu cha.
+            13. Trích dẫn nguồn: tối đa một dòng nguồn ngắn ở cuối câu trả lời (nếu cần); không chèn nhiều nguồn rải rác.
+
+            # QUYỀN TRUY CẬP
+            Mỗi đoạn trong "THÔNG TIN TỪ TÀI LIỆU" có dòng đầu `[ACCESS: GRANTED | ...]` — đó là nội dung hệ thống đã xác nhận người dùng được phép dùng.
+            Chỉ trả lời dựa trên các đoạn đó; không suy diễn hay bịa nội dung của tài liệu/mục không xuất hiện trong context.
+            """;
+
     @Value("${spring.ai.google.genai.api-key}")
     private String apiKey;
 
@@ -54,7 +78,7 @@ public class GeminiChatService {
 
         try {
             String prompt = buildPrompt(context, question, history);
-            return callGeminiAPI(prompt);
+            return callGeminiAPI(prompt, 2048);
         } catch (Exception e) {
             log.error("Failed to generate answer with Gemini", e);
             throw new RuntimeException("Failed to generate answer: " + e.getMessage(), e);
@@ -79,37 +103,38 @@ public class GeminiChatService {
         }
         String historyText = historyBlock.toString();
 
-        // If no context (no documents), answer with general knowledge
+        // If no context, the controller should block and return "no_match".
+        // Keep a defensive fallback to avoid any external-knowledge answer.
         if (context == null || context.isBlank()) {
             return """
-                    Bạn là trợ lý AI thông minh của hệ thống chatbot doanh nghiệp FPT Software.
-                    Hãy trả lời câu hỏi của người dùng dựa trên kiến thức chung của bạn.
-
-                    QUY TẮC:
-                    - Luôn trả lời bằng TIẾNG VIỆT, trừ khi người dùng hỏi bằng tiếng Anh.
-                    - Trả lời chính xác, hữu ích, ngắn gọn và rõ ràng.
-                    - Nếu câu hỏi liên quan đến chính sách nội bộ cụ thể của công ty, hãy cho biết bạn không có thông tin chi tiết về chính sách đó và khuyên người dùng liên hệ với bộ phận HR hoặc quản lý trực tiếp.
-                    - Không đề cập đến việc tải tài liệu lên hệ thống.
-
-                    %sCÂU HỎI HIỆN TẠI: %s
-
-                    TRẢ LỜI:
-                    """.formatted(historyText, question);
+                    Bạn là trợ lý AI nội bộ.
+                    Không có thông tin tài liệu trong context cho câu hỏi hiện tại.
+                    Hãy trả lời đúng 1 câu sau và không thêm gì:
+                    Xin lỗi, tôi không tìm thấy thông tin liên quan đến câu hỏi của bạn trong tài liệu nội bộ.
+                    """;
         }
         
         // With context from documents - answer based on RAG
         return """
-                Bạn là trợ lý AI thông minh của hệ thống chatbot doanh nghiệp.
-                Hãy trả lời câu hỏi của người dùng dựa trên kiến thức chung và thông tin từ tài liệu công ty bên dưới (nếu có).
+                Bạn là chuyên gia về quy định nội bộ.
+                Hãy trả lời câu hỏi của người dùng chỉ dựa trên thông tin từ tài liệu công ty bên dưới.
+                Tuyệt đối không dùng kiến thức ngoài tài liệu/context được cung cấp.
 
-                QUY TẮC BẮT BUỘC:
+                QUY TẮC NGÔN NGỮ:
                 - Luôn trả lời bằng TIẾNG VIỆT, trừ khi người dùng hỏi bằng tiếng Anh.
-                - ƯU TIÊN trích xuất và sử dụng thông tin từ tài liệu công ty bên dưới nếu có liên quan.
-                - Nếu tài liệu có thông tin liên quan → trích dẫn chính xác.
-                - Nếu tài liệu KHÔNG có thông tin liên quan → trả lời dựa trên kiến thức chung của bạn.
-                - KHÔNG nói "không tìm thấy trong tài liệu" — hãy luôn cố gắng đưa ra câu trả lời hữu ích.
-                - Trả lời ngắn gọn, rõ ràng, trực tiếp vào vấn đề.
+
+                %s
+
+                QUY TẮC BỔ SUNG:
+                - Ưu tiên số liệu, mốc, điều kiện lấy trực tiếp từ đoạn tài liệu.
+                - Với câu hỏi yes/no (đúng hay không, đúng hay sai), phải trả lời kết luận trước: Đúng/Không đúng (hoặc Đúng/Sai), ngắn gọn, không dài dòng.
+                - Câu hỏi có nhiều vế thì phải trả lời đủ từng vế theo từng bullet.
+                - Quy trình/điều kiện nhiều tầng: dùng bullet lồng nhau, mỗi cấp con thụt đúng 2 khoảng trắng; điều kiện phụ và ngoại lệ đặt dưới bước cha, không lặp lại toàn bộ câu cha.
+                - Luôn tìm và liệt kê rõ 3 nhóm điều kiện nếu có trong context: (1) bộ phận phê duyệt (LRC/ISM), (2) hình thức phê duyệt bằng văn bản, (3) thời hạn/gia hạn hằng năm.
+                - Nếu tài liệu không chứa phần liên quan: trả lời đúng 1 câu sau và không thêm gì:
+                  Xin lỗi, tôi không tìm thấy thông tin liên quan đến câu hỏi của bạn trong tài liệu nội bộ.
                 - Không đề cập đến việc tải tài liệu lên hệ thống.
+                - Không dùng in đậm trong câu trả lời và không nhắc tên file trong phần nội dung chính.
 
                 THÔNG TIN TỪ TÀI LIỆU CÔNG TY:
                 %s
@@ -117,13 +142,13 @@ public class GeminiChatService {
                 %sCÂU HỎI HIỆN TẠI: %s
 
                 TRẢ LỜI:
-                """.formatted(context, historyText, question);
+                """.formatted(RESPONSE_GUIDELINES_RAG, context, historyText, question);
     }
 
     /**
      * Call Gemini API to generate text
      */
-    private AnswerWithTokens callGeminiAPI(String prompt) throws IOException {
+    private AnswerWithTokens callGeminiAPI(String prompt, int maxOutputTokens) throws IOException {
         String url = "https://generativelanguage.googleapis.com/v1beta/models/" 
                    + chatModel + ":generateContent?key=" + apiKey;
 
@@ -143,7 +168,7 @@ public class GeminiChatService {
         JsonObject generationConfig = new JsonObject();
         generationConfig.addProperty("temperature", 0.7);
         generationConfig.addProperty("topP", 0.95);
-        generationConfig.addProperty("maxOutputTokens", 1024);
+        generationConfig.addProperty("maxOutputTokens", maxOutputTokens);
         requestBody.add("generationConfig", generationConfig);
 
         log.debug("Calling Gemini API: {}", url);
@@ -178,6 +203,9 @@ public class GeminiChatService {
             }
 
             JsonObject firstCandidate = candidates.get(0).getAsJsonObject();
+            String finishReason = firstCandidate.has("finishReason")
+                    ? firstCandidate.get("finishReason").getAsString()
+                    : "";
             JsonObject contentObj = firstCandidate.getAsJsonObject("content");
             JsonArray partsArray = contentObj.getAsJsonArray("parts");
             
@@ -188,6 +216,19 @@ public class GeminiChatService {
 
             String answer = partsArray.get(0).getAsJsonObject().get("text").getAsString();
             log.info("Generated answer: {} characters", answer.length());
+
+            // Guardrail: if response is cut by token limit, regenerate once with a stronger instruction.
+            if ("MAX_TOKENS".equalsIgnoreCase(finishReason)) {
+                log.warn("Gemini response hit MAX_TOKENS. Retrying once with larger output budget.");
+                String fullAnswerPrompt = prompt + """
+
+                        
+                        Lưu ý quan trọng:
+                        - Câu trả lời trước đã bị ngắt do giới hạn độ dài.
+                        - Hãy trả lời lại từ đầu, đầy đủ tất cả các ý, không bỏ sót, không cắt giữa chừng.
+                        """;
+                return callGeminiAPI(fullAnswerPrompt, 3072);
+            }
 
             // Extract token usage from usageMetadata if available
             int tokensUsed = 0;

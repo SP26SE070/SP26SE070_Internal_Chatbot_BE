@@ -4,6 +4,7 @@ import com.gsp26se114.chatbot_rag_be.entity.Tenant;
 import com.gsp26se114.chatbot_rag_be.entity.TenantStatus;
 import com.gsp26se114.chatbot_rag_be.payload.response.MessageResponse;
 import com.gsp26se114.chatbot_rag_be.repository.TenantRepository;
+import com.gsp26se114.chatbot_rag_be.repository.UserRepository;
 import com.gsp26se114.chatbot_rag_be.security.service.UserPrincipal;
 import com.gsp26se114.chatbot_rag_be.service.EmailService;
 import com.gsp26se114.chatbot_rag_be.service.StaffTenantService;
@@ -12,6 +13,7 @@ import io.swagger.v3.oas.annotations.security.SecurityRequirement;
 import io.swagger.v3.oas.annotations.tags.Tag;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
+import org.springframework.beans.factory.annotation.Value;
 import org.springframework.http.ResponseEntity;
 import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.security.core.annotation.AuthenticationPrincipal;
@@ -30,8 +32,11 @@ import java.util.UUID;
 public class StaffTenantController {
 
     private final TenantRepository tenantRepository;
+    private final UserRepository userRepository;
     private final EmailService emailService;
     private final StaffTenantService staffTenantService;
+    @Value("${app.dev.hard-delete-enabled:false}")
+    private boolean hardDeleteEnabled;
 
     @GetMapping
     @Operation(summary = "Lấy tất cả tenants", description = "Xem danh sách tất cả tenants trong hệ thống")
@@ -39,6 +44,7 @@ public class StaffTenantController {
         List<Tenant> tenants = tenantRepository.findAll()
                 .stream()
                 .filter(tenant -> !Boolean.TRUE.equals(tenant.getMarkedForDeletion()))
+                .map(this::enrichReviewerDisplayFields)
                 .toList();
         return ResponseEntity.ok(tenants);
     }
@@ -49,6 +55,7 @@ public class StaffTenantController {
         List<Tenant> tenants = tenantRepository.findByStatus(TenantStatus.PENDING)
                 .stream()
                 .filter(tenant -> !Boolean.TRUE.equals(tenant.getMarkedForDeletion()))
+                .map(this::enrichReviewerDisplayFields)
                 .toList();
         return ResponseEntity.ok(tenants);
     }
@@ -58,8 +65,34 @@ public class StaffTenantController {
     public ResponseEntity<Tenant> getTenantById(@PathVariable UUID tenantId) {
         return tenantRepository.findById(tenantId)
                 .filter(tenant -> !Boolean.TRUE.equals(tenant.getMarkedForDeletion()))
+                .map(this::enrichReviewerDisplayFields)
                 .map(ResponseEntity::ok)
                 .orElse(ResponseEntity.notFound().build());
+    }
+
+    private Tenant enrichReviewerDisplayFields(Tenant tenant) {
+        if (tenant.getReviewedBy() == null) {
+            return tenant;
+        }
+
+        String reviewerName = userRepository.findById(tenant.getReviewedBy())
+                .map(user -> {
+                    String fullName = user.getFullName();
+                    if (fullName != null && !fullName.isBlank()) {
+                        return fullName;
+                    }
+                    return user.getEmail();
+                })
+                .orElse(tenant.getReviewedBy().toString());
+
+        tenant.setReviewedByName(reviewerName);
+        if (tenant.getStatus() == TenantStatus.ACTIVE || tenant.getStatus() == TenantStatus.SUSPENDED) {
+            tenant.setApprovedByName(reviewerName);
+        }
+        if (tenant.getStatus() == TenantStatus.REJECTED) {
+            tenant.setRejectedByName(reviewerName);
+        }
+        return tenant;
     }
 
     @PutMapping("/{tenantId}/approve")
@@ -151,5 +184,15 @@ public class StaffTenantController {
         UUID staffUserId = principal.getId();
         staffTenantService.markTenantForDeletion(tenantId, staffUserId);
         return ResponseEntity.ok(new MessageResponse("Tenant đã được đánh dấu xóa"));
+    }
+
+    @DeleteMapping("/{tenantId}/hard-delete")
+    @Operation(summary = "DEV ONLY - Xóa cứng tenant", description = "Xóa cứng tenant khỏi database. Chỉ bật cho local/dev.")
+    public ResponseEntity<MessageResponse> hardDeleteTenant(@PathVariable UUID tenantId) {
+        if (!hardDeleteEnabled) {
+            return ResponseEntity.status(403).body(new MessageResponse("Hard delete chỉ được bật ở môi trường dev"));
+        }
+        staffTenantService.hardDeleteTenant(tenantId);
+        return ResponseEntity.ok(new MessageResponse("Đã xóa cứng tenant"));
     }
 }

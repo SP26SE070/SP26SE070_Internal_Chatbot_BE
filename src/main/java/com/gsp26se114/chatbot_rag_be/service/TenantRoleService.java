@@ -119,6 +119,7 @@ public class TenantRoleService {
         RoleEntity role = new RoleEntity();
         role.setCode(request.code());
         role.setName(request.name());
+        role.setLevel(request.level());
         role.setDescription(request.description());
         role.setTenantId(tenantId);
         role.setRoleType(RoleType.CUSTOM);
@@ -157,6 +158,7 @@ public class TenantRoleService {
         // Update fields
         role.setName(request.name());
         role.setDescription(request.description());
+        role.setLevel(request.level());
         role.setPermissions(request.permissions());
         role.setUpdatedAt(LocalDateTime.now());
         
@@ -210,6 +212,7 @@ public class TenantRoleService {
                 .id(role.getId())
                 .code(role.getCode())
                 .name(role.getName())
+                .level(role.getLevel())
                 .description(role.getDescription())
                 .tenantId(role.getTenantId())
                 .tenantName(tenantName)

@@ -82,6 +82,10 @@ public class DocumentEntity {
     @JdbcTypeCode(SqlTypes.JSON)
     @Column(name = "accessible_roles", columnDefinition = "jsonb")
     private List<Integer> accessibleRoles;       // [3, 6, 8] nếu visibility = SPECIFIC_ROLES
+
+    /** Ngưỡng 1–5 (Executive=1 … Intern/External=5). User level X thấy tài liệu/chunk khi minimum_role_level >= X. */
+    @Column(name = "minimum_role_level", nullable = false)
+    private Integer minimumRoleLevel = 4;
     
     // ========== UPLOAD HISTORY (AUDIT TRAIL) ==========
     @Column(name = "uploaded_by", nullable = false)
@@ -182,6 +186,13 @@ public class DocumentEntity {
     public void incrementViewCount() {
         this.viewCount++;
         this.lastAccessedAt = LocalDateTime.now();
+    }
+
+    public boolean isAccessibleByLevel(Integer userRoleLevel) {
+        if (userRoleLevel == null || minimumRoleLevel == null) {
+            return false;
+        }
+        return minimumRoleLevel >= userRoleLevel;
     }
     
     /**

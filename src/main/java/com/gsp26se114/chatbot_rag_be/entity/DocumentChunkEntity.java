@@ -88,6 +88,13 @@ public class DocumentChunkEntity {
     @Column(name = "tag_ids", columnDefinition = "jsonb")
     private List<UUID> tagIds;
 
+    /**
+     * Ngưỡng phân cấp RAG (1–5): user có role.level = X chỉ thấy chunk khi minimum_role_level >= X.
+     * Đồng bộ từ document khi tạo/ghi chunk.
+     */
+    @Column(name = "minimum_role_level", nullable = false)
+    private Integer minimumRoleLevel = 4;
+
     /** Từ khóa trích xuất từ chunk để pre-filter: ["onboarding", "HR", "checklist"] */
     @JdbcTypeCode(SqlTypes.JSON)
     @Column(name = "keywords", columnDefinition = "jsonb")

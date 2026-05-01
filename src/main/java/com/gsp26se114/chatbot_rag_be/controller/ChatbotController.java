@@ -6,6 +6,7 @@ import com.gsp26se114.chatbot_rag_be.entity.ChatMessage;
 import com.gsp26se114.chatbot_rag_be.entity.ChatSession;
 import com.gsp26se114.chatbot_rag_be.entity.DocumentChunkEntity;
 import com.gsp26se114.chatbot_rag_be.entity.DocumentEntity;
+import com.gsp26se114.chatbot_rag_be.entity.DocumentVisibility;
 import com.gsp26se114.chatbot_rag_be.payload.request.ChatRequest;
 import com.gsp26se114.chatbot_rag_be.payload.request.RateMessageRequest;
 import com.gsp26se114.chatbot_rag_be.payload.response.ChatHistoryResponse;
@@ -35,6 +36,7 @@ import org.springframework.web.bind.annotation.*;
 import java.time.LocalDate;
 import java.time.LocalDateTime;
 import java.util.List;
+import java.util.Optional;
 import java.util.UUID;
 import java.util.stream.Collectors;
 
@@ -70,6 +72,16 @@ public class ChatbotController {
             // Load chatbot config once
             ChatbotConfig chatbotConfig = chatbotConfigRepository
                     .findByTenantId(userDetails.getTenantId()).orElse(null);
+
+            if (request.getTargetDocumentId() != null) {
+                Optional<DocumentEntity> target = documentRepository.findById(request.getTargetDocumentId());
+                if (target.isEmpty()
+                        || !Boolean.TRUE.equals(target.get().getIsActive())
+                        || !userDetails.getTenantId().equals(target.get().getTenantId())
+                        || !canUserReadDocument(userDetails, target.get())) {
+                    return handleAndSaveRestrictedResponse(request, userDetails, startTime, "forbidden_exact");
+                }
+            }
 
             // Validate message length
             int maxLength = (chatbotConfig != null && chatbotConfig.getMaxMessageLength() != null)
@@ -139,16 +151,16 @@ public class ChatbotController {
 
                 switch (chatMode) {
                     case "STRICT" -> {
-                        defaultTopK = 2;
+                        defaultTopK = 5;
                         maxDistance = 0.5;
                     }
                     case "FLEXIBLE" -> {
-                        defaultTopK = 5;
+                        defaultTopK = 10;
                         maxDistance = 0.85;
                     }
                     default -> {
                         defaultTopK = (chatbotConfig != null && chatbotConfig.getTopK() != null)
-                                ? chatbotConfig.getTopK() : 3;
+                                ? chatbotConfig.getTopK() : 7;
                         maxDistance = (chatbotConfig != null && chatbotConfig.getSimilarityThreshold() != null)
                                 ? chatbotConfig.getSimilarityThreshold() : 0.7;
                     }
@@ -168,6 +180,7 @@ public class ChatbotController {
                 similarChunks = chunkRepository.findSimilarChunksWithAccessControl(
                         userDetails.getTenantId(),
                         userDetails.getId(),
+                        userDetails.getRoleLevel(),
                         vectorString,
                         userDetails.getDepartmentId(),
                         userDetails.getRoleId(),
@@ -185,55 +198,63 @@ public class ChatbotController {
                 similarChunks = List.of();
             }
 
-            // Step 3: Build context from chunks (if any)
+            if (request.getTargetDocumentId() != null) {
+                similarChunks = similarChunks.stream()
+                        .filter(c -> request.getTargetDocumentId().equals(c.getDocumentId()))
+                        .toList();
+                if (similarChunks.isEmpty()) {
+                    return handleAndSaveRestrictedResponse(request, userDetails, startTime, "no_match_in_doc");
+                }
+            }
+
+            if (similarChunks.isEmpty()) {
+                return handleAndSaveRestrictedResponse(request, userDetails, startTime, "no_match");
+            }
+
+            // Step 3: Build context from chunks
             String context;
             List<ChatResponse.SourceDocument> sources;
 
-            if (similarChunks.isEmpty()) {
-                context = "";
-                sources = List.of();
-            } else {
-                final float[] queryEmbeddingFinal = queryEmbedding;
+            final float[] queryEmbeddingFinal = queryEmbedding;
 
-                context = similarChunks.stream()
-                        .map(DocumentChunkEntity::getContent)
-                        .distinct()
-                        .collect(Collectors.joining("\n\n---\n\n"));
-                log.info("Context built: {} characters from {} unique chunks",
-                         context.length(),
-                         similarChunks.stream().map(DocumentChunkEntity::getContent).distinct().count());
+            context = similarChunks.stream()
+                    .map(this::formatChunkForRagContext)
+                    .distinct()
+                    .collect(Collectors.joining("\n\n---\n\n"));
+            log.info("Context built: {} characters from {} unique chunks",
+                    context.length(),
+                    similarChunks.stream().map(DocumentChunkEntity::getContent).distinct().count());
 
-                sources = similarChunks.stream()
-                        .map(chunk -> {
-                            DocumentEntity doc = documentRepository.findById(chunk.getDocumentId()).orElse(null);
-                            float[] chunkEmbedding = embeddingService.parseVector(chunk.getEmbedding());
-                            double distance = queryEmbeddingFinal != null
-                                    ? embeddingService.cosineDistance(queryEmbeddingFinal, chunkEmbedding)
-                                    : 1.0;
-                            double similarity = Math.round((1.0 - distance) * 100.0) / 100.0;
+            sources = similarChunks.stream()
+                    .map(chunk -> {
+                        DocumentEntity doc = documentRepository.findById(chunk.getDocumentId()).orElse(null);
+                        float[] chunkEmbedding = embeddingService.parseVector(chunk.getEmbedding());
+                        double distance = queryEmbeddingFinal != null
+                                ? embeddingService.cosineDistance(queryEmbeddingFinal, chunkEmbedding)
+                                : 1.0;
+                        double similarity = Math.round((1.0 - distance) * 100.0) / 100.0;
 
-                            return ChatResponse.SourceDocument.builder()
-                                    .documentId(chunk.getDocumentId().toString())
-                                    .fileName(doc != null ? doc.getOriginalFileName() : "Unknown")
-                                    .chunkContent(chunk.getContent().substring(0, Math.min(200, chunk.getContent().length())) + "...")
-                                    .chunkIndex(chunk.getChunkIndex())
-                                    .relevanceScore(similarity)
-                                    .build();
-                        })
-                        .filter(source -> source.getRelevanceScore() >= 0.80)
-                        .collect(Collectors.toMap(
-                                ChatResponse.SourceDocument::getChunkContent,
-                                source -> source,
-                                (existing, replacement) -> existing.getRelevanceScore() >= replacement.getRelevanceScore()
-                                        ? existing : replacement
-                        ))
-                        .values()
-                        .stream()
-                        .sorted((s1, s2) -> Double.compare(s2.getRelevanceScore(), s1.getRelevanceScore()))
-                        .toList();
+                        return ChatResponse.SourceDocument.builder()
+                                .documentId(chunk.getDocumentId().toString())
+                                .fileName(doc != null ? doc.getOriginalFileName() : "Unknown")
+                                .chunkContent(chunk.getContent().substring(0, Math.min(200, chunk.getContent().length())) + "...")
+                                .chunkIndex(chunk.getChunkIndex())
+                                .relevanceScore(similarity)
+                                .build();
+                    })
+                    .filter(source -> source.getRelevanceScore() >= 0.80)
+                    .collect(Collectors.toMap(
+                            ChatResponse.SourceDocument::getChunkContent,
+                            source -> source,
+                            (existing, replacement) -> existing.getRelevanceScore() >= replacement.getRelevanceScore()
+                                    ? existing : replacement
+                    ))
+                    .values()
+                    .stream()
+                    .sorted((s1, s2) -> Double.compare(s2.getRelevanceScore(), s1.getRelevanceScore()))
+                    .toList();
 
-                log.info("Filtered to {} unique highly relevant sources (>=80% similarity)", sources.size());
-            }
+            log.info("Filtered to {} unique highly relevant sources (>=80% similarity)", sources.size());
 
             // Step 4: Generate answer with Gemini
             List<ChatMessage> conversationHistory = List.of();
@@ -332,14 +353,15 @@ public class ChatbotController {
     private ResponseEntity<ChatResponse> handleAndSaveRestrictedResponse(
             ChatRequest request, UserPrincipal userDetails, long startTime, String reason) {
 
-        String answer;
-        if ("no_match".equals(reason)) {
-            answer = "Xin lỗi, tôi không tìm thấy thông tin liên quan đến câu hỏi của bạn trong tài liệu nội bộ.";
-        } else {
-            answer = "Xin lỗi, bạn không có quyền truy cập các tài liệu liên quan đến câu hỏi này. " +
-                     "Tài liệu này có thể chỉ dành cho các phòng ban hoặc vai trò cụ thể khác. " +
-                     "Vui lòng liên hệ quản trị viên nếu bạn cần quyền truy cập.";
-        }
+        String answer = switch (reason) {
+            case "forbidden_exact" -> "Bạn không có quyền hỏi về mục hay tài liệu này.";
+            case "no_match_in_doc" ->
+                    "Không tìm thấy đoạn nội dung liên quan trong tài liệu được chọn (có thể câu hỏi quá chung hoặc tài liệu chưa được nhúng đủ).";
+            case "no_match" ->
+                    "Xin lỗi, tôi không tìm thấy thông tin liên quan đến câu hỏi của bạn trong tài liệu nội bộ.";
+            default ->
+                    "Bạn không có quyền hỏi về mục hay tài liệu này.";
+        };
 
         UUID conversationId = null;
         UUID assistantMessageId = null;
@@ -386,6 +408,70 @@ public class ChatbotController {
                 .build();
 
         return ResponseEntity.ok(response);
+    }
+
+    private static boolean isTenantAdminForChat(UserPrincipal userDetails) {
+        return userDetails.getAuthorities().stream()
+                .anyMatch(a -> "ROLE_TENANT_ADMIN".equals(a.getAuthority()));
+    }
+
+    /**
+     * Giống quy tắc đọc tài liệu trên {@code DocumentController}: level + visibility + uploader + tenant admin.
+     */
+    private boolean canUserReadDocument(UserPrincipal userDetails, DocumentEntity doc) {
+        if (!Boolean.TRUE.equals(doc.getIsActive())) {
+            return false;
+        }
+        if (!userDetails.getTenantId().equals(doc.getTenantId())) {
+            return false;
+        }
+        if (!doc.isAccessibleByLevel(userDetails.getRoleLevel())) {
+            return false;
+        }
+        // Role hierarchy override: smaller level number means higher privilege (1 highest).
+        if (userDetails.getRoleLevel() != null
+                && doc.getMinimumRoleLevel() != null
+                && userDetails.getRoleLevel() < doc.getMinimumRoleLevel()) {
+            return true;
+        }
+        if (isTenantAdminForChat(userDetails)) {
+            return true;
+        }
+        if (doc.getUploadedBy() != null && doc.getUploadedBy().equals(userDetails.getId())) {
+            return true;
+        }
+        if (doc.getVisibility() == DocumentVisibility.COMPANY_WIDE) {
+            return true;
+        }
+        if (doc.getVisibility() == DocumentVisibility.SPECIFIC_DEPARTMENTS) {
+            return doc.getAccessibleDepartments() != null
+                    && userDetails.getDepartmentId() != null
+                    && doc.getAccessibleDepartments().contains(userDetails.getDepartmentId());
+        }
+        if (doc.getVisibility() == DocumentVisibility.SPECIFIC_ROLES) {
+            return doc.getAccessibleRoles() != null
+                    && userDetails.getRoleId() != null
+                    && doc.getAccessibleRoles().contains(userDetails.getRoleId());
+        }
+        if (doc.getVisibility() == DocumentVisibility.SPECIFIC_DEPARTMENTS_AND_ROLES) {
+            return doc.getAccessibleDepartments() != null
+                    && doc.getAccessibleRoles() != null
+                    && userDetails.getDepartmentId() != null
+                    && userDetails.getRoleId() != null
+                    && doc.getAccessibleDepartments().contains(userDetails.getDepartmentId())
+                    && doc.getAccessibleRoles().contains(userDetails.getRoleId());
+        }
+        return false;
+    }
+
+    private String formatChunkForRagContext(DocumentChunkEntity chunk) {
+        DocumentEntity doc = documentRepository.findById(chunk.getDocumentId()).orElse(null);
+        String title = "Unknown";
+        if (doc != null && doc.getOriginalFileName() != null && !doc.getOriginalFileName().isBlank()) {
+            title = doc.getOriginalFileName().replace('\n', ' ').trim();
+        }
+        String body = chunk.getContent() != null ? chunk.getContent() : "";
+        return "[ACCESS: GRANTED | Tài liệu: " + title + "]\n" + body;
     }
 
     private UUID parseConversationId(String conversationIdStr) {

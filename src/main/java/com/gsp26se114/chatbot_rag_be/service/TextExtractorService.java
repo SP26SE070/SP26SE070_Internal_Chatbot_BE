@@ -12,6 +12,7 @@ import org.apache.poi.ss.usermodel.Workbook;
 import org.apache.poi.xssf.usermodel.XSSFWorkbook;
 import org.apache.poi.xslf.usermodel.XMLSlideShow;
 import org.apache.poi.xslf.usermodel.XSLFShape;
+import org.apache.poi.xslf.usermodel.XSLFNotes;
 import org.apache.poi.xslf.usermodel.XSLFSlide;
 import org.apache.poi.xslf.usermodel.XSLFTextShape;
 import org.apache.poi.xwpf.usermodel.IBodyElement;
@@ -27,8 +28,9 @@ import org.springframework.stereotype.Service;
 import java.io.ByteArrayInputStream;
 import java.io.IOException;
 import java.nio.charset.StandardCharsets;
+import java.util.ArrayList;
+import java.util.List;
 import java.util.Locale;
-import java.util.Objects;
 
 /**
  * Trích text để nhúng RAG: PDF, DOCX (gồm cả bảng), XLSX, PPTX cơ bản, TXT/MD/CSV.
@@ -39,6 +41,10 @@ import java.util.Objects;
 @Service
 @Slf4j
 public class TextExtractorService {
+
+    /** Đánh dấu ranh giới sheet cho {@link ChunkingService} (nhóm dòng / không cắt giữa hàng). */
+    public static final String XLSX_SHEET_MARKER = "\n\n### SHEET: ";
+    public static final String XLSX_SHEET_MARKER_END = " ###\n";
 
     /**
      * @param originalFileName tên gốc (để suy MIME khi client gửi sai / octet-stream)
@@ -137,22 +143,63 @@ public class TextExtractorService {
         try (PDDocument document = Loader.loadPDF(fileContent)) {
             PDFTextStripper stripper = new PDFTextStripper();
             stripper.setLineSeparator("\n");
-            String text = stripper.getText(document);
-            log.debug("Extracted {} characters from PDF", text.length());
-            return cleanText(text);
+            int pages = document.getNumberOfPages();
+            if (pages <= 0) {
+                return "";
+            }
+            StringBuilder sb = new StringBuilder();
+            for (int page = 1; page <= pages; page++) {
+                stripper.setStartPage(page);
+                stripper.setEndPage(page);
+                sb.append(stripper.getText(document));
+                if (page < pages) {
+                    sb.append('\f');
+                }
+            }
+            log.debug("Extracted {} characters from PDF ({} pages, form-feed between pages)", sb.length(), pages);
+            return cleanText(sb.toString());
         }
     }
 
     /**
      * DOCX: đọc toàn bộ phần thân theo thứ tự — đoạn văn <b>và</b> bảng (ô nối bằng tab, hàng xuống dòng).
      */
+    private static Integer docxHeadingLevel(XWPFParagraph p) {
+        String styleId = p.getStyle();
+        if (styleId == null || styleId.isBlank()) {
+            return null;
+        }
+        String low = styleId.toLowerCase(Locale.ROOT);
+        if (!low.contains("heading")) {
+            return null;
+        }
+        String digits = styleId.replaceAll("\\D+", "");
+        if (digits.isEmpty()) {
+            return 1;
+        }
+        try {
+            int v = Integer.parseInt(digits.substring(0, 1));
+            return Math.min(9, Math.max(1, v));
+        } catch (NumberFormatException e) {
+            return 1;
+        }
+    }
+
     private String extractFromDocx(byte[] fileContent) throws IOException {
         try (XWPFDocument document = new XWPFDocument(new ByteArrayInputStream(fileContent))) {
             StringBuilder text = new StringBuilder();
             for (IBodyElement element : document.getBodyElements()) {
                 if (element instanceof XWPFParagraph p) {
-                    String t = paragraphTextPreservingLineBreaks(p);
-                    text.append(t.stripTrailing()).append('\n');
+                    Integer lvl = docxHeadingLevel(p);
+                    String t = paragraphTextPreservingLineBreaks(p).stripTrailing();
+                    if (lvl != null && !t.isBlank()) {
+                        text.append("<<<DOCX_H:").append(lvl).append(">>>\n");
+                        text.append(t).append("\n\n");
+                    } else if (!t.isBlank()) {
+                        text.append(t).append("\n\n");
+                    } else {
+                        text.append("\n\n");
+                    }
                 } else if (element instanceof XWPFTable table) {
                     for (XWPFTableRow row : table.getRows()) {
                         for (XWPFTableCell cell : row.getTableCells()) {
@@ -163,6 +210,7 @@ public class TextExtractorService {
                         }
                         text.append('\n');
                     }
+                    text.append("\n\n");
                 }
             }
             log.debug("Extracted {} characters from DOCX (paragraphs + tables)", text.length());
@@ -179,6 +227,8 @@ public class TextExtractorService {
                 if (sheet == null) {
                     continue;
                 }
+                String sheetName = sheet.getSheetName() != null ? sheet.getSheetName() : ("Sheet" + (s + 1));
+                sb.append(XLSX_SHEET_MARKER).append(sheetName).append(XLSX_SHEET_MARKER_END);
                 for (Row row : sheet) {
                     if (row == null) {
                         continue;
@@ -197,14 +247,56 @@ public class TextExtractorService {
     private String extractFromPptx(byte[] fileContent) throws IOException {
         try (XMLSlideShow ppt = new XMLSlideShow(new ByteArrayInputStream(fileContent))) {
             StringBuilder sb = new StringBuilder();
-            for (XSLFSlide slide : ppt.getSlides()) {
+            List<XSLFSlide> slides = ppt.getSlides();
+            for (int i = 0; i < slides.size(); i++) {
+                XSLFSlide slide = slides.get(i);
+                if (i > 0) {
+                    sb.append('\f');
+                }
+                List<String> lines = new ArrayList<>();
                 for (XSLFShape shape : slide.getShapes()) {
                     if (shape instanceof XSLFTextShape ts) {
                         String t = ts.getText();
                         if (t != null && !t.isBlank()) {
-                            sb.append(t).append('\n');
+                            for (String ln : t.split("\\R")) {
+                                String s = ln.strip();
+                                if (!s.isEmpty()) {
+                                    lines.add(s);
+                                }
+                            }
                         }
                     }
+                }
+                sb.append("Slide ").append(i + 1).append(": ");
+                if (!lines.isEmpty()) {
+                    sb.append(lines.get(0)).append('\n');
+                    if (lines.size() > 1) {
+                        sb.append(String.join("\n", lines.subList(1, lines.size()))).append('\n');
+                    }
+                } else {
+                    sb.append('\n');
+                }
+                try {
+                    XSLFNotes notes = slide.getNotes();
+                    if (notes != null) {
+                        StringBuilder noteText = new StringBuilder();
+                        for (XSLFShape sh : notes.getShapes()) {
+                            if (sh instanceof XSLFTextShape nts) {
+                                String nt = nts.getText();
+                                if (nt != null && !nt.isBlank()) {
+                                    if (noteText.length() > 0) {
+                                        noteText.append('\n');
+                                    }
+                                    noteText.append(nt.strip());
+                                }
+                            }
+                        }
+                        if (noteText.length() > 0) {
+                            sb.append("Notes: ").append(noteText).append('\n');
+                        }
+                    }
+                } catch (Exception ex) {
+                    log.trace("No notes for slide {}: {}", i + 1, ex.getMessage());
                 }
             }
             log.debug("Extracted {} characters from PPTX", sb.length());
