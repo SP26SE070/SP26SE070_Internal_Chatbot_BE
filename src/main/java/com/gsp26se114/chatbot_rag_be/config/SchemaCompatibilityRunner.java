@@ -2,6 +2,7 @@ package com.gsp26se114.chatbot_rag_be.config;
 
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
+import org.springframework.beans.factory.annotation.Value;
 import org.springframework.boot.context.event.ApplicationReadyEvent;
 import org.springframework.context.event.EventListener;
 import org.springframework.jdbc.core.JdbcTemplate;
@@ -17,6 +18,9 @@ import org.springframework.stereotype.Component;
 public class SchemaCompatibilityRunner {
 
     private final JdbcTemplate jdbcTemplate;
+
+    @Value("${embedding.storage-dimension:768}")
+    private int embeddingStorageDimension;
 
     @EventListener(ApplicationReadyEvent.class)
     public void applyCompatibilityMigrations() {
@@ -80,6 +84,7 @@ public class SchemaCompatibilityRunner {
                 jdbcTemplate.execute("ALTER TABLE IF EXISTS chatbot_configs ADD COLUMN IF NOT EXISTS chat_mode VARCHAR(20)");
                 jdbcTemplate.execute("ALTER TABLE IF EXISTS chatbot_configs ADD COLUMN IF NOT EXISTS top_k INTEGER");
                 jdbcTemplate.execute("ALTER TABLE IF EXISTS chatbot_configs ADD COLUMN IF NOT EXISTS similarity_threshold DOUBLE PRECISION");
+                jdbcTemplate.execute("ALTER TABLE IF EXISTS chatbot_configs ADD COLUMN IF NOT EXISTS embedding_provider VARCHAR(20)");
                 jdbcTemplate.execute("""
                         UPDATE chatbot_configs
                         SET chat_mode = COALESCE(chat_mode, "mode")
@@ -91,14 +96,58 @@ public class SchemaCompatibilityRunner {
             jdbcTemplate.execute("UPDATE chatbot_configs SET chat_mode = 'BALANCED' WHERE chat_mode IS NULL");
             jdbcTemplate.execute("UPDATE chatbot_configs SET top_k = 7 WHERE top_k IS NULL");
             jdbcTemplate.execute("UPDATE chatbot_configs SET similarity_threshold = 0.7 WHERE similarity_threshold IS NULL");
+            jdbcTemplate.execute("UPDATE chatbot_configs SET embedding_provider = 'GEMINI' WHERE embedding_provider IS NULL");
             jdbcTemplate.execute("ALTER TABLE IF EXISTS chatbot_configs ALTER COLUMN chat_mode SET DEFAULT 'BALANCED'");
             jdbcTemplate.execute("ALTER TABLE IF EXISTS chatbot_configs ALTER COLUMN top_k SET DEFAULT 7");
             jdbcTemplate.execute("ALTER TABLE IF EXISTS chatbot_configs ALTER COLUMN similarity_threshold SET DEFAULT 0.7");
+            jdbcTemplate.execute("ALTER TABLE IF EXISTS chatbot_configs ALTER COLUMN embedding_provider SET DEFAULT 'GEMINI'");
             jdbcTemplate.execute("DELETE FROM tenants WHERE tenant_id = '880e8400-e29b-41d4-a716-446655440003'");
+
+            maybeUpgradeChunkEmbeddingVectorDimension();
 
             log.info("Schema compatibility migration applied (roles.level 1–5, minimum_role_level, chatbot_configs.chat_mode).");
         } catch (Exception ex) {
             log.warn("Schema compatibility migration skipped: {}", ex.getMessage());
+        }
+    }
+
+    /**
+     * When {@code embedding.storage-dimension=1024} (BGE-M3 / Local), align PostgreSQL
+     * {@code document_chunks.embedding} with {@code vector(1024)}. Clears existing vectors so re-index is required.
+     */
+    private void maybeUpgradeChunkEmbeddingVectorDimension() {
+        if (embeddingStorageDimension != 1024) {
+            return;
+        }
+        try {
+            var typeRows = jdbcTemplate.query(
+                    """
+                            SELECT pg_catalog.format_type(a.atttypid, a.atttypmod) AS t
+                            FROM pg_attribute a
+                            JOIN pg_class c ON a.attrelid = c.oid
+                            JOIN pg_namespace n ON c.relnamespace = n.oid
+                            WHERE n.nspname = 'public'
+                              AND c.relname = 'document_chunks'
+                              AND a.attname = 'embedding'
+                              AND NOT a.attisdropped
+                            """,
+                    (rs, rowNum) -> rs.getString("t"));
+            String fmt = typeRows.isEmpty() ? null : typeRows.get(0);
+            if (fmt != null && fmt.contains("1024")) {
+                log.debug("document_chunks.embedding already vector(1024); skip column migration.");
+                return;
+            }
+            jdbcTemplate.execute("DROP INDEX IF EXISTS idx_chunks_embedding_cosine");
+            jdbcTemplate.update("UPDATE document_chunks SET embedding = NULL WHERE embedding IS NOT NULL");
+            jdbcTemplate.execute("ALTER TABLE document_chunks ALTER COLUMN embedding TYPE vector(1024)");
+            jdbcTemplate.execute("""
+                    CREATE INDEX IF NOT EXISTS idx_chunks_embedding_cosine ON document_chunks
+                    USING hnsw (embedding vector_cosine_ops)
+                    """);
+            log.info(
+                    "document_chunks.embedding set to vector(1024) for local embeddings; prior vectors cleared — re-index documents.");
+        } catch (Exception ex) {
+            log.warn("Chunk embedding vector(1024) migration skipped: {}", ex.getMessage());
         }
     }
 }

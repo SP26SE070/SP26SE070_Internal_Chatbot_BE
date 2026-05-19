@@ -28,6 +28,12 @@ public class MinioService {
 
     @Value("${minio.bucket-name}")
     private String bucketName;
+
+    @Value("${minio.tenant-assets-bucket}")
+    private String tenantAssetsBucket;
+
+    @Value("${minio.public-endpoint}")
+    private String publicEndpoint;
     
     /**
      * Upload document vào MinIO
@@ -65,6 +71,28 @@ public class MinioService {
         } catch (Exception e) {
             log.error("Failed to upload document to MinIO: {}", file.getOriginalFilename(), e);
             throw new RuntimeException("Failed to upload document", e);
+        }
+    }
+
+    /**
+     * Upload tenant logo to the public tenant-assets bucket.
+     *
+     * @param file MultipartFile logo
+     * @param tenantId Tenant UUID
+     * @return Public URL to the uploaded logo
+     */
+    public String uploadTenantLogo(MultipartFile file, UUID tenantId) {
+        if (minioClient == null) {
+            log.warn("MinIO is not available — skipping operation");
+            throw new RuntimeException("File storage service is currently unavailable");
+        }
+        try {
+            String folder = "tenant-" + tenantId + "/logo";
+            String objectName = uploadToBucket(file, folder, tenantAssetsBucket);
+            return buildPublicUrl(tenantAssetsBucket, objectName);
+        } catch (Exception e) {
+            log.error("Failed to upload tenant logo to MinIO: {}", file.getOriginalFilename(), e);
+            throw new RuntimeException("Failed to upload tenant logo", e);
         }
     }
     
@@ -200,5 +228,34 @@ public class MinioService {
         } catch (Exception e) {
             return false;
         }
+    }
+
+    private String uploadToBucket(MultipartFile file, String folder, String bucket) throws Exception {
+        String originalFilename = file.getOriginalFilename();
+        String safeName = originalFilename == null ? "file" : originalFilename;
+        String uniqueFilename = UUID.randomUUID().toString() + "_" + safeName;
+        String objectName = folder + "/" + uniqueFilename;
+
+        minioClient.putObject(
+            PutObjectArgs.builder()
+                .bucket(bucket)
+                .object(objectName)
+                .stream(file.getInputStream(), file.getSize(), -1)
+                .contentType(file.getContentType())
+                .build()
+        );
+
+        log.info("Object uploaded to MinIO: bucket={}, path={}, size={}",
+            bucket, objectName, file.getSize());
+
+        return objectName;
+    }
+
+    private String buildPublicUrl(String bucket, String objectName) {
+        String base = publicEndpoint == null ? "" : publicEndpoint.trim();
+        if (base.endsWith("/")) {
+            base = base.substring(0, base.length() - 1);
+        }
+        return base + "/" + bucket + "/" + objectName;
     }
 }

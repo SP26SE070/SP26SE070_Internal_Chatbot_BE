@@ -108,14 +108,14 @@ public class ProfileController {
             roleRepository.findById(user.getRoleId()).orElse(null) : null;
         Department department = user.getDepartmentId() != null ? 
             departmentRepository.findById(user.getDepartmentId()).orElse(null) : null;
-        
-        // Get tenant name
-        String tenantName = null;
+
+        // Get tenant info
+        Tenant tenant = null;
         if (user.getTenantId() != null) {
-            tenantName = tenantRepository.findById(user.getTenantId())
-                    .map(Tenant::getName)
-                    .orElse(null);
+            tenant = tenantRepository.findById(user.getTenantId()).orElse(null);
         }
+        String tenantName = tenant != null ? tenant.getName() : null;
+        String tenantLogoUrl = tenant != null ? tenant.getLogoUrl() : null;
         
         return new UserProfileResponse(
             user.getId(),
@@ -128,6 +128,7 @@ public class ProfileController {
             role != null ? role.getName() : null,
             department != null ? department.getName() : null,
             tenantName,
+            tenantLogoUrl,
             user.getCreatedAt(),
             user.getUpdatedAt(),
             user.getLastLoginAt()

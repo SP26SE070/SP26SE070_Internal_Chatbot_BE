@@ -47,9 +47,9 @@ public class DocumentChunkEntity {
 
     /**
      * Vector embedding stored as PostgreSQL vector type (pgvector extension).
-     * gemini-embedding-001 with outputDimensionality=768 produces 768 dimensions
+     * Actual storage dimension is controlled at DB level for each deployment mode.
      */
-    @Column(name = "embedding", columnDefinition = "vector(768)")
+    @Column(name = "embedding", columnDefinition = "vector")
     private String embedding;
 
     @Column(name = "embedding_model", length = 100)
@@ -92,6 +92,7 @@ public class DocumentChunkEntity {
      * Ngưỡng phân cấp RAG (1–5): user có role.level = X chỉ thấy chunk khi minimum_role_level >= X.
      * Đồng bộ từ document khi tạo/ghi chunk.
      */
+    @Builder.Default
     @Column(name = "minimum_role_level", nullable = false)
     private Integer minimumRoleLevel = 4;
 

@@ -19,15 +19,17 @@ import com.gsp26se114.chatbot_rag_be.repository.DocumentChunkRepository;
 import com.gsp26se114.chatbot_rag_be.repository.DocumentRepository;
 import com.gsp26se114.chatbot_rag_be.security.service.UserPrincipal;
 import com.gsp26se114.chatbot_rag_be.service.ChatHistoryService;
-import com.gsp26se114.chatbot_rag_be.service.EmbeddingService;
+import com.gsp26se114.chatbot_rag_be.service.ChunkEmbeddingVectorSchemaService;
 import com.gsp26se114.chatbot_rag_be.service.GeminiChatService;
 import com.gsp26se114.chatbot_rag_be.service.RateLimiterService;
+import com.gsp26se114.chatbot_rag_be.service.TenantEmbeddingService;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.tags.Tag;
 import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.data.domain.Page;
+import org.springframework.beans.factory.annotation.Value;
 import org.springframework.http.ResponseEntity;
 import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.security.core.annotation.AuthenticationPrincipal;
@@ -47,7 +49,8 @@ import java.util.stream.Collectors;
 @Tag(name = "21. 🤖 Chatbot", description = "RAG-powered chatbot APIs")
 public class ChatbotController {
 
-    private final EmbeddingService embeddingService;
+    private final TenantEmbeddingService embeddingService;
+    private final ChunkEmbeddingVectorSchemaService chunkEmbeddingVectorSchemaService;
     private final GeminiChatService geminiChatService;
     private final DocumentChunkRepository chunkRepository;
     private final DocumentRepository documentRepository;
@@ -56,6 +59,10 @@ public class ChatbotController {
     private final ChatbotConfigRepository chatbotConfigRepository;
     private final ChatMessageRepository chatMessageRepository;
     private final RateLimiterService rateLimiterService;
+    @Value("${embedding.storage-dimension:768}")
+    private int storageDimension;
+    @Value("${embedding.local.dimension:1024}")
+    private int localEmbeddingDimension;
 
     @PostMapping("/chat")
     @PreAuthorize("isAuthenticated()")
@@ -138,7 +145,10 @@ public class ChatbotController {
             List<DocumentChunkEntity> similarChunks;
 
             try {
-                queryEmbedding = embeddingService.createEmbedding(request.getMessage());
+                int embedDim = embeddingService.getDimension(userDetails.getTenantId());
+                chunkEmbeddingVectorSchemaService.ensureColumnDimension(embedDim);
+                validateEmbeddingDimension(userDetails.getTenantId());
+                queryEmbedding = embeddingService.createEmbedding(userDetails.getTenantId(), request.getMessage());
                 String vectorString = embeddingService.toVectorString(queryEmbedding);
                 log.debug("Query embedding created: {} dimensions", queryEmbedding.length);
 
@@ -192,6 +202,19 @@ public class ChatbotController {
 
                 log.info("Found {} similar chunks (similarity threshold: > 30%)", similarChunks.size());
 
+            } catch (IllegalArgumentException embeddingConfig) {
+                log.warn("Embedding configuration / local server error: {}", embeddingConfig.getMessage());
+                return ResponseEntity.badRequest().body(
+                        ChatResponse.builder()
+                                .answer("Cấu hình embedding không hợp lệ hoặc máy chủ embedding cục bộ không phản hồi đúng. "
+                                        + "Kiểm tra Ollama đang chạy, model bge-m3 đã pull, endpoint http://localhost:11434/api/embed, "
+                                        + "và biến EMBEDDING_STORAGE_DIMENSION=1024 khi dùng BGE-M3. Chi tiết: "
+                                        + embeddingConfig.getMessage())
+                                .conversationId(request.getConversationId())
+                                .sources(List.of())
+                                .responseTimeMs(System.currentTimeMillis() - startTime)
+                                .build()
+                );
             } catch (Exception ragError) {
                 log.warn("RAG pipeline failed, falling back to general knowledge: {}", ragError.getMessage());
                 queryEmbedding = null;
@@ -482,6 +505,21 @@ public class ChatbotController {
             return UUID.fromString(conversationIdStr);
         } catch (IllegalArgumentException e) {
             return null;
+        }
+    }
+
+    private void validateEmbeddingDimension(UUID tenantId) {
+        int fromModel = embeddingService.getDimension(tenantId);
+        int expected = "LOCAL".equals(embeddingService.getProvider(tenantId))
+                ? localEmbeddingDimension
+                : storageDimension;
+        if (fromModel != expected) {
+            throw new IllegalArgumentException(
+                    "Embedding dimension mismatch: provider=" + embeddingService.getProvider(tenantId)
+                            + " model=" + embeddingService.getModelName(tenantId)
+                            + " returns " + fromModel
+                            + " but expected " + expected + " (LOCAL: embedding.local.dimension; GEMINI: embedding.storage-dimension)."
+            );
         }
     }
 

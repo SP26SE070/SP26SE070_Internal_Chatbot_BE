@@ -30,6 +30,9 @@ public class Tenant {
     
     @Column(length = 50)
     private String companySize; // Quy mô: "1-50", "51-200", "201-500", "500+"
+
+    @Column(name = "logo_url", length = 512)
+    private String logoUrl;
     
     // ========== REPRESENTATIVE INFORMATION ==========
     // Email người đại diện - SAU KHI APPROVE sẽ trở thành TENANT_ADMIN

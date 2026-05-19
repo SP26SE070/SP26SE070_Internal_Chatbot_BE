@@ -123,7 +123,7 @@ public interface DocumentChunkRepository extends JpaRepository<DocumentChunkEnti
             created_at
         ) VALUES (
             :id, :documentId, :tenantId, :chunkIndex, :content,
-            CAST(:embedding AS vector(768)), :embeddingModel, :tokenCount,
+            CAST(:embedding AS vector), :embeddingModel, :tokenCount,
             :visibility, CAST(:accessibleDepartments AS jsonb), CAST(:accessibleRoles AS jsonb), :ownerDepartmentId,
             :categoryId, CAST(:tagIds AS jsonb), :versionId, :minimumRoleLevel,
             :createdAt

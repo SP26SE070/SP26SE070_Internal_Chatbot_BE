@@ -50,6 +50,7 @@ CREATE TABLE tenants (
     address VARCHAR(500),
     website VARCHAR(255),
     company_size VARCHAR(50),
+    logo_url VARCHAR(512),
     
     -- Representative Information
     contact_email VARCHAR(255) NOT NULL UNIQUE,
@@ -669,6 +670,7 @@ CREATE TABLE chatbot_configs (
     top_k INTEGER DEFAULT 7,
     similarity_threshold DOUBLE PRECISION DEFAULT 0.7,
     chat_mode VARCHAR(20) DEFAULT 'BALANCED',
+    embedding_provider VARCHAR(20) DEFAULT 'GEMINI',
 
     is_active BOOLEAN DEFAULT TRUE NOT NULL,
     updated_by UUID REFERENCES users(user_id),

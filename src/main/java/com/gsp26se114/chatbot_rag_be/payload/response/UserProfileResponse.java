@@ -25,6 +25,7 @@ public class UserProfileResponse {
     private String roleName;           // Role name (Employee, Manager, Admin, etc)
     private String departmentName;     // Department name (Development, HR, Sales, etc)
     private String tenantName;         // Tên tenant
+    private String tenantLogoUrl;      // Tenant logo URL
     private LocalDateTime createdAt;   // Ngày tạo
     private LocalDateTime updatedAt;   // Lần cập nhật cuối
     private LocalDateTime lastLoginAt; // Lần đăng nhập cuối

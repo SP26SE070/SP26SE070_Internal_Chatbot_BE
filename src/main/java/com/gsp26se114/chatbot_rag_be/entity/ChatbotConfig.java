@@ -67,6 +67,10 @@ public class ChatbotConfig {
     @Column(name = "chat_mode", length = 20)
     private String mode = "BALANCED";
 
+    /** Embedding provider per tenant: GEMINI (default) or LOCAL */
+    @Column(name = "embedding_provider", length = 20)
+    private String embeddingProvider = "GEMINI";
+
     @Column(name = "is_active", nullable = false)
     private Boolean isActive = true;
 

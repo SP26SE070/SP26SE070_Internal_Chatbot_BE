@@ -27,6 +27,9 @@ public class TenantRegistrationRequest {
     
     @Size(max = 50, message = "Quy mô không hợp lệ")
     private String companySize; // "1-50", "51-200", "201-500", "500+"
+
+    @Size(max = 512, message = "Logo URL must be 512 characters or less")
+    private String logoUrl;
     
     // Representative Information
     @NotBlank(message = "Email người đại diện không được để trống")

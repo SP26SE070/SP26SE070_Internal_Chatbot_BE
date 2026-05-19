@@ -90,6 +90,7 @@ public class TenantDashboardController {
         data.put("address", tenant.getAddress());
         data.put("website", tenant.getWebsite());
         data.put("company_size", tenant.getCompanySize());
+        data.put("logo_url", tenant.getLogoUrl());
         data.put("contact_email", tenant.getContactEmail());
         data.put("representative_name", tenant.getRepresentativeName());
         data.put("representative_position", tenant.getRepresentativePosition());

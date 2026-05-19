@@ -8,12 +8,12 @@ import com.gsp26se114.chatbot_rag_be.repository.DocumentChunkRepository;
 import com.gsp26se114.chatbot_rag_be.repository.DocumentRepository;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
+import org.springframework.beans.factory.annotation.Value;
 import org.springframework.scheduling.annotation.Async;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Propagation;
 import org.springframework.transaction.annotation.Transactional;
 
-import java.util.ArrayList;
 import java.util.List;
 import java.util.UUID;
 
@@ -30,8 +30,15 @@ public class DocumentProcessingService {
     private final MinioService minioService;
     private final TextExtractorService textExtractor;
     private final ChunkingService chunkingService;
-    private final EmbeddingService embeddingService;
+    private final TenantEmbeddingService embeddingService;
+    private final ChunkEmbeddingVectorSchemaService chunkEmbeddingVectorSchemaService;
     private final Gson gson = new Gson();
+    @Value("${embedding.storage-dimension:768}")
+    private int storageDimension;
+    @Value("${embedding.local.dimension:1024}")
+    private int localEmbeddingDimension;
+    @Value("${embedding.chunk-failure-limit:5}")
+    private int chunkFailureLimit;
 
     /**
      * Process document synchronously (for testing)
@@ -127,8 +134,16 @@ public class DocumentProcessingService {
                 throw new RuntimeException("No chunks created from text");
             }
 
+            String provider = embeddingService.getProvider(document.getTenantId());
+            String modelName = embeddingService.getModelName(document.getTenantId());
+            int embedDim = embeddingService.getDimension(document.getTenantId());
+            chunkEmbeddingVectorSchemaService.ensureColumnDimension(embedDim);
+            validateEmbeddingDimension(document.getTenantId());
+
             // 5. Create embeddings and persist chunks
-            log.info("[STEP 5] Generating embeddings for {} chunks", chunks.size());
+                int failureLimit = Math.max(1, chunkFailureLimit);
+                log.info("[STEP 5] Generating embeddings for {} chunks (provider={}, model={}, dimension={}, failureLimit={})",
+                    chunks.size(), provider, modelName, embedDim, failureLimit);
             int savedCount = 0;
             int failedCount = 0;
 
@@ -137,7 +152,7 @@ public class DocumentProcessingService {
 
                 try {
                     // Create embedding
-                    float[] embedding = embeddingService.createEmbedding(chunkText);
+                    float[] embedding = embeddingService.createEmbedding(document.getTenantId(), chunkText);
                     String embeddingVector = embeddingService.toVectorString(embedding);
 
                     // Create chunk entity
@@ -149,7 +164,7 @@ public class DocumentProcessingService {
                             .chunkIndex(i)
                             .content(chunkText)
                             .embedding(embeddingVector)
-                            .embeddingModel("gemini-embedding-001")
+                            .embeddingModel(modelName)
                             .tokenCount(chunkText.length() / 4) // Rough estimate
                             // Copy access control from parent document
                             .visibility(document.getVisibility().toString())
@@ -186,9 +201,12 @@ public class DocumentProcessingService {
 
                 } catch (Exception chunkEx) {
                     failedCount++;
-                    log.error("[STEP 5] ✗ Failed to save chunk {}/{}: {}", i + 1, chunks.size(), chunkEx.getMessage());
+                    int chunkLength = chunkText == null ? 0 : chunkText.length();
+                    String chunkHash = chunkText == null ? "null" : Integer.toHexString(chunkText.hashCode());
+                    log.error("[STEP 5] ✗ Failed to save chunk {}/{} (len={}, hash={}, provider={}, model={}): {}",
+                            i + 1, chunks.size(), chunkLength, chunkHash, provider, modelName, chunkEx.getMessage());
                     // Continue with remaining chunks — don't kill entire document for one bad chunk
-                    if (failedCount >= 5) {
+                    if (failedCount >= failureLimit) {
                         log.error("[STEP 5] Too many chunk failures ({}), aborting document {}", failedCount, documentId);
                         throw new RuntimeException("Too many chunk failures: " + chunkEx.getMessage(), chunkEx);
                     }
@@ -204,7 +222,7 @@ public class DocumentProcessingService {
             // 6. Update document status — use REQUIRES_NEW so it commits independently
             // This ensures COMPLETED only shows if chunks actually persisted
             log.info("[STEP 6] Marking document COMPLETED ({} chunks)", savedCount);
-            updateDocumentCompleteStatus(documentId, savedCount, "gemini-embedding-001");
+            updateDocumentCompleteStatus(documentId, savedCount, modelName);
 
             log.info("[PROCESSING SUCCESS] ✓✓✓ Document {} completed: {} chunks created ✓✓✓",
                     documentId, savedCount);
@@ -270,10 +288,17 @@ public class DocumentProcessingService {
     @Transactional
     public void reprocessDocument(UUID documentId) {
         log.info("Re-processing document: {}", documentId);
-        
+
+        DocumentEntity document = documentRepository.findById(documentId)
+                .orElseThrow(() -> new RuntimeException("Document not found: " + documentId));
+        document.setEmbeddingStatus("PENDING");
+        document.setEmbeddingError(null);
+        document.setChunkCount(0);
+        documentRepository.save(document);
+
         // Delete old chunks
         chunkRepository.deleteByDocumentId(documentId);
-        
+
         // Process again
         processDocumentAsync(documentId);
     }
@@ -286,5 +311,24 @@ public class DocumentProcessingService {
         return document.getTags().stream()
                 .map(DocumentTag::getId)
                 .toList();
+    }
+
+    private void validateEmbeddingDimension(UUID tenantId) {
+        int fromModel = embeddingService.getDimension(tenantId);
+        int expected = expectedStorageDimension(tenantId);
+        if (fromModel != expected) {
+            throw new IllegalArgumentException(
+                    "Embedding dimension mismatch: provider=" + embeddingService.getProvider(tenantId)
+                            + " model=" + embeddingService.getModelName(tenantId)
+                            + " returns " + fromModel
+                            + " but expected " + expected + " (LOCAL dùng embedding.local.dimension; GEMINI dùng embedding.storage-dimension)."
+            );
+        }
+    }
+
+    private int expectedStorageDimension(UUID tenantId) {
+        return "LOCAL".equals(embeddingService.getProvider(tenantId))
+                ? localEmbeddingDimension
+                : storageDimension;
     }
 }

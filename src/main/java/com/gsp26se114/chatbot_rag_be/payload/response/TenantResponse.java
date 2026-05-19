@@ -24,6 +24,7 @@ public class TenantResponse {
     private String address;
     private String website;
     private String companySize;
+    private String logoUrl;
     
     // Representative Information
     private String contactEmail;

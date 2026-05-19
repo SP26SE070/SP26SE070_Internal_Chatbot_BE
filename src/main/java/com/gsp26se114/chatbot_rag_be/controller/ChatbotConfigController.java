@@ -14,8 +14,8 @@ import org.springframework.security.core.annotation.AuthenticationPrincipal;
 import org.springframework.web.bind.annotation.*;
 
 import java.time.LocalDateTime;
+import java.util.Locale;
 import java.util.Map;
-import java.util.UUID;
 
 @Slf4j
 @RestController
@@ -38,8 +38,10 @@ public class ChatbotConfigController {
 
         String mode = (config != null && config.getMode() != null)
                 ? config.getMode() : "BALANCED";
+        String provider = (config != null && config.getEmbeddingProvider() != null)
+                ? config.getEmbeddingProvider() : "GEMINI";
 
-        return ResponseEntity.ok(new ChatbotConfigResponse(mode));
+        return ResponseEntity.ok(new ChatbotConfigResponse(mode, provider));
     }
 
     @PutMapping("/config")
@@ -51,8 +53,15 @@ public class ChatbotConfigController {
             @RequestBody Map<String, String> body) {
 
         String newMode = body.get("mode");
+        String newProvider = body.get("embeddingProvider");
         if (newMode == null || !newMode.matches("BALANCED|STRICT|FLEXIBLE")) {
             return ResponseEntity.badRequest().build();
+        }
+        if (newProvider != null) {
+            newProvider = newProvider.trim().toUpperCase(Locale.ROOT);
+            if (!newProvider.matches("GEMINI|LOCAL")) {
+                return ResponseEntity.badRequest().build();
+            }
         }
 
         ChatbotConfig config = chatbotConfigRepository
@@ -64,11 +73,17 @@ public class ChatbotConfigController {
                 });
 
         config.setMode(newMode.toUpperCase());
+        if (newProvider != null) {
+            config.setEmbeddingProvider(newProvider);
+        } else if (config.getEmbeddingProvider() == null) {
+            config.setEmbeddingProvider("GEMINI");
+        }
         config.setUpdatedAt(LocalDateTime.now());
         config.setUpdatedBy(userDetails.getId());
         chatbotConfigRepository.save(config);
 
-        log.info("Tenant {} updated chatbot mode to {}", userDetails.getTenantId(), newMode);
-        return ResponseEntity.ok(new ChatbotConfigResponse(newMode));
+        log.info("Tenant {} updated chatbot mode={} embeddingProvider={}",
+                userDetails.getTenantId(), newMode, config.getEmbeddingProvider());
+        return ResponseEntity.ok(new ChatbotConfigResponse(newMode, config.getEmbeddingProvider()));
     }
 }

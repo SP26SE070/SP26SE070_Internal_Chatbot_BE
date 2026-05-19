@@ -1,0 +1,13 @@
+embedding:
+  provider: local
+  storage-dimension: ${EMBEDDING_STORAGE_DIMENSION:1024}
+  chunk-failure-limit: ${EMBEDDING_CHUNK_FAILURE_LIMIT:20}
+  startup-self-test: ${EMBEDDING_STARTUP_SELF_TEST:true}
+  local:
+    model-name: ${LOCAL_EMBEDDING_MODEL_NAME:mxbai-embed-large}
+    fallback-models: ${LOCAL_EMBEDDING_FALLBACK_MODELS:}
+    endpoint: ${LOCAL_EMBEDDING_ENDPOINT:http://localhost:11434/api/embed}
+    api-key: ${LOCAL_EMBEDDING_API_KEY:}
+    timeout-seconds: ${LOCAL_EMBEDDING_TIMEOUT_SECONDS:60}
+    dimension: ${LOCAL_EMBEDDING_DIMENSION:1024}
+    max-chars: ${LOCAL_EMBEDDING_MAX_CHARS:6000}

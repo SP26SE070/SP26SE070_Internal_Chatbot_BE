@@ -29,6 +29,7 @@ import com.gsp26se114.chatbot_rag_be.service.DocumentPreviewService;
 import com.gsp26se114.chatbot_rag_be.security.service.UserPrincipal;
 import com.gsp26se114.chatbot_rag_be.service.DocumentProcessingService;
 import com.gsp26se114.chatbot_rag_be.service.MinioService;
+import com.gsp26se114.chatbot_rag_be.service.TenantEmbeddingService;
 import com.gsp26se114.chatbot_rag_be.service.TextExtractorService;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.Parameter;
@@ -87,6 +88,7 @@ public class DocumentController {
     private final DocumentProcessingService documentProcessingService;
     private final DocumentPreviewService documentPreviewService;
     private final TextExtractorService textExtractorService;
+    private final TenantEmbeddingService embeddingService;
     private final ObjectMapper objectMapper;
     private final SubscriptionValidationService subscriptionValidationService;
     private final com.gsp26se114.chatbot_rag_be.repository.AuditLogRepository auditLogRepository;
@@ -586,7 +588,7 @@ public class DocumentController {
             document.setUploadedBy(userDetails.getId());
             document.setUploadedAt(LocalDateTime.now());
             document.setEmbeddingStatus("PENDING");
-            document.setEmbeddingModel("gemini-embedding-001");
+            document.setEmbeddingModel(embeddingService.getModelName(userDetails.getTenantId()));
             document.setIsActive(true);
 
             document = documentRepository.save(document);
@@ -725,9 +727,9 @@ public class DocumentController {
         documentProcessingService.reprocessDocument(doc.getId());
 
         return ResponseEntity.ok(Map.of(
-                "message", "Re-indexing started for document: " + doc.getOriginalFileName(),
+            "message", "Re-indexing queued for document: " + doc.getOriginalFileName(),
                 "documentId", doc.getId().toString(),
-                "status", "PROCESSING"
+            "status", "PENDING"
         ));
     }
 

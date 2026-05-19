@@ -40,6 +40,9 @@ public class TenantRegistrationService {
         tenant.setAddress(request.getAddress());
         tenant.setWebsite(request.getWebsite());
         tenant.setCompanySize(request.getCompanySize());
+        if (request.getLogoUrl() != null && !request.getLogoUrl().isBlank()) {
+            tenant.setLogoUrl(request.getLogoUrl().trim());
+        }
 
         tenant.setContactEmail(request.getContactEmail());
         tenant.setRepresentativeName(request.getRepresentativeName());

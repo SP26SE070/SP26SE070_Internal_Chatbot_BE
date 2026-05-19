@@ -13,6 +13,9 @@ spring:
   sql:
     init:
       mode: ${SQL_INIT_MODE:never}
+  jpa:
+    hibernate:
+      ddl-auto: update
   servlet:
     multipart:
       max-file-size: ${MULTIPART_MAX_FILE_SIZE:50MB}
@@ -84,6 +87,7 @@ minio:
   access-key: ${MINIO_ACCESS_KEY:minioadmin}
   secret-key: ${MINIO_SECRET_KEY:minioadmin123}
   bucket-name: ${MINIO_BUCKET:chatbot-documents}
+  tenant-assets-bucket: ${MINIO_TENANT_ASSETS_BUCKET:tenant-assets}
   public-endpoint: ${MINIO_PUBLIC_ENDPOINT:http://localhost:9000}
 
 jwt:
@@ -98,3 +102,20 @@ rag:
   chunk-overlap-chars: ${RAG_CHUNK_OVERLAP_CHARS:100}
   spreadsheet-rows-per-chunk: ${RAG_SPREADSHEET_ROWS_PER_CHUNK:18}
   pdf-sparse-page-char-threshold: ${RAG_PDF_SPARSE_PAGE_CHARS:80}
+
+embedding:
+  # Default for SaaS/demo. Switch to "local" for on-premise POC.
+  provider: ${EMBEDDING_PROVIDER:gemini}
+  # DB vector dimension for current deployment mode (POC option B = re-create/re-embed when switching).
+  storage-dimension: ${EMBEDDING_STORAGE_DIMENSION:768}
+  chunk-failure-limit: ${EMBEDDING_CHUNK_FAILURE_LIMIT:5}
+  startup-self-test: ${EMBEDDING_STARTUP_SELF_TEST:false}
+  startup-self-test-text: ${EMBEDDING_STARTUP_SELF_TEST_TEXT:Kiểm tra embedding cục bộ cho tài liệu nội bộ}
+  local:
+    model-name: ${LOCAL_EMBEDDING_MODEL_NAME:mxbai-embed-large}
+    fallback-models: ${LOCAL_EMBEDDING_FALLBACK_MODELS:}
+    endpoint: ${LOCAL_EMBEDDING_ENDPOINT:http://localhost:11434/api/embed}
+    api-key: ${LOCAL_EMBEDDING_API_KEY:}
+    timeout-seconds: ${LOCAL_EMBEDDING_TIMEOUT_SECONDS:60}
+    dimension: ${LOCAL_EMBEDDING_DIMENSION:1024}
+    max-chars: ${LOCAL_EMBEDDING_MAX_CHARS:6000}

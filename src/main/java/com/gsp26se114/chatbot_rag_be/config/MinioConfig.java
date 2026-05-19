@@ -3,6 +3,7 @@ package com.gsp26se114.chatbot_rag_be.config;
 import io.minio.BucketExistsArgs;
 import io.minio.MakeBucketArgs;
 import io.minio.MinioClient;
+import io.minio.SetBucketPolicyArgs;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.beans.factory.annotation.Value;
@@ -36,6 +37,9 @@ public class MinioConfig {
     @Value("${minio.bucket-name}")
     private String bucketName;
 
+    @Value("${minio.tenant-assets-bucket}")
+    private String tenantAssetsBucket;
+
     @Autowired
     private Environment environment;
     
@@ -47,26 +51,12 @@ public class MinioConfig {
                 .endpoint(endpoint)
                 .credentials(accessKey, secretKey)
                 .build();
-            
-            // Create bucket if not exists
-            boolean exists = client.bucketExists(
-                BucketExistsArgs.builder()
-                    .bucket(bucketName)
-                    .build()
-            );
-            
-            if (!exists) {
-                client.makeBucket(
-                    MakeBucketArgs.builder()
-                        .bucket(bucketName)
-                        .build()
-                );
-                log.info("MinIO bucket '{}' created successfully", bucketName);
-            } else {
-                log.info("MinIO bucket '{}' already exists", bucketName);
-            }
-            
-            log.info("MinIO client initialized: endpoint={}, bucket={}", endpoint, bucketName);
+
+            ensureBucketExists(client, bucketName, false);
+            ensureBucketExists(client, tenantAssetsBucket, true);
+
+            log.info("MinIO client initialized: endpoint={}, bucket={}, tenantAssetsBucket={}",
+                endpoint, bucketName, tenantAssetsBucket);
             return client;
             
         } catch (Exception e) {
@@ -74,6 +64,51 @@ public class MinioConfig {
             log.warn("MinIO is unavailable — document upload/download will not work");
             return null;
         }
+    }
+
+    private void ensureBucketExists(MinioClient client, String bucket, boolean publicRead)
+            throws Exception {
+        if (bucket == null || bucket.isBlank()) {
+            return;
+        }
+        boolean exists = client.bucketExists(
+            BucketExistsArgs.builder()
+                .bucket(bucket)
+                .build()
+        );
+
+        if (!exists) {
+            client.makeBucket(
+                MakeBucketArgs.builder()
+                    .bucket(bucket)
+                    .build()
+            );
+            log.info("MinIO bucket '{}' created successfully", bucket);
+        } else {
+            log.info("MinIO bucket '{}' already exists", bucket);
+        }
+
+        if (publicRead) {
+            try {
+                applyPublicReadPolicy(client, bucket);
+            } catch (Exception e) {
+                log.warn("Unable to set public read policy for bucket '{}': {}", bucket, e.getMessage());
+            }
+        }
+    }
+
+    private void applyPublicReadPolicy(MinioClient client, String bucket) throws Exception {
+        String policy = String.format(
+            "{\"Version\":\"2012-10-17\",\"Statement\":[{\"Effect\":\"Allow\",\"Principal\":\"*\",\"Action\":[\"s3:GetObject\"],\"Resource\":[\"arn:aws:s3:::%s/*\"]}]}",
+            bucket
+        );
+        client.setBucketPolicy(
+            SetBucketPolicyArgs.builder()
+                .bucket(bucket)
+                .config(policy)
+                .build()
+        );
+        log.info("Public read policy applied to MinIO bucket '{}'", bucket);
     }
 
     @Bean(name = "publicMinioClient")
