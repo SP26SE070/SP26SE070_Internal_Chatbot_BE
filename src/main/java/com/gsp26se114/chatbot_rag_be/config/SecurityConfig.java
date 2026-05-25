@@ -31,6 +31,7 @@ import java.util.UUID;
 public class SecurityConfig {
 
     private final JwtAuthenticationFilter jwtFilter; // Tiêm thẳng vào thay vì tạo Bean thủ công
+    private final TenantContextFilter tenantContextFilter;
 
     @Bean
     public PasswordEncoder passwordEncoder() {
@@ -91,6 +92,7 @@ public class SecurityConfig {
 
         // 6. THỨ TỰ FILTER: Cực kỳ quan trọng để dứt điểm 403
         http.addFilterBefore(jwtFilter, UsernamePasswordAuthenticationFilter.class);
+        http.addFilterAfter(tenantContextFilter, com.gsp26se114.chatbot_rag_be.security.jwt.JwtAuthenticationFilter.class);
 
         return http.build();
     }
