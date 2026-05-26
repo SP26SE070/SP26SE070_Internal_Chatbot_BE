@@ -82,6 +82,7 @@ public class ChatbotRagBeApplication {
         executor.setMaxPoolSize(5);
         executor.setQueueCapacity(100);
         executor.setThreadNamePrefix("DocProcess-");
+        executor.setTaskDecorator(new com.gsp26se114.chatbot_rag_be.config.TenantAwareTaskDecorator());
         executor.initialize();
         return executor;
     }
