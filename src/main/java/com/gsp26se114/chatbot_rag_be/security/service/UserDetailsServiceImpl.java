@@ -1,14 +1,14 @@
 package com.gsp26se114.chatbot_rag_be.security.service;
 
-import com.gsp26se114.chatbot_rag_be.entity.User; 
 import com.gsp26se114.chatbot_rag_be.entity.RoleEntity;
-import com.gsp26se114.chatbot_rag_be.repository.UserRepository;
+import com.gsp26se114.chatbot_rag_be.entity.User;
 import com.gsp26se114.chatbot_rag_be.repository.RoleRepository;
+import com.gsp26se114.chatbot_rag_be.repository.UserRepository;
 import lombok.RequiredArgsConstructor;
+import org.springframework.security.authentication.DisabledException;
 import org.springframework.security.core.userdetails.UserDetails;
 import org.springframework.security.core.userdetails.UserDetailsService;
 import org.springframework.security.core.userdetails.UsernameNotFoundException;
-import org.springframework.security.authentication.DisabledException;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -22,20 +22,22 @@ public class UserDetailsServiceImpl implements UserDetailsService {
     @Override
     @Transactional
     public UserDetails loadUserByUsername(String email) throws UsernameNotFoundException {
-        // 1. Tìm user trong Database bằng email
-        User user = userRepository.findByEmail(email)
-                .orElseThrow(() -> new UsernameNotFoundException("User Not Found with email: " + email));
+        return com.gsp26se114.chatbot_rag_be.config.TenantContext.withDefaultDataSource(() -> {
+            // 1. Find user in the Main DB by email.
+            User user = userRepository.findByEmail(email)
+                    .orElseThrow(() -> new UsernameNotFoundException("User Not Found with email: " + email));
 
-        // 2. Kiểm tra user có bị ban không
-        if (Boolean.FALSE.equals(user.getIsActive())) {
-            throw new DisabledException("Account has been disabled: " + email);
-        }
+            // 2. Check whether the account is disabled.
+            if (Boolean.FALSE.equals(user.getIsActive())) {
+                throw new DisabledException("Account has been disabled: " + email);
+            }
 
-        // 3. Load role information
-        RoleEntity role = roleRepository.findById(user.getRoleId())
-                .orElseThrow(() -> new RuntimeException("Role not found with id: " + user.getRoleId()));
+            // 3. Load role information from the Main DB.
+            RoleEntity role = roleRepository.findById(user.getRoleId())
+                    .orElseThrow(() -> new RuntimeException("Role not found with id: " + user.getRoleId()));
 
-        // 3. Trả về UserPrincipal với role information
-        return UserPrincipal.build(user, role);
+            // 4. Return UserPrincipal with role information.
+            return UserPrincipal.build(user, role);
+        });
     }
 }

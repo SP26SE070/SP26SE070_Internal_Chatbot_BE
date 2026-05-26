@@ -1,11 +1,12 @@
 package com.gsp26se114.chatbot_rag_be.security.jwt;
 
+import com.gsp26se114.chatbot_rag_be.config.TenantContext;
 import com.gsp26se114.chatbot_rag_be.entity.Subscription;
 import com.gsp26se114.chatbot_rag_be.entity.SubscriptionStatus;
 import com.gsp26se114.chatbot_rag_be.entity.Tenant;
 import com.gsp26se114.chatbot_rag_be.entity.TenantStatus;
-import com.gsp26se114.chatbot_rag_be.security.service.UserPrincipal;
 import com.gsp26se114.chatbot_rag_be.security.service.UserDetailsServiceImpl;
+import com.gsp26se114.chatbot_rag_be.security.service.UserPrincipal;
 import jakarta.servlet.FilterChain;
 import jakarta.servlet.ServletException;
 import jakarta.servlet.http.HttpServletRequest;
@@ -28,7 +29,7 @@ import java.security.NoSuchAlgorithmException;
 
 @Slf4j
 @Component
-@RequiredArgsConstructor // Sử dụng Constructor Injection thay cho @Autowired
+@RequiredArgsConstructor
 public class JwtAuthenticationFilter extends OncePerRequestFilter {
 
     private final JwtUtils jwtUtils;
@@ -40,103 +41,121 @@ public class JwtAuthenticationFilter extends OncePerRequestFilter {
     @Override
     protected void doFilterInternal(HttpServletRequest request, HttpServletResponse response, FilterChain filterChain)
             throws ServletException, IOException {
+        AuthResult authResult = null;
         try {
             String path = request.getServletPath();
 
-            // 1. BYPASS LOGIC: Nếu là Login hoặc Swagger thì đi thẳng, không cần check Token
+            // 1. BYPASS LOGIC
             if (path.startsWith("/api/v1/auth/") || path.contains("/v3/api-docs") || path.contains("/swagger-ui")) {
                 filterChain.doFilter(request, response);
                 return;
             }
 
-            // 2. Lấy JWT từ Header
+            // 2. Get JWT
             String jwt = parseJwt(request);
-            
-            // 3. Kiểm tra Token có hợp lệ và KHÔNG BỊ BLACKLIST
+
+            // 3. Validate token and check blacklist/tenant/subscription on Main DB ONLY
             if (jwt != null && jwtUtils.validateJwtToken(jwt)) {
-                // CRITICAL: Hash token trước khi check blacklist
-                String tokenHash = hashToken(jwt);
-                if (blacklistedTokenRepository.existsByToken(tokenHash)) {
-                    log.warn("Token has been blacklisted (user logged out)");
+                // Wrap all auth/registry queries to use Main DB
+                authResult = TenantContext.withDefaultDataSource(() -> {
+                    try {
+                        String tokenHash = hashToken(jwt);
+                        if (blacklistedTokenRepository.existsByToken(tokenHash)) {
+                            log.warn("Token has been blacklisted (user logged out)");
+                            return AuthResult.blacklisted();
+                        }
+
+                        Integer tokenVersion = jwtUtils.getClaimFromJwtToken(jwt, "tokenVersion", Integer.class);
+                        String username = jwtUtils.getUserNameFromJwtToken(jwt);
+                        UserDetails userDetails = userDetailsService.loadUserByUsername(username);
+                        UserPrincipal principal = (UserPrincipal) userDetails;
+
+                        if (tokenVersion != null && !tokenVersion.equals(principal.getTokenVersion())) {
+                            log.warn("Token version mismatch - old token rejected for user {}", principal.getEmail());
+                            return AuthResult.versionMismatch();
+                        }
+
+                        if (principal.getTenantId() != null) {
+                            Tenant tenant = tenantRepository.findById(principal.getTenantId()).orElse(null);
+                            if (tenant != null && tenant.getStatus() == TenantStatus.SUSPENDED) {
+                                log.warn("Access denied - tenant {} is suspended", principal.getTenantId());
+                                return AuthResult.tenantSuspended();
+                            }
+
+                            Subscription subscription = subscriptionRepository
+                                    .findActiveSubscriptionByTenantId(principal.getTenantId())
+                                    .orElse(null);
+
+                            if (subscription == null) {
+                                subscription = subscriptionRepository
+                                        .findByTenantIdAndStatus(principal.getTenantId(),
+                                                SubscriptionStatus.GRACE_PERIOD)
+                                        .orElse(null);
+                            }
+
+                            if (subscription != null &&
+                                    subscription.getStatus() == SubscriptionStatus.GRACE_PERIOD) {
+                                boolean isTenantAdmin = "TENANT_ADMIN".equals(principal.getRoleCode());
+                                if (!isTenantAdmin) {
+                                    log.warn("Access denied - grace period, user {} not TENANT_ADMIN", principal.getId());
+                                    return AuthResult.gracePeriodDenied();
+                                }
+                                log.info("Grace period access granted for TENANT_ADMIN: {}", principal.getId());
+                            }
+                        }
+
+                        return AuthResult.success(userDetails, username);
+                    } catch (DisabledException e) {
+                        return AuthResult.disabled(e.getMessage());
+                    }
+                });
+
+                // Process result outside the wrapper so response/security context can use real tenant context.
+                if (authResult.status == AuthStatus.BLACKLISTED) {
                     filterChain.doFilter(request, response);
                     return;
                 }
-
-                // Check token version matches current user version
-                Integer tokenVersion = jwtUtils.getClaimFromJwtToken(jwt, "tokenVersion", Integer.class);
-                String username = jwtUtils.getUserNameFromJwtToken(jwt);
-                UserDetails userDetails = userDetailsService.loadUserByUsername(username);
-                UserPrincipal principal = (UserPrincipal) userDetails;
-                if (tokenVersion != null && !tokenVersion.equals(principal.getTokenVersion())) {
-                    log.warn("Token version mismatch — old token rejected for user {}", principal.getEmail());
+                if (authResult.status == AuthStatus.VERSION_MISMATCH) {
                     response.setStatus(HttpServletResponse.SC_UNAUTHORIZED);
                     response.setContentType("application/json");
                     response.getWriter().write("{\"error\": \"Session expired. Please login again.\"}");
                     return;
                 }
-
-                // 3b. Check tenant suspension status
-                if (principal.getTenantId() != null) {
-                    Tenant tenant = tenantRepository.findById(principal.getTenantId()).orElse(null);
-                    if (tenant != null && tenant.getStatus() == TenantStatus.SUSPENDED) {
-                        log.warn("Access denied — tenant {} is suspended", principal.getTenantId());
-                        response.setStatus(HttpServletResponse.SC_FORBIDDEN);
-                        response.setContentType("application/json");
-                        response.getWriter().write("{\"error\": \"Tenant account is suspended\"}");
-                        return;
-                    }
-
-                    // 3c. Check subscription grace period — allow TENANT_ADMIN only
-                    Subscription subscription = subscriptionRepository
-                            .findActiveSubscriptionByTenantId(principal.getTenantId())
-                            .orElse(null);
-
-                    // Check for grace period subscription
-                    if (subscription == null) {
-                        subscription = subscriptionRepository
-                                .findByTenantIdAndStatus(principal.getTenantId(),
-                                        SubscriptionStatus.GRACE_PERIOD)
-                                .orElse(null);
-                    }
-
-                    if (subscription != null &&
-                            subscription.getStatus() == SubscriptionStatus.GRACE_PERIOD) {
-                        boolean isTenantAdmin = "TENANT_ADMIN".equals(principal.getRoleCode());
-                        if (!isTenantAdmin) {
-                            log.warn("Access denied — subscription in grace period, user {} is not TENANT_ADMIN",
-                                    principal.getId());
-                            response.setStatus(HttpServletResponse.SC_FORBIDDEN);
-                            response.setContentType("application/json");
-                            response.getWriter().write("{\"error\": \"Subscription expired. Please contact your administrator to renew.\"}");
-                            return;
-                        }
-                        log.info("Grace period access granted for TENANT_ADMIN: {}", principal.getId());
-                    }
+                if (authResult.status == AuthStatus.TENANT_SUSPENDED) {
+                    response.setStatus(HttpServletResponse.SC_FORBIDDEN);
+                    response.setContentType("application/json");
+                    response.getWriter().write("{\"error\": \"Tenant account is suspended\"}");
+                    return;
+                }
+                if (authResult.status == AuthStatus.GRACE_PERIOD_DENIED) {
+                    response.setStatus(HttpServletResponse.SC_FORBIDDEN);
+                    response.setContentType("application/json");
+                    response.getWriter().write("{\"error\": \"Subscription expired. Please contact your administrator to renew.\"}");
+                    return;
+                }
+                if (authResult.status == AuthStatus.DISABLED) {
+                    log.warn("Access denied - user account is disabled: {}", authResult.errorMessage);
+                    response.setStatus(HttpServletResponse.SC_UNAUTHORIZED);
+                    response.setContentType("application/json");
+                    response.getWriter().write("{\"error\": \"Account has been deactivated\"}");
+                    return;
                 }
 
-                UsernamePasswordAuthenticationToken authentication = new UsernamePasswordAuthenticationToken(
-                        userDetails, 
-                        null, 
-                        userDetails.getAuthorities()
-                );
-                
-                authentication.setDetails(new WebAuthenticationDetailsSource().buildDetails(request));
-
-                // Lưu thông tin xác thực vào Context
-                SecurityContextHolder.getContext().setAuthentication(authentication);
-                log.info("Authenticated user: {}", username);
+                if (authResult.status == AuthStatus.SUCCESS) {
+                    UsernamePasswordAuthenticationToken authentication = new UsernamePasswordAuthenticationToken(
+                            authResult.userDetails,
+                            null,
+                            authResult.userDetails.getAuthorities()
+                    );
+                    authentication.setDetails(new WebAuthenticationDetailsSource().buildDetails(request));
+                    SecurityContextHolder.getContext().setAuthentication(authentication);
+                    log.info("Authenticated user: {}", authResult.username);
+                }
             }
-        } catch (DisabledException e) {
-            log.warn("Access denied — user account is disabled: {}", e.getMessage());
-            response.setStatus(HttpServletResponse.SC_UNAUTHORIZED);
-            response.setContentType("application/json");
-            response.getWriter().write("{\"error\": \"Account has been deactivated\"}");
-            return;
         } catch (Exception e) {
             log.error("Cannot set user authentication: {}", e.getMessage());
         }
 
-        // 4. Cho phép request đi tiếp qua các filter khác
         filterChain.doFilter(request, response);
     }
 
@@ -145,17 +164,14 @@ public class JwtAuthenticationFilter extends OncePerRequestFilter {
         if (StringUtils.hasText(headerAuth) && headerAuth.startsWith("Bearer ")) {
             return headerAuth.substring(7);
         }
-        // Also support token as query parameter for file downloads
+        // Also support token as query parameter for file downloads.
         String tokenParam = request.getParameter("token");
         if (StringUtils.hasText(tokenParam)) {
             return tokenParam;
         }
         return null;
     }
-    
-    /**
-     * Hash JWT token bằng SHA-256 để rút ngắn từ 300+ ký tự xuống 64 ký tự
-     */
+
     private String hashToken(String token) {
         try {
             MessageDigest digest = MessageDigest.getInstance("SHA-256");
@@ -169,6 +185,49 @@ public class JwtAuthenticationFilter extends OncePerRequestFilter {
             return hexString.toString();
         } catch (NoSuchAlgorithmException e) {
             throw new RuntimeException("SHA-256 algorithm not found", e);
+        }
+    }
+
+    private enum AuthStatus {
+        SUCCESS, BLACKLISTED, VERSION_MISMATCH, TENANT_SUSPENDED,
+        GRACE_PERIOD_DENIED, DISABLED
+    }
+
+    private static class AuthResult {
+        final AuthStatus status;
+        final UserDetails userDetails;
+        final String username;
+        final String errorMessage;
+
+        private AuthResult(AuthStatus status, UserDetails userDetails, String username, String errorMessage) {
+            this.status = status;
+            this.userDetails = userDetails;
+            this.username = username;
+            this.errorMessage = errorMessage;
+        }
+
+        static AuthResult success(UserDetails userDetails, String username) {
+            return new AuthResult(AuthStatus.SUCCESS, userDetails, username, null);
+        }
+
+        static AuthResult blacklisted() {
+            return new AuthResult(AuthStatus.BLACKLISTED, null, null, null);
+        }
+
+        static AuthResult versionMismatch() {
+            return new AuthResult(AuthStatus.VERSION_MISMATCH, null, null, null);
+        }
+
+        static AuthResult tenantSuspended() {
+            return new AuthResult(AuthStatus.TENANT_SUSPENDED, null, null, null);
+        }
+
+        static AuthResult gracePeriodDenied() {
+            return new AuthResult(AuthStatus.GRACE_PERIOD_DENIED, null, null, null);
+        }
+
+        static AuthResult disabled(String message) {
+            return new AuthResult(AuthStatus.DISABLED, null, null, message);
         }
     }
 }

@@ -1,9 +1,10 @@
 package com.gsp26se114.chatbot_rag_be.service;
 
+import com.gsp26se114.chatbot_rag_be.config.TenantContext;
 import com.gsp26se114.chatbot_rag_be.entity.BlacklistedToken;
 import com.gsp26se114.chatbot_rag_be.entity.RefreshToken;
-import com.gsp26se114.chatbot_rag_be.entity.User;
 import com.gsp26se114.chatbot_rag_be.entity.RoleEntity;
+import com.gsp26se114.chatbot_rag_be.entity.User;
 import com.gsp26se114.chatbot_rag_be.exception.ForbiddenException;
 import com.gsp26se114.chatbot_rag_be.payload.request.*;
 import com.gsp26se114.chatbot_rag_be.payload.response.JwtResponse;
@@ -14,7 +15,8 @@ import com.gsp26se114.chatbot_rag_be.security.service.UserPrincipal;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.factory.annotation.Value;
-import org.springframework.security.authentication.*;
+import org.springframework.security.authentication.AuthenticationManager;
+import org.springframework.security.authentication.UsernamePasswordAuthenticationToken;
 import org.springframework.security.core.Authentication;
 import org.springframework.security.core.context.SecurityContextHolder;
 import org.springframework.security.crypto.password.PasswordEncoder;
@@ -26,7 +28,9 @@ import java.security.MessageDigest;
 import java.security.NoSuchAlgorithmException;
 import java.time.Instant;
 import java.time.LocalDateTime;
-import java.util.*;
+import java.util.List;
+import java.util.Random;
+import java.util.UUID;
 
 @Slf4j
 @Service
@@ -47,93 +51,89 @@ public class AuthService {
 
     @Transactional
     public JwtResponse login(LoginRequest loginRequest) {
-        Authentication authentication = authenticationManager.authenticate(
-                new UsernamePasswordAuthenticationToken(loginRequest.email(), loginRequest.password()));
+        return TenantContext.withDefaultDataSource(() -> {
+            Authentication authentication = authenticationManager.authenticate(
+                    new UsernamePasswordAuthenticationToken(loginRequest.email(), loginRequest.password()));
 
-        SecurityContextHolder.getContext().setAuthentication(authentication);
-        UserPrincipal userDetails = (UserPrincipal) authentication.getPrincipal();
-        
-        // Update lastLoginAt
-        User user = userRepository.findById(userDetails.getId())
-                .orElseThrow(() -> new RuntimeException("User không tồn tại!"));
-        user.setLastLoginAt(LocalDateTime.now());
-        userRepository.save(user);
+            SecurityContextHolder.getContext().setAuthentication(authentication);
+            UserPrincipal userDetails = (UserPrincipal) authentication.getPrincipal();
 
-        // Increment token version to invalidate old tokens
-        user.setTokenVersion(user.getTokenVersion() + 1);
-        userRepository.save(user);
+            // Update lastLoginAt.
+            User user = userRepository.findById(userDetails.getId())
+                    .orElseThrow(() -> new RuntimeException("User không tồn tại!"));
+            user.setLastLoginAt(LocalDateTime.now());
+            userRepository.save(user);
 
-        // Check subscription grace period — block non-admin employees
-        if (userDetails.getTenantId() != null) {
-            com.gsp26se114.chatbot_rag_be.entity.Subscription subscription =
-                    subscriptionRepository.findByTenantIdAndStatus(
-                            userDetails.getTenantId(),
-                            com.gsp26se114.chatbot_rag_be.entity.SubscriptionStatus.GRACE_PERIOD)
-                    .orElse(null);
+            // Increment token version to invalidate old tokens.
+            user.setTokenVersion(user.getTokenVersion() + 1);
+            userRepository.save(user);
 
-            if (subscription != null) {
-                boolean isTenantAdmin = userDetails.getAuthorities().stream()
-                        .anyMatch(a -> a.getAuthority().equals("ROLE_TENANT_ADMIN"));
-                if (!isTenantAdmin) {
-                    throw new ForbiddenException(
-                        "Gói đăng ký của công ty bạn đã hết hạn. " +
-                        "Vui lòng liên hệ quản trị viên để gia hạn."
-                    );
+            // Check subscription grace period - block non-admin employees.
+            if (userDetails.getTenantId() != null) {
+                com.gsp26se114.chatbot_rag_be.entity.Subscription subscription =
+                        subscriptionRepository.findByTenantIdAndStatus(
+                                        userDetails.getTenantId(),
+                                        com.gsp26se114.chatbot_rag_be.entity.SubscriptionStatus.GRACE_PERIOD)
+                                .orElse(null);
+
+                if (subscription != null) {
+                    boolean isTenantAdmin = userDetails.getAuthorities().stream()
+                            .anyMatch(a -> a.getAuthority().equals("ROLE_TENANT_ADMIN"));
+                    if (!isTenantAdmin) {
+                        throw new ForbiddenException(
+                                "Gói đăng ký của công ty bạn đã hết hạn. " +
+                                        "Vui lòng liên hệ quản trị viên để gia hạn."
+                        );
+                    }
                 }
             }
-        }
 
-        // Reload user so JWT contains the updated tokenVersion
-        User userWithUpdatedTokenVersion = userRepository.findById(userDetails.getId()).get();
+            // Reload user so JWT contains the updated tokenVersion.
+            User userWithUpdatedTokenVersion = userRepository.findById(userDetails.getId()).get();
 
-        // Reload role info
-        RoleEntity role = roleRepository.findById(userWithUpdatedTokenVersion.getRoleId())
-                .orElseThrow(() -> new RuntimeException("Role not found"));
+            // Reload role info.
+            RoleEntity role = roleRepository.findById(userWithUpdatedTokenVersion.getRoleId())
+                    .orElseThrow(() -> new RuntimeException("Role not found"));
 
-        UserPrincipal updatedPrincipal = UserPrincipal.build(userWithUpdatedTokenVersion, role);
-        UsernamePasswordAuthenticationToken updatedAuth =
-                new UsernamePasswordAuthenticationToken(updatedPrincipal, null, updatedPrincipal.getAuthorities());
-        String accessToken = jwtUtils.generateJwtToken(updatedAuth);
+            UserPrincipal updatedPrincipal = UserPrincipal.build(userWithUpdatedTokenVersion, role);
+            UsernamePasswordAuthenticationToken updatedAuth =
+                    new UsernamePasswordAuthenticationToken(updatedPrincipal, null, updatedPrincipal.getAuthorities());
+            String accessToken = jwtUtils.generateJwtToken(updatedAuth);
 
-        // Single session enforcement — delete existing token first
-        refreshTokenRepository.deleteByUser(userWithUpdatedTokenVersion);
-        refreshTokenRepository.flush();
-        RefreshToken refreshToken = createRefreshToken(userDetails.getId());
+            refreshTokenRepository.deleteByUser(userWithUpdatedTokenVersion);
+            refreshTokenRepository.flush();
+            RefreshToken refreshToken = createRefreshToken(userDetails.getId());
 
-        List<String> roles = userDetails.getAuthorities().stream()
-                .map(item -> item.getAuthority()).toList();
+            List<String> roles = userDetails.getAuthorities().stream()
+                    .map(item -> item.getAuthority()).toList();
 
-        return new JwtResponse(
-                accessToken,
-                refreshToken.getToken(),
-                userDetails.getId(),
-                userDetails.getEmail(),
-                userDetails.getTenantId(),
-                roles,
-                user.getMustChangePassword()  // Frontend check để bắt đổi password
-        );
+            return new JwtResponse(
+                    accessToken,
+                    refreshToken.getToken(),
+                    userDetails.getId(),
+                    userDetails.getEmail(),
+                    userDetails.getTenantId(),
+                    roles,
+                    user.getMustChangePassword()
+            );
+        });
     }
 
     public void logout(String authHeader) {
-        if (authHeader != null && authHeader.startsWith("Bearer ")) {
-            String jwt = authHeader.substring(7);
-            
-            // Lấy expiry date từ JWT token
-            Instant expiryDate = jwtUtils.getExpiryDateFromToken(jwt);
-            
-            // Hash JWT thành SHA-256 (64 ký tự) thay vì lưu nguyên (300+ ký tự)
-            String tokenHash = hashToken(jwt);
-            
-            BlacklistedToken blacklistedToken = new BlacklistedToken();
-            blacklistedToken.setToken(tokenHash);
-            blacklistedToken.setExpiryDate(expiryDate);
-            blacklistedTokenRepository.save(blacklistedToken);
-        }
+        TenantContext.runOnDefaultDataSource(() -> {
+            if (authHeader != null && authHeader.startsWith("Bearer ")) {
+                String jwt = authHeader.substring(7);
+                Instant expiryDate = jwtUtils.getExpiryDateFromToken(jwt);
+                String tokenHash = hashToken(jwt);
+
+                BlacklistedToken blacklistedToken = new BlacklistedToken();
+                blacklistedToken.setToken(tokenHash);
+                blacklistedToken.setExpiryDate(expiryDate);
+                blacklistedTokenRepository.save(blacklistedToken);
+            }
+        });
     }
-    
-    /**
-     * Hash JWT token bằng SHA-256 để rút ngắn từ 300+ ký tự xuống 64 ký tự
-     */
+
     private String hashToken(String token) {
         try {
             MessageDigest digest = MessageDigest.getInstance("SHA-256");
@@ -155,30 +155,26 @@ public class AuthService {
 
     @Transactional
     public void forgotPassword(String email) {
-        User user = userRepository.findByEmail(email)
-                .orElseThrow(() -> new RuntimeException("Email không tồn tại!"));
-        String otp = String.format("%06d", new Random().nextInt(999999));
-        user.setResetPasswordToken(otp);
-        user.setTokenExpiry(LocalDateTime.now().plusMinutes(OTP_VALID_MINUTES));
-        // New OTP flow: invalidate any previous verified session
-        user.setPasswordResetSessionToken(null);
-        user.setPasswordResetSessionExpiry(null);
-        userRepository.save(user);
-        
-        // Gửi OTP đến email thật (contactEmail nếu có, không thì dùng email login)
+        User user = TenantContext.withDefaultDataSource(() -> {
+            User u = userRepository.findByEmail(email)
+                    .orElseThrow(() -> new RuntimeException("Email không tồn tại!"));
+            String otp = String.format("%06d", new Random().nextInt(999999));
+            u.setResetPasswordToken(otp);
+            u.setTokenExpiry(LocalDateTime.now().plusMinutes(OTP_VALID_MINUTES));
+            u.setPasswordResetSessionToken(null);
+            u.setPasswordResetSessionExpiry(null);
+            return userRepository.save(u);
+        });
+
+        // Email sending stays outside the datasource wrapper.
         String emailToSend = getEmailToSend(user);
         String htmlContent = emailTemplateService.generateOtpResetPasswordEmail(
-            user.getFullName(), otp);
+                user.getFullName(), user.getResetPasswordToken());
         emailService.sendHtmlEmail(emailToSend, "🔐 Xác Thực OTP - Đặt Lại Mật Khẩu", htmlContent);
         log.info("OTP reset password email sent to: {}", emailToSend);
     }
-    
-    /**
-     * Lấy email để gửi thông báo: ưu tiên contactEmail (đã verify khi lưu DB)
-     */
+
     private String getEmailToSend(User user) {
-        // Ưu tiên gửi OTP đến contactEmail (đã verify khi lưu DB)
-        // Ngược lại fallback về email đăng nhập
         if (user.getContactEmail() != null) {
             log.info("Sending OTP to contact email: {}", user.getContactEmail());
             return user.getContactEmail();
@@ -186,100 +182,98 @@ public class AuthService {
         return user.getEmail();
     }
 
-    /**
-     * Bước 2: xác thực OTP đúng → cấp resetSessionToken (one-time) để gọi reset-password.
-     */
     @Transactional
     public VerifyResetOtpResponse verifyResetOtp(String email, String otp) {
-        User user = userRepository.findByEmail(email)
-                .orElseThrow(() -> new RuntimeException("Email không tồn tại!"));
-        if (user.getResetPasswordToken() == null || user.getTokenExpiry() == null) {
-            throw new RuntimeException("Chưa có mã OTP hợp lệ. Vui lòng gửi lại OTP.");
-        }
-        if (user.getTokenExpiry().isBefore(LocalDateTime.now())) {
-            throw new RuntimeException("OTP đã hết hạn!");
-        }
-        if (!user.getResetPasswordToken().equals(otp.trim())) {
-            throw new RuntimeException("Mã OTP không đúng!");
-        }
+        return TenantContext.withDefaultDataSource(() -> {
+            User user = userRepository.findByEmail(email)
+                    .orElseThrow(() -> new RuntimeException("Email không tồn tại!"));
+            if (user.getResetPasswordToken() == null || user.getTokenExpiry() == null) {
+                throw new RuntimeException("Chưa có mã OTP hợp lệ. Vui lòng gửi lại OTP.");
+            }
+            if (user.getTokenExpiry().isBefore(LocalDateTime.now())) {
+                throw new RuntimeException("OTP đã hết hạn!");
+            }
+            if (!user.getResetPasswordToken().equals(otp.trim())) {
+                throw new RuntimeException("Mã OTP không đúng!");
+            }
 
-        String sessionToken = UUID.randomUUID().toString();
-        user.setPasswordResetSessionToken(sessionToken);
-        user.setPasswordResetSessionExpiry(LocalDateTime.now().plusMinutes(RESET_SESSION_VALID_MINUTES));
-        user.setResetPasswordToken(null);
-        user.setTokenExpiry(null);
-        userRepository.save(user);
+            String sessionToken = UUID.randomUUID().toString();
+            user.setPasswordResetSessionToken(sessionToken);
+            user.setPasswordResetSessionExpiry(LocalDateTime.now().plusMinutes(RESET_SESSION_VALID_MINUTES));
+            user.setResetPasswordToken(null);
+            user.setTokenExpiry(null);
+            userRepository.save(user);
 
-        return new VerifyResetOtpResponse(
-                "Xác thực OTP thành công. Bạn có thể đặt lại mật khẩu.",
-                sessionToken
-        );
+            return new VerifyResetOtpResponse(
+                    "Xác thực OTP thành công. Bạn có thể đặt lại mật khẩu.",
+                    sessionToken
+            );
+        });
     }
 
     @Transactional
     public void resetPassword(ResetPasswordRequest request) {
-        User user = userRepository.findByPasswordResetSessionToken(request.resetSessionToken())
-                .filter(u -> u.getPasswordResetSessionExpiry() != null
-                        && u.getPasswordResetSessionExpiry().isAfter(LocalDateTime.now()))
-                .orElseThrow(() -> new RuntimeException("Phiên đặt lại mật khẩu hết hạn hoặc không hợp lệ!"));
-        user.setPassword(passwordEncoder.encode(request.newPassword()));
-        user.setResetPasswordToken(null);
-        user.setTokenExpiry(null);
-        user.setPasswordResetSessionToken(null);
-        user.setPasswordResetSessionExpiry(null);
-        userRepository.save(user);
+        TenantContext.runOnDefaultDataSource(() -> {
+            User user = userRepository.findByPasswordResetSessionToken(request.resetSessionToken())
+                    .filter(u -> u.getPasswordResetSessionExpiry() != null
+                            && u.getPasswordResetSessionExpiry().isAfter(LocalDateTime.now()))
+                    .orElseThrow(() -> new RuntimeException("Phiên đặt lại mật khẩu hết hạn hoặc không hợp lệ!"));
+            user.setPassword(passwordEncoder.encode(request.newPassword()));
+            user.setResetPasswordToken(null);
+            user.setTokenExpiry(null);
+            user.setPasswordResetSessionToken(null);
+            user.setPasswordResetSessionExpiry(null);
+            userRepository.save(user);
+        });
     }
 
     @Transactional
     public JwtResponse refreshAccessToken(String refreshTokenStr) {
-        // 1. Tìm refresh token trong database
-        RefreshToken refreshToken = refreshTokenRepository.findByToken(refreshTokenStr)
-                .orElseThrow(() -> new RuntimeException("Refresh token không hợp lệ!"));
+        return TenantContext.withDefaultDataSource(() -> {
+            RefreshToken refreshToken = refreshTokenRepository.findByToken(refreshTokenStr)
+                    .orElseThrow(() -> new RuntimeException("Refresh token không hợp lệ!"));
 
-        // 2. Kiểm tra refresh token có hết hạn không
-        if (refreshToken.getExpiryDate().isBefore(Instant.now())) {
-            refreshTokenRepository.delete(refreshToken);
-            throw new RuntimeException("Refresh token đã hết hạn. Vui lòng đăng nhập lại!");
-        }
+            if (refreshToken.getExpiryDate().isBefore(Instant.now())) {
+                refreshTokenRepository.delete(refreshToken);
+                throw new RuntimeException("Refresh token đã hết hạn. Vui lòng đăng nhập lại!");
+            }
 
-        // 3. Reload user from DB so permissions/role are current (not stale Hibernate proxy cache)
-        User user = userRepository.findById(refreshToken.getUser().getId())
-                .orElseThrow(() -> new RuntimeException("User không tồn tại!"));
-        if (Boolean.FALSE.equals(user.getIsActive())) {
-            throw new RuntimeException("Account has been disabled");
-        }
+            User user = userRepository.findById(refreshToken.getUser().getId())
+                    .orElseThrow(() -> new RuntimeException("User không tồn tại!"));
+            if (Boolean.FALSE.equals(user.getIsActive())) {
+                throw new RuntimeException("Account has been disabled");
+            }
 
-        // 3.5 Load role information (includes jsonb permissions)
-        RoleEntity role = roleRepository.findById(user.getRoleId())
-                .orElseThrow(() -> new RuntimeException("Role not found"));
+            RoleEntity role = roleRepository.findById(user.getRoleId())
+                    .orElseThrow(() -> new RuntimeException("Role not found"));
 
+            UserPrincipal userPrincipal = UserPrincipal.build(user, role);
+            UsernamePasswordAuthenticationToken authentication =
+                    new UsernamePasswordAuthenticationToken(userPrincipal, null, userPrincipal.getAuthorities());
+            String newAccessToken = jwtUtils.generateJwtToken(authentication);
 
-        // 4. Tạo access token mới
-        UserPrincipal userPrincipal = UserPrincipal.build(user, role);
-        UsernamePasswordAuthenticationToken authentication = 
-                new UsernamePasswordAuthenticationToken(userPrincipal, null, userPrincipal.getAuthorities());
-        String newAccessToken = jwtUtils.generateJwtToken(authentication);
+            List<String> roles = userPrincipal.getAuthorities().stream()
+                    .map(item -> item.getAuthority()).toList();
 
-        // 5. Trả về response với access token mới, giữ nguyên refresh token cũ
-        List<String> roles = userPrincipal.getAuthorities().stream()
-                .map(item -> item.getAuthority()).toList();
-
-        return new JwtResponse(
-                newAccessToken,
-                refreshTokenStr, // Giữ nguyên refresh token cũ (không rotate)
-                user.getId(),
-                user.getEmail(),
-                userPrincipal.getTenantId(),
-                roles,
-                user.getMustChangePassword()  // Trả về flag này cho frontend
-        );
+            return new JwtResponse(
+                    newAccessToken,
+                    refreshTokenStr,
+                    user.getId(),
+                    user.getEmail(),
+                    userPrincipal.getTenantId(),
+                    roles,
+                    user.getMustChangePassword()
+            );
+        });
     }
 
     private RefreshToken createRefreshToken(UUID userId) {
-        RefreshToken refreshToken = new RefreshToken();
-        refreshToken.setUser(userRepository.findById(userId).get());
-        refreshToken.setExpiryDate(Instant.now().plusMillis(refreshTokenDurationMs));
-        refreshToken.setToken(UUID.randomUUID().toString());
-        return refreshTokenRepository.save(refreshToken);
+        return TenantContext.withDefaultDataSource(() -> {
+            RefreshToken refreshToken = new RefreshToken();
+            refreshToken.setUser(userRepository.findById(userId).get());
+            refreshToken.setExpiryDate(Instant.now().plusMillis(refreshTokenDurationMs));
+            refreshToken.setToken(UUID.randomUUID().toString());
+            return refreshTokenRepository.save(refreshToken);
+        });
     }
 }

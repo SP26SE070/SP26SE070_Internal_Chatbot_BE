@@ -1,5 +1,6 @@
 package com.gsp26se114.chatbot_rag_be.controller;
 
+import com.gsp26se114.chatbot_rag_be.config.TenantContext;
 import com.gsp26se114.chatbot_rag_be.entity.Department;
 import com.gsp26se114.chatbot_rag_be.entity.RoleEntity;
 import com.gsp26se114.chatbot_rag_be.entity.Tenant;
@@ -104,35 +105,37 @@ public class ProfileController {
      * Helper method: Map User entity to UserProfileResponse
      */
     private UserProfileResponse mapToResponse(User user) {
-        RoleEntity role = user.getRoleId() != null ? 
-            roleRepository.findById(user.getRoleId()).orElse(null) : null;
-        Department department = user.getDepartmentId() != null ? 
-            departmentRepository.findById(user.getDepartmentId()).orElse(null) : null;
+        return TenantContext.withDefaultDataSource(() -> {
+            RoleEntity role = user.getRoleId() != null ?
+                roleRepository.findById(user.getRoleId()).orElse(null) : null;
+            Department department = user.getDepartmentId() != null ?
+                departmentRepository.findById(user.getDepartmentId()).orElse(null) : null;
 
-        // Get tenant info
-        Tenant tenant = null;
-        if (user.getTenantId() != null) {
-            tenant = tenantRepository.findById(user.getTenantId()).orElse(null);
-        }
-        String tenantName = tenant != null ? tenant.getName() : null;
-        String tenantLogoUrl = tenant != null ? tenant.getLogoUrl() : null;
-        
-        return new UserProfileResponse(
-            user.getId(),
-            user.getEmail(),
-            user.getContactEmail(),
-            user.getFullName(),
-            user.getPhoneNumber(),
-            user.getDateOfBirth(),
-            user.getAddress(),
-            role != null ? role.getName() : null,
-            department != null ? department.getName() : null,
-            tenantName,
-            tenantLogoUrl,
-            user.getCreatedAt(),
-            user.getUpdatedAt(),
-            user.getLastLoginAt()
-        );
+            // Get tenant info
+            Tenant tenant = null;
+            if (user.getTenantId() != null) {
+                tenant = tenantRepository.findById(user.getTenantId()).orElse(null);
+            }
+            String tenantName = tenant != null ? tenant.getName() : null;
+            String tenantLogoUrl = tenant != null ? tenant.getLogoUrl() : null;
+
+            return new UserProfileResponse(
+                user.getId(),
+                user.getEmail(),
+                user.getContactEmail(),
+                user.getFullName(),
+                user.getPhoneNumber(),
+                user.getDateOfBirth(),
+                user.getAddress(),
+                role != null ? role.getName() : null,
+                department != null ? department.getName() : null,
+                tenantName,
+                tenantLogoUrl,
+                user.getCreatedAt(),
+                user.getUpdatedAt(),
+                user.getLastLoginAt()
+            );
+        });
     }
     
     /**
