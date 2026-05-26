@@ -1,10 +1,13 @@
 package com.gsp26se114.chatbot_rag_be.service;
 
+import com.gsp26se114.chatbot_rag_be.config.TenantContext;
+import com.gsp26se114.chatbot_rag_be.service.TenantTierResolver;
 import com.google.gson.Gson;
 import com.google.gson.JsonArray;
 import com.google.gson.JsonObject;
 import lombok.extern.slf4j.Slf4j;
 import okhttp3.*;
+import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.stereotype.Service;
 
@@ -50,8 +53,20 @@ public class GeminiChatService {
     @Value("${spring.ai.google.genai.api-key}")
     private String apiKey;
 
+    @Value("${gemini.models.starter:gemini-2.5-flash}")
+    private String starterModel;
+
+    @Value("${gemini.models.standard:gemini-2.5-flash}")
+    private String standardModel;
+
+    @Value("${gemini.models.enterprise:gemini-2.5-pro}")
+    private String enterpriseModel;
+
     @Value("${spring.ai.google.genai.chat.options.model:gemini-2.5-flash}")
-    private String chatModel;
+    private String defaultModel;
+
+    @Autowired
+    private TenantTierResolver tenantTierResolver;
 
     private final OkHttpClient httpClient;
     private final Gson gson;
@@ -149,8 +164,10 @@ public class GeminiChatService {
      * Call Gemini API to generate text
      */
     private AnswerWithTokens callGeminiAPI(String prompt, int maxOutputTokens) throws IOException {
+        String modelToUse = resolveChatModel();
+        log.info("Using Gemini model: {} for tenant tier", modelToUse);
         String url = "https://generativelanguage.googleapis.com/v1beta/models/" 
-                   + chatModel + ":generateContent?key=" + apiKey;
+                   + modelToUse + ":generateContent?key=" + apiKey;
 
         // Build request body
         JsonObject requestBody = new JsonObject();
@@ -248,6 +265,34 @@ public class GeminiChatService {
             }
 
             return new AnswerWithTokens(answer, tokensUsed);
+        }
+    }
+
+    /**
+     * Resolves which Gemini model to use based on current tenant tier.
+     * - ENTERPRISE → enterpriseModel (Gemini Pro)
+     * - STANDARD → standardModel (Gemini Flash) 
+     * - STARTER/TRIAL → starterModel (Gemini Flash)
+     * - No tenant context → defaultModel
+     */
+    private String resolveChatModel() {
+        java.util.UUID tenantId = TenantContext.getCurrentTenant();
+        if (tenantId == null) {
+            return defaultModel;
+        }
+        String tier = TenantContext.getCurrentTier();
+        if (tier == null || tier.isBlank()) {
+            tier = tenantTierResolver.resolveTier(tenantId);
+        }
+        switch (tier) {
+            case "ENTERPRISE":
+                return enterpriseModel;
+            case "STANDARD":
+                return standardModel;
+            case "STARTER":
+            case "TRIAL":
+            default:
+                return starterModel;
         }
     }
 }

@@ -1,5 +1,6 @@
 package com.gsp26se114.chatbot_rag_be.service;
 
+import com.gsp26se114.chatbot_rag_be.config.TenantContext;
 import com.gsp26se114.chatbot_rag_be.entity.Subscription;
 import com.gsp26se114.chatbot_rag_be.entity.SubscriptionTier;
 import com.gsp26se114.chatbot_rag_be.repository.SubscriptionRepository;
@@ -29,9 +30,11 @@ public class TenantTierResolver {
         if (tenantId == null) {
             return "STARTER";
         }
-        Optional<Subscription> sub = subscriptionRepository
-                .findActiveSubscriptionByTenantId(tenantId);
-        return sub.map(s -> s.getTier().name()).orElse("STARTER");
+        return TenantContext.withDefaultDataSource(() -> {
+            Optional<Subscription> sub = subscriptionRepository
+                    .findActiveSubscriptionByTenantId(tenantId);
+            return sub.map(s -> s.getTier().name()).orElse("STARTER");
+        });
     }
 
     /**

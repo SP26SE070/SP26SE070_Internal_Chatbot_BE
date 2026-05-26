@@ -43,3 +43,9 @@ build/
 .claude/
 worker.md
 .gitignore
+
+# Codex working files
+.codex-*.log
+.codex-*.pid
+.codex-*.out.log
+.codex-*.err.log

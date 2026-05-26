@@ -119,3 +119,10 @@ embedding:
     timeout-seconds: ${LOCAL_EMBEDDING_TIMEOUT_SECONDS:60}
     dimension: ${LOCAL_EMBEDDING_DIMENSION:1024}
     max-chars: ${LOCAL_EMBEDDING_MAX_CHARS:6000}
+
+# Tier-based Gemini model selection
+gemini:
+  models:
+    starter: gemini-2.5-flash
+    standard: gemini-2.5-flash
+    enterprise: gemini-2.5-pro
