@@ -50,8 +50,11 @@ public class GeminiChatService {
             Chỉ trả lời dựa trên các đoạn đó; không suy diễn hay bịa nội dung của tài liệu/mục không xuất hiện trong context.
             """;
 
-    @Value("${spring.ai.google.genai.api-key}")
+    @Value("${chiasegpu.api-key}")
     private String apiKey;
+
+    @Value("${chiasegpu.base-url:https://llm.chiasegpu.vn/v1}")
+    private String baseUrl;
 
     @Value("${gemini.models.starter:gemini-2.5-flash}")
     private String starterModel;
@@ -62,7 +65,7 @@ public class GeminiChatService {
     @Value("${gemini.models.enterprise:gemini-2.5-pro}")
     private String enterpriseModel;
 
-    @Value("${spring.ai.google.genai.chat.options.model:gemini-2.5-flash}")
+    @Value("${gemini.models.starter:ts/gemini-2.5-flash}")
     private String defaultModel;
 
     @Autowired
@@ -88,7 +91,7 @@ public class GeminiChatService {
      */
     public AnswerWithTokens generateAnswer(String context, String question, List<ChatMessage> history) {
         if (apiKey == null || apiKey.isBlank()) {
-            return new AnswerWithTokens("He thong chua cau hinh GEMINI_API_KEY, vui long lien he quan tri vien.", 0);
+            return new AnswerWithTokens("He thong chua cau hinh CHIASEGPU_API_KEY, vui long lien he quan tri vien.", 0);
         }
 
         try {
@@ -165,30 +168,24 @@ public class GeminiChatService {
      */
     private AnswerWithTokens callGeminiAPI(String prompt, int maxOutputTokens) throws IOException {
         String modelToUse = resolveChatModel();
-        log.info("Using Gemini model: {} for tenant tier", modelToUse);
-        String url = "https://generativelanguage.googleapis.com/v1beta/models/" 
-                   + modelToUse + ":generateContent?key=" + apiKey;
+        log.info("Using LLM model: {} for tenant tier", modelToUse);
+        String url = baseUrl + "/chat/completions";
 
-        // Build request body
+        // Build OpenAI-compatible request body
         JsonObject requestBody = new JsonObject();
-        JsonArray contents = new JsonArray();
-        JsonObject content = new JsonObject();
-        JsonArray parts = new JsonArray();
-        JsonObject part = new JsonObject();
-        part.addProperty("text", prompt);
-        parts.add(part);
-        content.add("parts", parts);
-        contents.add(content);
-        requestBody.add("contents", contents);
+        requestBody.addProperty("model", modelToUse);
 
-        // Add generation config
-        JsonObject generationConfig = new JsonObject();
-        generationConfig.addProperty("temperature", 0.7);
-        generationConfig.addProperty("topP", 0.95);
-        generationConfig.addProperty("maxOutputTokens", maxOutputTokens);
-        requestBody.add("generationConfig", generationConfig);
+        JsonArray messages = new JsonArray();
+        JsonObject userMessage = new JsonObject();
+        userMessage.addProperty("role", "user");
+        userMessage.addProperty("content", prompt);
+        messages.add(userMessage);
+        requestBody.add("messages", messages);
 
-        log.debug("Calling Gemini API: {}", url);
+        requestBody.addProperty("temperature", 0.7);
+        requestBody.addProperty("max_tokens", maxOutputTokens);
+
+        log.debug("Calling ChiaseGPU API: {}", url);
 
         RequestBody body = RequestBody.create(
             gson.toJson(requestBody),
@@ -197,46 +194,46 @@ public class GeminiChatService {
 
         Request request = new Request.Builder()
                 .url(url)
+                .header("Authorization", "Bearer " + apiKey)
                 .post(body)
                 .build();
 
         try (Response response = httpClient.newCall(request).execute()) {
             if (!response.isSuccessful()) {
                 String errorBody = response.body() != null ? response.body().string() : "No error body";
-                log.error("Gemini API error: {} - {}", response.code(), errorBody);
-                throw new IOException("Gemini API error: " + response.code() + " - " + errorBody);
+                log.error("ChiaseGPU API error: {} - {}", response.code(), errorBody);
+                throw new IOException("ChiaseGPU API error: " + response.code() + " - " + errorBody);
             }
 
             String responseBody = response.body().string();
-            log.debug("Gemini API response: {}", responseBody);
+            log.debug("ChiaseGPU API response: {}", responseBody);
 
-            // Parse response
+            // Parse OpenAI-compatible response
             JsonObject jsonResponse = gson.fromJson(responseBody, JsonObject.class);
-            JsonArray candidates = jsonResponse.getAsJsonArray("candidates");
-            
-            if (candidates == null || candidates.isEmpty()) {
-                log.warn("No candidates in Gemini response");
+            JsonArray choices = jsonResponse.getAsJsonArray("choices");
+
+            if (choices == null || choices.isEmpty()) {
+                log.warn("No choices in ChiaseGPU response");
                 return new AnswerWithTokens("I apologize, but I couldn't generate a response at this time.", 0);
             }
 
-            JsonObject firstCandidate = candidates.get(0).getAsJsonObject();
-            String finishReason = firstCandidate.has("finishReason")
-                    ? firstCandidate.get("finishReason").getAsString()
+            JsonObject firstChoice = choices.get(0).getAsJsonObject();
+            String finishReason = firstChoice.has("finish_reason") && !firstChoice.get("finish_reason").isJsonNull()
+                    ? firstChoice.get("finish_reason").getAsString()
                     : "";
-            JsonObject contentObj = firstCandidate.getAsJsonObject("content");
-            JsonArray partsArray = contentObj.getAsJsonArray("parts");
-            
-            if (partsArray == null || partsArray.isEmpty()) {
-                log.warn("No parts in Gemini response");
+
+            JsonObject messageObj = firstChoice.getAsJsonObject("message");
+            if (messageObj == null || !messageObj.has("content") || messageObj.get("content").isJsonNull()) {
+                log.warn("No message content in ChiaseGPU response");
                 return new AnswerWithTokens("I apologize, but I couldn't generate a response at this time.", 0);
             }
 
-            String answer = partsArray.get(0).getAsJsonObject().get("text").getAsString();
+            String answer = messageObj.get("content").getAsString();
             log.info("Generated answer: {} characters", answer.length());
 
-            // Guardrail: if response is cut by token limit, regenerate once with a stronger instruction.
-            if ("MAX_TOKENS".equalsIgnoreCase(finishReason)) {
-                log.warn("Gemini response hit MAX_TOKENS. Retrying once with larger output budget.");
+            // Guardrail: if response cut by length, regenerate once with larger budget
+            if ("length".equalsIgnoreCase(finishReason)) {
+                log.warn("ChiaseGPU response hit length limit. Retrying once with larger output budget.");
                 String fullAnswerPrompt = prompt + """
 
                         
@@ -247,17 +244,16 @@ public class GeminiChatService {
                 return callGeminiAPI(fullAnswerPrompt, 3072);
             }
 
-            // Extract token usage from usageMetadata if available
+            // Extract token usage from usage field if available
             int tokensUsed = 0;
             try {
-                if (jsonResponse.has("usageMetadata")) {
-                    JsonObject usage = jsonResponse.getAsJsonObject("usageMetadata");
-                    if (usage.has("totalTokenCount")) {
-                        tokensUsed = usage.get("totalTokenCount").getAsInt();
+                if (jsonResponse.has("usage")) {
+                    JsonObject usage = jsonResponse.getAsJsonObject("usage");
+                    if (usage.has("total_tokens")) {
+                        tokensUsed = usage.get("total_tokens").getAsInt();
                     }
                 }
             } catch (Exception e) {
-                // Fallback: estimate from text length
                 tokensUsed = answer.length() / 4;
             }
             if (tokensUsed == 0) {

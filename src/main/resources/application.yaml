@@ -120,9 +120,19 @@ embedding:
     dimension: ${LOCAL_EMBEDDING_DIMENSION:1024}
     max-chars: ${LOCAL_EMBEDDING_MAX_CHARS:6000}
 
+# ChiaseGPU (OpenAI-compatible) LLM provider
+chiasegpu:
+  base-url: ${CHIASEGPU_BASE_URL:https://llm.chiasegpu.vn/v1}
+  api-key: ${CHIASEGPU_API_KEY:}
+  models:
+    flash: ts/gemini-2.5-flash
+    pro: ts/gemini-3.1-pro
+    embedding: tse/gemini/gemini-embedding-001
+  embedding-dimension: ${EMBEDDING_STORAGE_DIMENSION:3072}
+
 # Tier-based Gemini model selection
 gemini:
   models:
-    starter: gemini-2.5-flash
-    standard: gemini-2.5-flash
-    enterprise: gemini-2.5-pro
+    starter: ts/gemini-2.5-flash
+    standard: ts/gemini-2.5-flash
+    enterprise: ts/gemini-3.1-pro

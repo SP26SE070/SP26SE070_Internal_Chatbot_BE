@@ -112,12 +112,12 @@ public class SchemaCompatibilityRunner {
     }
 
     /**
-     * When {@code embedding.storage-dimension=1024} (BGE-M3 / Local), align PostgreSQL
-     * {@code document_chunks.embedding} with {@code vector(1024)}. Clears existing vectors so re-index is required.
+     * When {@code embedding.storage-dimension} is not the baseline 768, align PostgreSQL
+     * {@code document_chunks.embedding} with the configured vector dimension. Clears existing vectors so re-index is required.
      */
     private void maybeUpgradeChunkEmbeddingVectorDimension() {
-        if (embeddingStorageDimension != 1024) {
-            return;
+        if (embeddingStorageDimension == 768) {
+            return;  // 768 is the baseline, no migration needed
         }
         try {
             var typeRows = jdbcTemplate.query(
@@ -133,21 +133,27 @@ public class SchemaCompatibilityRunner {
                             """,
                     (rs, rowNum) -> rs.getString("t"));
             String fmt = typeRows.isEmpty() ? null : typeRows.get(0);
-            if (fmt != null && fmt.contains("1024")) {
-                log.debug("document_chunks.embedding already vector(1024); skip column migration.");
+            if (fmt != null && fmt.contains(String.valueOf(embeddingStorageDimension))) {
+                log.debug("document_chunks.embedding already vector({}); skip column migration.", embeddingStorageDimension);
                 return;
             }
             jdbcTemplate.execute("DROP INDEX IF EXISTS idx_chunks_embedding_cosine");
             jdbcTemplate.update("UPDATE document_chunks SET embedding = NULL WHERE embedding IS NOT NULL");
-            jdbcTemplate.execute("ALTER TABLE document_chunks ALTER COLUMN embedding TYPE vector(1024)");
-            jdbcTemplate.execute("""
-                    CREATE INDEX IF NOT EXISTS idx_chunks_embedding_cosine ON document_chunks
-                    USING hnsw (embedding vector_cosine_ops)
-                    """);
+            jdbcTemplate.execute("ALTER TABLE document_chunks ALTER COLUMN embedding TYPE vector(" + embeddingStorageDimension + ")");
+            if (embeddingStorageDimension > 2000) {
+                jdbcTemplate.execute(
+                        "CREATE INDEX IF NOT EXISTS idx_chunks_embedding_cosine ON document_chunks " +
+                        "USING hnsw ((embedding::halfvec(" + embeddingStorageDimension + ")) halfvec_cosine_ops)");
+            } else {
+                jdbcTemplate.execute(
+                        "CREATE INDEX IF NOT EXISTS idx_chunks_embedding_cosine ON document_chunks " +
+                        "USING hnsw (embedding vector_cosine_ops)");
+            }
             log.info(
-                    "document_chunks.embedding set to vector(1024) for local embeddings; prior vectors cleared — re-index documents.");
+                    "document_chunks.embedding set to vector({}) for configured embeddings; prior vectors cleared - re-index documents.",
+                    embeddingStorageDimension);
         } catch (Exception ex) {
-            log.warn("Chunk embedding vector(1024) migration skipped: {}", ex.getMessage());
+            log.warn("Chunk embedding vector({}) migration skipped: {}", embeddingStorageDimension, ex.getMessage());
         }
     }
 }

@@ -41,11 +41,20 @@ public class ChunkEmbeddingVectorSchemaService {
                 jdbcTemplate.update("UPDATE document_chunks SET embedding = NULL WHERE embedding IS NOT NULL");
                 jdbcTemplate.execute(
                         "ALTER TABLE document_chunks ALTER COLUMN embedding TYPE vector(" + targetDimension + ")");
-                jdbcTemplate.execute("""
-                        CREATE INDEX IF NOT EXISTS idx_chunks_embedding_cosine ON document_chunks
-                        USING hnsw (embedding vector_cosine_ops)
-                        """);
-                log.info("document_chunks.embedding is now vector({}).", targetDimension);
+
+                // pgvector HNSW supports max 2000 dims for 'vector', up to 4000 for 'halfvec'.
+                // For dimensions over 2000, build the index on a halfvec cast.
+                if (targetDimension > 2000) {
+                    jdbcTemplate.execute(
+                            "CREATE INDEX IF NOT EXISTS idx_chunks_embedding_cosine ON document_chunks " +
+                            "USING hnsw ((embedding::halfvec(" + targetDimension + ")) halfvec_cosine_ops)");
+                    log.info("document_chunks.embedding is now vector({}) with halfvec HNSW index.", targetDimension);
+                } else {
+                    jdbcTemplate.execute(
+                            "CREATE INDEX IF NOT EXISTS idx_chunks_embedding_cosine ON document_chunks " +
+                            "USING hnsw (embedding vector_cosine_ops)");
+                    log.info("document_chunks.embedding is now vector({}) with standard HNSW index.", targetDimension);
+                }
             } catch (Exception ex) {
                 log.error("Failed to align document_chunks.embedding to vector({}): {}", targetDimension, ex.getMessage());
                 throw new IllegalStateException(
