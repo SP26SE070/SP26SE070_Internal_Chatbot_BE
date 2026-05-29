@@ -136,3 +136,12 @@ gemini:
     starter: ts/gemini-2.5-flash
     standard: ts/gemini-2.5-flash
     enterprise: ts/gemini-3.1-pro
+
+# Enterprise VPS provisioning
+enterprise:
+  vps:
+    admin-url: ${ENTERPRISE_VPS_ADMIN_URL:jdbc:postgresql://localhost:5435/postgres}
+    admin-username: ${ENTERPRISE_VPS_ADMIN_USER:postgres}
+    admin-password: ${ENTERPRISE_VPS_ADMIN_PASSWORD:enterprise2026}
+    db-url-template: ${ENTERPRISE_VPS_DB_URL_TEMPLATE:jdbc:postgresql://localhost:5435/%s?TimeZone=UTC}
+    db-name-prefix: ${ENTERPRISE_VPS_DB_PREFIX:enterprise_}

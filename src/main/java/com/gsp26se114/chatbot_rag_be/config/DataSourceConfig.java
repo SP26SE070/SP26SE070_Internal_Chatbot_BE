@@ -71,13 +71,13 @@ public class DataSourceConfig {
     }
 
     @Slf4j
-    static class EnterpriseDataSourceInitializer {
+    public static class EnterpriseDataSourceInitializer {
 
         private final DataSource routingDataSource;
         private final TenantDatasourceRepository repository;
 
-        EnterpriseDataSourceInitializer(DataSource routingDataSource,
-                                        TenantDatasourceRepository repository) {
+        public EnterpriseDataSourceInitializer(DataSource routingDataSource,
+                                               TenantDatasourceRepository repository) {
             this.routingDataSource = routingDataSource;
             this.repository = repository;
         }
