@@ -1,11 +1,15 @@
 package com.gsp26se114.chatbot_rag_be.controller;
 
 import com.gsp26se114.chatbot_rag_be.repository.TenantDatasourceRepository;
+import com.gsp26se114.chatbot_rag_be.service.EnterpriseBackupService;
 import com.gsp26se114.chatbot_rag_be.service.EnterpriseProvisioningService;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.tags.Tag;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
+import org.springframework.core.io.FileSystemResource;
+import org.springframework.http.HttpHeaders;
+import org.springframework.http.MediaType;
 import org.springframework.http.ResponseEntity;
 import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.web.bind.annotation.GetMapping;
@@ -28,6 +32,7 @@ public class EnterpriseProvisioningController {
 
     private final EnterpriseProvisioningService provisioningService;
     private final TenantDatasourceRepository tenantDatasourceRepository;
+    private final EnterpriseBackupService backupService;
 
     @PostMapping("/{tenantId}/provision")
     @Operation(summary = "Provision a dedicated Enterprise database for a tenant",
@@ -67,5 +72,28 @@ public class EnterpriseProvisioningController {
             m.put("isActive", ds.getIsActive());
             return m;
         }).toList());
+    }
+
+    @GetMapping("/{tenantId}/backup")
+    @Operation(summary = "Backup a tenant's Enterprise database",
+            description = "Runs pg_dump on the tenant's dedicated database and returns a .sql file the customer can restore on their own infrastructure.")
+    public ResponseEntity<?> backup(@PathVariable UUID tenantId) {
+        try {
+            EnterpriseBackupService.BackupResult result = backupService.backupTenant(tenantId);
+            FileSystemResource resource = new FileSystemResource(result.filePath().toFile());
+            String filename = result.databaseName() + "_backup.sql";
+            return ResponseEntity.ok()
+                    .header(HttpHeaders.CONTENT_DISPOSITION, "attachment; filename=\"" + filename + "\"")
+                    .contentType(MediaType.APPLICATION_OCTET_STREAM)
+                    .contentLength(result.sizeBytes())
+                    .body(resource);
+        } catch (Exception e) {
+            log.error("Backup failed for tenant {}: {}", tenantId, e.getMessage(), e);
+            Map<String, Object> error = new HashMap<>();
+            error.put("success", false);
+            error.put("tenantId", tenantId.toString());
+            error.put("error", e.getMessage());
+            return ResponseEntity.status(500).body(error);
+        }
     }
 }

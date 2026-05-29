@@ -56,5 +56,10 @@ vps-init-*
 vps-test-*
 *.pid
 
+# Backup test files
+*_backup.sql
+fpt_backup.sql
+ttc2_backup.sql
+
 # Local-only notes with secrets
 VPS_SETUP_NOTES.md
