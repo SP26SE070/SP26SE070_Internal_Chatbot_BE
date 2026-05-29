@@ -49,3 +49,12 @@ worker.md
 .codex-*.pid
 .codex-*.out.log
 .codex-*.err.log
+
+# VPS test artifacts
+enterprise-vps-*
+vps-init-*
+vps-test-*
+*.pid
+
+# Local-only notes with secrets
+VPS_SETUP_NOTES.md
