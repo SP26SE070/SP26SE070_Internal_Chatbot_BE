@@ -29,14 +29,15 @@ public class SchemaCompatibilityRunner {
             jdbcTemplate.execute("""
                     UPDATE roles
                     SET level = CASE
-                        WHEN code = 'TENANT_ADMIN' THEN 2
-                        WHEN code = 'EMPLOYEE' THEN 4
-                        ELSE level
+                        WHEN code IN ('SUPER_ADMIN', 'STAFF') THEN NULL
+                        WHEN code = 'TENANT_ADMIN' THEN COALESCE(level, 2)
+                        WHEN code = 'EMPLOYEE' THEN COALESCE(level, 4)
+                        ELSE COALESCE(level, 4)
                     END
-                    WHERE level IS NULL
+                    WHERE level IS NULL OR code IN ('SUPER_ADMIN', 'STAFF')
                     """);
             jdbcTemplate.execute("ALTER TABLE roles DROP CONSTRAINT IF EXISTS roles_level_check");
-            jdbcTemplate.execute("ALTER TABLE roles ADD CONSTRAINT roles_level_check CHECK (level BETWEEN 1 AND 5)");
+            jdbcTemplate.execute("ALTER TABLE roles ADD CONSTRAINT roles_level_check CHECK (level BETWEEN 1 AND 5 OR level IS NULL)");
 
             jdbcTemplate.execute("ALTER TABLE documents ADD COLUMN IF NOT EXISTS minimum_role_level INTEGER");
             try {
