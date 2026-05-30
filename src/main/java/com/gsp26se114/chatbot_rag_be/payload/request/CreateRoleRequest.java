@@ -27,7 +27,6 @@ public record CreateRoleRequest(
         @Size(max = 500, message = "Description không được quá 500 ký tự")
         String description,
 
-        @NotNull(message = "Level không được để trống")
         @Min(value = 1, message = "Level phải từ 1 đến 5")
         @Max(value = 5, message = "Level phải từ 1 đến 5")
         Integer level,

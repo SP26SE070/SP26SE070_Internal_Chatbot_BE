@@ -73,7 +73,7 @@ app:
 # Server configuration for proxy support (ngrok)
 server:
   forward-headers-strategy: framework
-  port: 8080
+  port: ${PORT:8080}
 
 management:
   health:
