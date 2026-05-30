@@ -1028,7 +1028,7 @@ INSERT INTO subscription_plans (
     5, 100, 5, 1000,
     500, 50, 10000,
     4096, 512,
-    'gpt-3.5-turbo', 'text-embedding-ada-002',
+    'ts/gemini-2.5-flash', 'tse/gemini/gemini-embedding-001',
     true, 0,
     '✅ 5 users, ✅ 100 documents, ✅ 5GB storage, ✅ 1,000 API calls/month, ✅ Basic AI chatbot',
     CURRENT_TIMESTAMP, CURRENT_TIMESTAMP
@@ -1050,7 +1050,7 @@ INSERT INTO subscription_plans (
     10, 500, 10, 5000,
     2000, 200, 50000,
     8192, 512,
-    'gpt-3.5-turbo', 'text-embedding-ada-002',
+    'ts/gemini-2.5-flash', 'tse/gemini/gemini-embedding-001',
     true, 1,
     '✅ 10 users, ✅ 500 documents, ✅ 10GB storage, ✅ 5,000 API calls/month, ✅ RAG enabled, ✅ Priority support',
     CURRENT_TIMESTAMP, CURRENT_TIMESTAMP
@@ -1072,9 +1072,9 @@ INSERT INTO subscription_plans (
     50, 2000, 50, 20000,
     10000, 1000, 200000,
     16384, 1024,
-    'gpt-4', 'text-embedding-ada-002',
+    'ts/gemini-2.5-flash', 'tse/gemini/gemini-embedding-001',
     true, 2,
-    '✅ 50 users, ✅ 2,000 documents, ✅ 50GB storage, ✅ 20,000 API calls/month, ✅ GPT-4 model, ✅ Advanced RAG, ✅ 24/7 support',
+    '✅ 50 users, ✅ 2,000 documents, ✅ 50GB storage, ✅ 20,000 API calls/month, ✅ Gemini 2.5 Flash, ✅ Advanced RAG, ✅ 24/7 support',
     CURRENT_TIMESTAMP, CURRENT_TIMESTAMP
 );
 
@@ -1091,12 +1091,12 @@ INSERT INTO subscription_plans (
 ) VALUES (
     'a0000000-0000-0000-0000-000000000004', 'ENTERPRISE', 'Gói Doanh Nghiệp', 'Giải pháp toàn diện cho doanh nghiệp lớn',
     20000, 54000, 192000, 'VND',
-    999, 999999, 500, 999999,
+    999, 999999, 999999, 999999,
     999999, 999999, 999999,
     32768, 2048,
-    'gpt-4', 'text-embedding-ada-002',
+    'ts/gemini-3.1-pro', 'tse/gemini/gemini-embedding-001',
     true, 3,
-    '✅ Unlimited users, ✅ Unlimited documents, ✅ 500GB storage, ✅ Unlimited API calls, ✅ GPT-4 model, ✅ Advanced RAG, ✅ Dedicated support, ✅ Custom integration',
+    '✅ Unlimited users, ✅ Unlimited documents, ✅ Scalable storage (dedicated VPS), ✅ Unlimited API calls, ✅ Gemini 3.1 Pro, ✅ Advanced RAG, ✅ Dedicated support, ✅ Custom integration, ✅ Dedicated database (data isolation)',
     CURRENT_TIMESTAMP, CURRENT_TIMESTAMP
 );
 
@@ -1146,10 +1146,10 @@ INSERT INTO subscriptions (
     CURRENT_TIMESTAMP + interval '360 days',
     TRUE,
     FALSE,
-    999, 999999, 500, 999999,
+    999, 999999, 999999, 999999,
     999999, 999999, 999999,
     32768, 2048,
-    'gpt-4', 'text-embedding-ada-002',
+    'ts/gemini-3.1-pro', 'tse/gemini/gemini-embedding-001',
     'SEPAY',
     CURRENT_TIMESTAMP - interval '5 days'
 );
