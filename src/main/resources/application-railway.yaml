@@ -7,3 +7,6 @@ spring:
     url: ${DB_URL}
     username: ${DB_USERNAME}
     password: ${DB_PASSWORD}
+
+embedding:
+  storage-dimension: ${EMBEDDING_STORAGE_DIMENSION:3072}
