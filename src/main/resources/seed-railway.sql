@@ -226,7 +226,7 @@ INSERT INTO subscription_plans (
     features, created_at, updated_at
 ) VALUES (
     'a0000000-0000-0000-0000-000000000002', 'STARTER', 'Gói Khởi Đầu', 'Phù hợp cho doanh nghiệp nhỏ và startup',
-    5000, 13500, 48000, 'VND',
+    299000, 799000, 2990000, 'VND',
     10, 500, 10, 5000,
     2000, 200, 50000,
     8192, 512,
@@ -247,7 +247,7 @@ INSERT INTO subscription_plans (
     features, created_at, updated_at
 ) VALUES (
     'a0000000-0000-0000-0000-000000000003', 'STANDARD', 'Gói Tiêu Chuẩn', 'Phù hợp cho doanh nghiệp vừa',
-    10000, 27000, 96000, 'VND',
+    999000, 2690000, 9990000, 'VND',
     50, 2000, 50, 20000,
     10000, 1000, 200000,
     16384, 1024,
@@ -268,7 +268,7 @@ INSERT INTO subscription_plans (
     features, created_at, updated_at
 ) VALUES (
     'a0000000-0000-0000-0000-000000000004', 'ENTERPRISE', 'Gói Doanh Nghiệp', 'Giải pháp toàn diện cho doanh nghiệp lớn',
-    20000, 54000, 192000, 'VND',
+    4990000, 13470000, 47900000, 'VND',
     999, 999999, 999999, 999999,
     999999, 999999, 999999,
     32768, 2048,
