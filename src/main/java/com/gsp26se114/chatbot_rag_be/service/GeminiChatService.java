@@ -184,6 +184,7 @@ public class GeminiChatService {
 
         requestBody.addProperty("temperature", 0.7);
         requestBody.addProperty("max_tokens", maxOutputTokens);
+        requestBody.addProperty("stream", false);
 
         log.debug("Calling ChiaseGPU API: {}", url);
 
@@ -208,27 +209,85 @@ public class GeminiChatService {
             String responseBody = response.body().string();
             log.debug("ChiaseGPU API response: {}", responseBody);
 
-            // Parse OpenAI-compatible response
-            JsonObject jsonResponse = gson.fromJson(responseBody, JsonObject.class);
-            JsonArray choices = jsonResponse.getAsJsonArray("choices");
+            // ChiaseGPU may return SSE streaming (data: {...}) even for non-stream
+            // requests. Handle both SSE and single-object responses.
+            String answer = "";
+            String finishReason = "";
+            int tokensUsed = 0;
+            boolean isSse = responseBody.trim().startsWith("data:");
 
-            if (choices == null || choices.isEmpty()) {
-                log.warn("No choices in ChiaseGPU response");
+            if (isSse) {
+                StringBuilder contentBuilder = new StringBuilder();
+                for (String rawLine : responseBody.split("\n")) {
+                    String line = rawLine.trim();
+                    if (!line.startsWith("data:")) {
+                        continue;
+                    }
+                    String payload = line.substring(5).trim();
+                    if (payload.isEmpty() || "[DONE]".equals(payload)) {
+                        continue;
+                    }
+                    try {
+                        JsonObject chunk = gson.fromJson(payload, JsonObject.class);
+                        JsonArray chunkChoices = chunk.getAsJsonArray("choices");
+                        if (chunkChoices != null && !chunkChoices.isEmpty()) {
+                            JsonObject firstChoice = chunkChoices.get(0).getAsJsonObject();
+                            if (firstChoice.has("delta") && firstChoice.get("delta").isJsonObject()) {
+                                JsonObject delta = firstChoice.getAsJsonObject("delta");
+                                if (delta.has("content") && !delta.get("content").isJsonNull()) {
+                                    contentBuilder.append(delta.get("content").getAsString());
+                                }
+                            }
+                            if (firstChoice.has("message") && firstChoice.get("message").isJsonObject()) {
+                                JsonObject message = firstChoice.getAsJsonObject("message");
+                                if (message.has("content") && !message.get("content").isJsonNull()) {
+                                    contentBuilder.append(message.get("content").getAsString());
+                                }
+                            }
+                            if (firstChoice.has("finish_reason") && !firstChoice.get("finish_reason").isJsonNull()) {
+                                finishReason = firstChoice.get("finish_reason").getAsString();
+                            }
+                        }
+                        if (chunk.has("usage") && chunk.get("usage").isJsonObject()) {
+                            JsonObject usage = chunk.getAsJsonObject("usage");
+                            if (usage.has("total_tokens") && !usage.get("total_tokens").isJsonNull()) {
+                                tokensUsed = usage.get("total_tokens").getAsInt();
+                            }
+                        }
+                    } catch (Exception ex) {
+                        log.debug("Skipping unparseable SSE chunk: {}", payload);
+                    }
+                }
+                answer = contentBuilder.toString();
+            } else {
+                JsonObject jsonResponse = gson.fromJson(responseBody, JsonObject.class);
+                JsonArray choices = jsonResponse.getAsJsonArray("choices");
+                if (choices == null || choices.isEmpty()) {
+                    log.warn("No choices in ChiaseGPU response");
+                    return new AnswerWithTokens("I apologize, but I couldn't generate a response at this time.", 0);
+                }
+                JsonObject firstChoice = choices.get(0).getAsJsonObject();
+                finishReason = firstChoice.has("finish_reason") && !firstChoice.get("finish_reason").isJsonNull()
+                        ? firstChoice.get("finish_reason").getAsString() : "";
+                JsonObject messageObj = firstChoice.getAsJsonObject("message");
+                if (messageObj == null || !messageObj.has("content") || messageObj.get("content").isJsonNull()) {
+                    log.warn("No message content in ChiaseGPU response");
+                    return new AnswerWithTokens("I apologize, but I couldn't generate a response at this time.", 0);
+                }
+                answer = messageObj.get("content").getAsString();
+                if (jsonResponse.has("usage") && jsonResponse.get("usage").isJsonObject()) {
+                    JsonObject usage = jsonResponse.getAsJsonObject("usage");
+                    if (usage.has("total_tokens") && !usage.get("total_tokens").isJsonNull()) {
+                        tokensUsed = usage.get("total_tokens").getAsInt();
+                    }
+                }
+            }
+
+            if (answer == null || answer.isEmpty()) {
+                log.warn("Empty answer from ChiaseGPU (finishReason={}, sse={})", finishReason, isSse);
                 return new AnswerWithTokens("I apologize, but I couldn't generate a response at this time.", 0);
             }
 
-            JsonObject firstChoice = choices.get(0).getAsJsonObject();
-            String finishReason = firstChoice.has("finish_reason") && !firstChoice.get("finish_reason").isJsonNull()
-                    ? firstChoice.get("finish_reason").getAsString()
-                    : "";
-
-            JsonObject messageObj = firstChoice.getAsJsonObject("message");
-            if (messageObj == null || !messageObj.has("content") || messageObj.get("content").isJsonNull()) {
-                log.warn("No message content in ChiaseGPU response");
-                return new AnswerWithTokens("I apologize, but I couldn't generate a response at this time.", 0);
-            }
-
-            String answer = messageObj.get("content").getAsString();
             log.info("Generated answer: {} characters", answer.length());
 
             // Guardrail: if response cut by length, regenerate once with larger budget
@@ -244,18 +303,6 @@ public class GeminiChatService {
                 return callGeminiAPI(fullAnswerPrompt, 3072);
             }
 
-            // Extract token usage from usage field if available
-            int tokensUsed = 0;
-            try {
-                if (jsonResponse.has("usage")) {
-                    JsonObject usage = jsonResponse.getAsJsonObject("usage");
-                    if (usage.has("total_tokens")) {
-                        tokensUsed = usage.get("total_tokens").getAsInt();
-                    }
-                }
-            } catch (Exception e) {
-                tokensUsed = answer.length() / 4;
-            }
             if (tokensUsed == 0) {
                 tokensUsed = answer.length() / 4;
             }
