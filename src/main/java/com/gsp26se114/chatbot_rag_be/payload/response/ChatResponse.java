@@ -36,6 +36,7 @@ public class ChatResponse {
     @Builder
     public static class SourceDocument {
         private String documentId;
+        private String documentTitle;
         private String fileName;
         private String chunkContent;
         private Integer chunkIndex;

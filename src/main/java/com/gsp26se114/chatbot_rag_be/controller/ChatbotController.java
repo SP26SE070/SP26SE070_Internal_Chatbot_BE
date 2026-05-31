@@ -259,15 +259,17 @@ public class ChatbotController {
 
                         return ChatResponse.SourceDocument.builder()
                                 .documentId(chunk.getDocumentId().toString())
+                            .documentTitle(doc != null && doc.getDocumentTitle() != null && !doc.getDocumentTitle().isBlank()
+                                ? doc.getDocumentTitle()
+                                : doc != null ? doc.getOriginalFileName() : "Unknown")
                                 .fileName(doc != null ? doc.getOriginalFileName() : "Unknown")
                                 .chunkContent(chunk.getContent().substring(0, Math.min(200, chunk.getContent().length())) + "...")
                                 .chunkIndex(chunk.getChunkIndex())
                                 .relevanceScore(similarity)
                                 .build();
                     })
-                    .filter(source -> source.getRelevanceScore() >= 0.80)
                     .collect(Collectors.toMap(
-                            ChatResponse.SourceDocument::getChunkContent,
+                            ChatResponse.SourceDocument::getDocumentId,
                             source -> source,
                             (existing, replacement) -> existing.getRelevanceScore() >= replacement.getRelevanceScore()
                                     ? existing : replacement
@@ -275,9 +277,10 @@ public class ChatbotController {
                     .values()
                     .stream()
                     .sorted((s1, s2) -> Double.compare(s2.getRelevanceScore(), s1.getRelevanceScore()))
+                    .limit(3)
                     .toList();
 
-            log.info("Filtered to {} unique highly relevant sources (>=80% similarity)", sources.size());
+            log.info("Returning {} unique source documents for citation", sources.size());
 
             // Step 4: Generate answer with Gemini
             List<ChatMessage> conversationHistory = List.of();
