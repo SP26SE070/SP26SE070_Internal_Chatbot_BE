@@ -3,6 +3,7 @@ package com.gsp26se114.chatbot_rag_be.controller;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.gsp26se114.chatbot_rag_be.entity.ChatbotConfig;
 import com.gsp26se114.chatbot_rag_be.entity.ChatMessage;
+import com.gsp26se114.chatbot_rag_be.entity.ChatbotMode;
 import com.gsp26se114.chatbot_rag_be.entity.ChatSession;
 import com.gsp26se114.chatbot_rag_be.entity.DocumentChunkEntity;
 import com.gsp26se114.chatbot_rag_be.entity.DocumentEntity;
@@ -79,6 +80,8 @@ public class ChatbotController {
             // Load chatbot config once
             ChatbotConfig chatbotConfig = chatbotConfigRepository
                     .findByTenantId(userDetails.getTenantId()).orElse(null);
+            ChatbotMode chatbotMode = ChatbotMode.from(
+                    chatbotConfig != null ? chatbotConfig.getMode() : null);
 
             if (request.getTargetDocumentId() != null) {
                 Optional<DocumentEntity> target = documentRepository.findById(request.getTargetDocumentId());
@@ -140,7 +143,7 @@ public class ChatbotController {
             }
 
             // Step 1 & 2: Create embedding and find similar chunks with access control
-            // If RAG pipeline fails, fall back to general knowledge (no context)
+            // If RAG retrieval fails, handle the empty context according to the configured mode.
             float[] queryEmbedding = null;
             List<DocumentChunkEntity> similarChunks;
 
@@ -153,18 +156,15 @@ public class ChatbotController {
                 log.debug("Query embedding created: {} dimensions", queryEmbedding.length);
 
                 // Apply mode-based config override
-                String chatMode = (chatbotConfig != null && chatbotConfig.getMode() != null)
-                        ? chatbotConfig.getMode().toUpperCase() : "BALANCED";
-
                 int defaultTopK;
                 double maxDistance;
 
-                switch (chatMode) {
-                    case "STRICT" -> {
+                switch (chatbotMode) {
+                    case STRICT -> {
                         defaultTopK = 5;
                         maxDistance = 0.5;
                     }
-                    case "FLEXIBLE" -> {
+                    case FLEXIBLE -> {
                         defaultTopK = 10;
                         maxDistance = 0.85;
                     }
@@ -216,7 +216,8 @@ public class ChatbotController {
                                 .build()
                 );
             } catch (Exception ragError) {
-                log.warn("RAG pipeline failed, falling back to general knowledge: {}", ragError.getMessage());
+                log.warn("RAG pipeline failed, continuing with empty context in {} mode: {}",
+                        chatbotMode, ragError.getMessage());
                 queryEmbedding = null;
                 similarChunks = List.of();
             }
@@ -230,7 +231,7 @@ public class ChatbotController {
                 }
             }
 
-            if (similarChunks.isEmpty()) {
+            if (similarChunks.isEmpty() && !chatbotMode.allowsAnswerWithoutContext()) {
                 return handleAndSaveRestrictedResponse(request, userDetails, startTime, "no_match");
             }
 
@@ -302,7 +303,8 @@ public class ChatbotController {
                 }
             }
 
-            GeminiChatService.AnswerWithTokens result = geminiChatService.generateAnswer(context, request.getMessage(), conversationHistory);
+            GeminiChatService.AnswerWithTokens result = geminiChatService.generateAnswer(
+                    context, request.getMessage(), conversationHistory, chatbotMode);
             String answer = result.answer();
             int tokensUsed = result.tokensUsed();
             log.info("Answer generated: {} characters, {} tokens", answer.length(), tokensUsed);

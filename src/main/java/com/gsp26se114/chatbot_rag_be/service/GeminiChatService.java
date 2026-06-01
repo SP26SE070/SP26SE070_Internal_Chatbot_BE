@@ -12,6 +12,7 @@ import org.springframework.beans.factory.annotation.Value;
 import org.springframework.stereotype.Service;
 
 import com.gsp26se114.chatbot_rag_be.entity.ChatMessage;
+import com.gsp26se114.chatbot_rag_be.entity.ChatbotMode;
 
 import java.io.IOException;
 import java.util.List;
@@ -89,13 +90,14 @@ public class GeminiChatService {
      * @param question User's question
      * @return Generated answer
      */
-    public AnswerWithTokens generateAnswer(String context, String question, List<ChatMessage> history) {
+    public AnswerWithTokens generateAnswer(
+            String context, String question, List<ChatMessage> history, ChatbotMode mode) {
         if (apiKey == null || apiKey.isBlank()) {
             return new AnswerWithTokens("He thong chua cau hinh CHIASEGPU_API_KEY, vui long lien he quan tri vien.", 0);
         }
 
         try {
-            String prompt = buildPrompt(context, question, history);
+            String prompt = buildPrompt(context, question, history, mode);
             return callGeminiAPI(prompt, 2048);
         } catch (Exception e) {
             log.error("Failed to generate answer with Gemini", e);
@@ -106,7 +108,8 @@ public class GeminiChatService {
     /**
      * Build prompt with RAG pattern: context + instruction + question
      */
-    private String buildPrompt(String context, String question, List<ChatMessage> history) {
+    String buildPrompt(String context, String question, List<ChatMessage> history, ChatbotMode mode) {
+        ChatbotMode resolvedMode = mode != null ? mode : ChatbotMode.BALANCED;
         StringBuilder historyBlock = new StringBuilder();
         if (history != null && !history.isEmpty()) {
             historyBlock.append("LỊCH SỬ HỘI THOẠI GẦN ĐÂY:\n");
@@ -121,19 +124,12 @@ public class GeminiChatService {
         }
         String historyText = historyBlock.toString();
 
-        // If no context, the controller should block and return "no_match".
-        // Keep a defensive fallback to avoid any external-knowledge answer.
         if (context == null || context.isBlank()) {
-            return """
-                    Bạn là trợ lý AI nội bộ.
-                    Không có thông tin tài liệu trong context cho câu hỏi hiện tại.
-                    Hãy trả lời đúng 1 câu sau và không thêm gì:
-                    Xin lỗi, tôi không tìm thấy thông tin liên quan đến câu hỏi của bạn trong tài liệu nội bộ.
-                    """;
+            return buildNoContextPrompt(resolvedMode, question, historyText);
         }
         
         // With context from documents - answer based on RAG
-        return """
+        String strictPrompt = """
                 Bạn là chuyên gia về quy định nội bộ.
                 Hãy trả lời câu hỏi của người dùng chỉ dựa trên thông tin từ tài liệu công ty bên dưới.
                 Tuyệt đối không dùng kiến thức ngoài tài liệu/context được cung cấp.
@@ -161,6 +157,93 @@ public class GeminiChatService {
 
                 TRẢ LỜI:
                 """.formatted(RESPONSE_GUIDELINES_RAG, context, historyText, question);
+
+        if (resolvedMode == ChatbotMode.STRICT) {
+            return mandatoryCitationGuideline() + "\n\n" + strictPrompt;
+        }
+        return buildConversationalRagPrompt(resolvedMode, context, question, historyText);
+    }
+
+    private String buildNoContextPrompt(ChatbotMode mode, String question, String historyText) {
+        if (mode == ChatbotMode.STRICT) {
+            return """
+                    Bạn là trợ lý AI nội bộ ở chế độ STRICT.
+                    Không có thông tin tài liệu trong context cho câu hỏi hiện tại.
+                    Hãy trả lời đúng 1 câu sau và không thêm gì:
+                    Xin lỗi, tôi không tìm thấy thông tin liên quan đến câu hỏi của bạn trong tài liệu nội bộ.
+                    """;
+        }
+
+        String modeGuideline = mode == ChatbotMode.FLEXIBLE
+                ? """
+                  - Trò chuyện tự nhiên và hỗ trợ đầy đủ bằng kiến thức phổ thông khi phù hợp.
+                  - Nếu câu hỏi đề cập thông tin riêng của công ty mà không có tài liệu nội bộ, phải nói rõ rằng bạn không tìm thấy thông tin đó trong tài liệu nội bộ; không được bịa dữ kiện của công ty.
+                  """
+                : """
+                  - Chào hỏi, trò chuyện xã giao và trả lời kiến thức phổ thông nhẹ nhàng một cách tự nhiên.
+                  - Nếu câu hỏi liên quan đến công ty, chính sách hoặc quy trình nội bộ mà không có tài liệu phù hợp, hãy trả lời đúng 1 câu: Xin lỗi, tôi không tìm thấy thông tin liên quan đến câu hỏi của bạn trong tài liệu nội bộ.
+                  - Không được bịa dữ kiện riêng của công ty.
+                  """;
+
+        return """
+                Bạn là trợ lý AI hữu ích ở chế độ %s.
+
+                QUY TẮC:
+                - Luôn trả lời bằng TIẾNG VIỆT, trừ khi người dùng hỏi bằng tiếng Anh.
+                %s
+
+                %sCÂU HỎI HIỆN TẠI: %s
+
+                TRẢ LỜI:
+                """.formatted(mode.name(), modeGuideline, historyText, question);
+    }
+
+    private String buildConversationalRagPrompt(
+            ChatbotMode mode, String context, String question, String historyText) {
+        String modeGuideline = mode == ChatbotMode.FLEXIBLE
+                ? """
+                  - Trò chuyện tự nhiên và có thể bổ sung kiến thức phổ thông để giúp người dùng.
+                  - Khi dùng kiến thức ngoài tài liệu, phải phân biệt rõ với thông tin nội bộ lấy từ tài liệu.
+                  """
+                : """
+                  - Có thể chào hỏi, trò chuyện xã giao và trả lời kiến thức phổ thông nhẹ nhàng.
+                  - Với câu hỏi về công ty, chính sách hoặc quy trình nội bộ, chỉ nêu dữ kiện có trong tài liệu được cung cấp.
+                  """;
+
+        return """
+                Bạn là trợ lý AI hữu ích ở chế độ %s.
+
+                QUY TẮC CHẾ ĐỘ:
+                - Luôn trả lời bằng TIẾNG VIỆT, trừ khi người dùng hỏi bằng tiếng Anh.
+                %s
+                - Không được bịa dữ kiện riêng của công ty.
+
+                %s
+
+                %s
+
+                THÔNG TIN TỪ TÀI LIỆU CÔNG TY:
+                %s
+
+                %sCÂU HỎI HIỆN TẠI: %s
+
+                TRẢ LỜI:
+                """.formatted(
+                mode.name(),
+                modeGuideline,
+                mandatoryCitationGuideline(),
+                RESPONSE_GUIDELINES_RAG,
+                context,
+                historyText,
+                question);
+    }
+
+    private String mandatoryCitationGuideline() {
+        return """
+                YÊU CẦU TRÍCH DẪN BẮT BUỘC:
+                - Khi sử dụng thông tin từ context, câu trả lời phải kết thúc bằng đúng một dòng ngắn theo mẫu: Nguồn: <tên tài liệu>.
+                - Lấy tên tài liệu từ nhãn [ACCESS: GRANTED | Tài liệu: ...] trong context.
+                """;
     }
 
     /**
