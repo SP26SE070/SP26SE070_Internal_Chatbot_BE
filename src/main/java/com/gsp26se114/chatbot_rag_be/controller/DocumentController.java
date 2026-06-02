@@ -127,6 +127,16 @@ public class DocumentController {
         return "PDF/PPTX: 30MB, DOCX: 20MB, XLSX/CSV: 15MB, TXT/MD: 5MB";
     }
 
+    private Optional<String> validateUploadMetadata(String documentTitle, String versionNote) {
+        if (documentTitle != null && documentTitle.trim().length() > 500) {
+            return Optional.of("documentTitle must not exceed 500 characters");
+        }
+        if (versionNote != null && versionNote.trim().length() > 500) {
+            return Optional.of("versionNote must not exceed 500 characters");
+        }
+        return Optional.empty();
+    }
+
     private Optional<String> validateUploadFile(MultipartFile file) {
         if (file.isEmpty()) {
             return Optional.of("File is empty");
@@ -460,6 +470,8 @@ public class DocumentController {
             @RequestParam(value = "description", required = false) String description,
             @Parameter(description = "Ghi chú phiên bản đầu tiên (nếu bỏ trống sẽ mặc định là 'Initial upload')")
             @RequestParam(value = "versionNote", required = false) String versionNote,
+            @Parameter(description = "Optional display title. Defaults to the original filename without extension.")
+            @RequestParam(value = "documentTitle", required = false) String documentTitle,
             @Parameter(description = "Phạm vi hiển thị: COMPANY_WIDE | SPECIFIC_DEPARTMENTS | SPECIFIC_ROLES")
             @RequestParam(value = "visibility", defaultValue = "COMPANY_WIDE") DocumentVisibility visibility,
             @Parameter(description = "Danh sách department ID được xem (bắt buộc khi visibility = SPECIFIC_DEPARTMENTS)")
@@ -520,6 +532,11 @@ public class DocumentController {
                 return ResponseEntity.badRequest().body("minimumRoleLevel phải trong khoảng 1-5");
             }
 
+            Optional<String> metadataValidationError = validateUploadMetadata(documentTitle, versionNote);
+            if (metadataValidationError.isPresent()) {
+                return ResponseEntity.badRequest().body(metadataValidationError.get());
+            }
+
             log.info("Uploading document: {} ({})", file.getOriginalFilename(), contentType);
             subscriptionValidationService.validateDocumentUpload(userDetails.getTenantId());
 
@@ -542,14 +559,19 @@ public class DocumentController {
             }
             document.setFileName(fileName);
             document.setOriginalFileName(file.getOriginalFilename());
-            // Auto-set document_title from original filename (strip extension)
-            String titleFromFile = file.getOriginalFilename();
-            if (titleFromFile != null && !titleFromFile.isBlank()) {
-                int dot = titleFromFile.lastIndexOf('.');
-                if (dot > 0) {
-                    titleFromFile = titleFromFile.substring(0, dot);
+            String resolvedDocumentTitle = documentTitle;
+            if (resolvedDocumentTitle == null || resolvedDocumentTitle.isBlank()) {
+                // Default document_title from original filename (strip extension)
+                resolvedDocumentTitle = file.getOriginalFilename();
+                if (resolvedDocumentTitle != null && !resolvedDocumentTitle.isBlank()) {
+                    int dot = resolvedDocumentTitle.lastIndexOf('.');
+                    if (dot > 0) {
+                        resolvedDocumentTitle = resolvedDocumentTitle.substring(0, dot);
+                    }
                 }
-                document.setDocumentTitle(titleFromFile);
+            }
+            if (resolvedDocumentTitle != null && !resolvedDocumentTitle.isBlank()) {
+                document.setDocumentTitle(resolvedDocumentTitle.trim());
             }
             document.setFileType(contentType);
             document.setFileSize(file.getSize());
@@ -1273,6 +1295,10 @@ public class DocumentController {
 
                 // --- 2. Upload file mới lên MinIO ---
             String folder = "tenant-" + userDetails.getTenantId() + "/documents";
+            Optional<String> metadataValidationError = validateUploadMetadata(documentTitle, versionNote);
+            if (metadataValidationError.isPresent()) {
+                return ResponseEntity.badRequest().body(metadataValidationError.get());
+            }
             String newStoragePath = minioService.uploadDocument(file, folder);
             String newFileName = newStoragePath.substring(newStoragePath.lastIndexOf('/') + 1);
 

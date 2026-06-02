@@ -1,0 +1,4 @@
+filename,title,department,min_role_level,visibility,category,tags,version_note
+onboarding_overview.txt,Tổng quan Onboarding,ALL,1,COMPANY_WIDE,Onboarding,onboarding,v1
+sales_lead_process.txt,Quy trình xử lý Lead,Sales,1,DEPARTMENT,Sales,sales;process,v1
+finance_approval.txt,Quy trình duyệt chi,Finance,3,DEPARTMENT,Finance,finance;approval,v1

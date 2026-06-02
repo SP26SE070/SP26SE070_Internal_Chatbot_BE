@@ -32,6 +32,10 @@ build/
 ### VS Code ###
 .vscode/
 
+### Python ###
+__pycache__/
+*.py[cod]
+
 ### Sensitive Configuration Files ###
 # Environment variables - DO NOT COMMIT
 .env

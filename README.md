@@ -11,6 +11,36 @@ The system ensures AI responses are accurate and grounded by retrieving informat
 * **Group Code:** GSP26SE114.
 * **Duration:** January 1, 2026 - April 30, 2026.
 
+## Bulk Document Upload
+
+Use `scripts/bulk_upload_documents.py` to upload a folder as one validated batch. Add
+`manifest.csv` or `manifest.json` to the folder, or pass `--manifest`; see
+`scripts/documents.example/`.
+
+Required manifest columns:
+
+```text
+filename,title,department,min_role_level,visibility,category,tags,version_note
+```
+
+Use `department=ALL` with `visibility=COMPANY_WIDE`. Use a department code or name
+with `visibility=DEPARTMENT`. Separate tag codes or names with semicolons. Category
+and tags may be blank.
+
+The script validates every row and file before upload, resolves active tenant
+metadata, and checks projected document count and storage usage against the tenant
+subscription. Use a tenant-admin token so the plan check can read full tenant usage.
+Run a remote preflight without uploading:
+
+```powershell
+py scripts/bulk_upload_documents.py `
+  --folder scripts/documents.example `
+  --token $env:BULK_UPLOAD_TOKEN `
+  --dry-run
+```
+
+Remove `--dry-run` after the precheck passes.
+
 ---
 
 ## 👥 Team Information (Group GSP26SE114)
