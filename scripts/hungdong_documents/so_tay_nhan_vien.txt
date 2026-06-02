@@ -1,0 +1,13 @@
+Sổ tay nhân viên
+Công ty Cổ phần Công nghệ Hừng Đông (HungDong Tech JSC)
+Phân loại: Nội bộ
+------------------------------------------------------------
+
+Sổ tay này áp dụng cho toàn bộ nhân viên HungDong Tech.
+
+1. Giờ làm việc: Thứ Hai đến Thứ Sáu, 08:30–17:30; nghỉ trưa 12:00–13:30. Thứ Bảy, Chủ Nhật nghỉ.
+2. Chấm công: bắt buộc check-in/check-out qua ứng dụng nội bộ HungHR. Đi muộn quá 15 phút bị tính theo quy định chấm công.
+3. Trang phục: lịch sự, gọn gàng; ngày thứ Sáu được mặc trang phục thoải mái (casual).
+4. Nghỉ phép: 12 ngày phép có lương mỗi năm (chi tiết tại Chính sách nghỉ phép của Phòng Nhân sự).
+5. Bảo mật: tuân thủ Chính sách bảo mật thông tin; không chia sẻ tài khoản nội bộ.
+6. Liên hệ: mọi thắc mắc về nhân sự gửi về Phòng Nhân sự qua email hr@hungdong.vn hoặc hotline nội bộ số 100.

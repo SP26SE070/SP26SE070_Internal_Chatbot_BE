@@ -1,0 +1,12 @@
+Hướng dẫn quản lý ngân sách quảng cáo
+Công ty Cổ phần Công nghệ Hừng Đông (HungDong Tech JSC)
+Phân loại: Nội bộ
+------------------------------------------------------------
+
+Nguyên tắc quản lý ngân sách quảng cáo:
+
+- Ngân sách được phân bổ theo kênh và cập nhật hàng tuần.
+- Theo dõi chỉ số CPA (chi phí mỗi đơn) và ROAS (doanh thu trên chi phí quảng cáo) hàng ngày.
+- Ngưỡng cảnh báo: nếu CPA vượt 120% mục tiêu trong 3 ngày liên tiếp, phải tạm dừng nhóm quảng cáo và báo cáo Trưởng phòng.
+- Mọi điều chỉnh ngân sách vượt 10% so với kế hoạch cần được Trưởng phòng Marketing phê duyệt.
+- Báo cáo ngân sách tổng hợp nộp vào cuối mỗi tuần (thứ Sáu).

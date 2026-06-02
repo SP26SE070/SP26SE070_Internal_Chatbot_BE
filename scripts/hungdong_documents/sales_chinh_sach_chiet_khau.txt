@@ -1,0 +1,13 @@
+Chính sách chiết khấu và phê duyệt giá
+Công ty Cổ phần Công nghệ Hừng Đông (HungDong Tech JSC)
+Phân loại: Nội bộ
+------------------------------------------------------------
+
+Chính sách chiết khấu của Phòng Kinh doanh theo hạn mức phê duyệt:
+
+- Chiết khấu đến 5%: nhân viên kinh doanh tự quyết.
+- Trên 5% đến 10%: Trưởng nhóm kinh doanh duyệt.
+- Trên 10% đến 20%: Trưởng phòng Kinh doanh duyệt.
+- Trên 20%: Giám đốc Kinh doanh duyệt.
+
+Khách hàng VIP và đơn hàng combo có thể áp dụng chính sách riêng nhưng vẫn tuân theo hạn mức phê duyệt nêu trên. Mọi chiết khấu phải được ghi nhận trên CRM.

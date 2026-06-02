@@ -1,0 +1,14 @@
+Chính sách bảo mật thông tin
+Công ty Cổ phần Công nghệ Hừng Đông (HungDong Tech JSC)
+Phân loại: Nội bộ
+------------------------------------------------------------
+
+Chính sách bảo mật thông tin của HungDong Tech.
+
+Phân loại thông tin: Công khai – Nội bộ – Mật – Tối mật. Tài liệu Mật/Tối mật chỉ chia sẻ theo đúng phân quyền.
+
+Quy định mật khẩu: tối thiểu 10 ký tự gồm chữ hoa, chữ thường, số, ký tự đặc biệt; bắt buộc đổi mỗi 90 ngày; bật xác thực hai yếu tố (MFA) cho mọi hệ thống nội bộ.
+
+An toàn thiết bị: không cắm USB lạ; khóa màn hình khi rời chỗ; không cài phần mềm không rõ nguồn gốc.
+
+Sự cố bảo mật: báo cáo cho Phòng Kỹ thuật trong vòng 01 giờ kể từ khi phát hiện qua email security@hungdong.vn.

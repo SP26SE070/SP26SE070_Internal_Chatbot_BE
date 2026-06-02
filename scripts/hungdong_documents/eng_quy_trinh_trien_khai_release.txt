@@ -1,0 +1,13 @@
+Quy trình triển khai và phát hành (release)
+Công ty Cổ phần Công nghệ Hừng Đông (HungDong Tech JSC)
+Phân loại: Nội bộ
+------------------------------------------------------------
+
+Quy trình release của Phòng Kỹ thuật:
+
+- Luồng nhánh: feature -> main -> staging -> production.
+- Khung giờ deploy (deploy window): Thứ Ba và Thứ Năm, 14:00–16:00.
+- Đóng băng triển khai (freeze): cuối tuần và các ngày lễ.
+- Điều kiện deploy: Pull Request được ít nhất 1 reviewer phê duyệt và CI (kiểm thử tự động) phải xanh.
+- Mỗi bản phát hành được gắn tag phiên bản (version tag).
+- Khả năng rollback: phải có thể quay lui bản cũ trong vòng 15 phút nếu phát sinh sự cố.

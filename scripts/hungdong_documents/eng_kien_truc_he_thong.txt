@@ -1,0 +1,15 @@
+Tài liệu kiến trúc hệ thống nội bộ
+Công ty Cổ phần Công nghệ Hừng Đông (HungDong Tech JSC)
+Phân loại: Mật
+------------------------------------------------------------
+
+TÀI LIỆU NHẠY CẢM – Chỉ dành cho cấp quản lý kỹ thuật (level 2).
+
+Kiến trúc hệ thống HungDong:
+- Backend: Java Spring Boot (Java 21), REST API.
+- Frontend: Next.js (TypeScript), triển khai trên Vercel.
+- Cơ sở dữ liệu: PostgreSQL kèm pgvector cho tìm kiếm vector.
+- Pipeline RAG: nạp tài liệu -> chunking -> sinh embedding -> truy hồi theo phân quyền -> sinh câu trả lời.
+- Đa người thuê (multi-tenant): khách Enterprise dùng cơ sở dữ liệu riêng (database-per-tenant); các gói chia sẻ dùng chung một cơ sở dữ liệu.
+
+Thông tin hạ tầng chi tiết không được chia sẻ ngoài cấp quản lý kỹ thuật.

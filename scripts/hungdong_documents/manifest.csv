@@ -1,0 +1,31 @@
+filename,title,department,min_role_level,visibility,category,tags,version_note
+so_tay_nhan_vien.txt,Sổ tay nhân viên,ALL,5,COMPANY_WIDE,Chính sách,nhan_su;noi_quy,v1.0
+quy_tac_ung_xu.txt,Quy tắc ứng xử và đạo đức nghề nghiệp,ALL,5,COMPANY_WIDE,Chính sách,van_hoa;dao_duc,v1.0
+lich_nghi_le_2026.txt,Lịch nghỉ lễ và ngày làm việc năm 2026,ALL,5,COMPANY_WIDE,Thông báo,nghi_le;lich,v1.0
+chinh_sach_bao_mat_thong_tin.txt,Chính sách bảo mật thông tin,ALL,5,COMPANY_WIDE,Chính sách,bao_mat;it,v1.0
+gioi_thieu_cong_ty.txt,Giới thiệu công ty và cơ cấu tổ chức,ALL,5,COMPANY_WIDE,Tổng quan,cong_ty;to_chuc,v1.0
+chien_luoc_ngan_sach_2026.txt,Chiến lược và ngân sách toàn công ty năm 2026,ALL,2,COMPANY_WIDE,Báo cáo,chien_luoc;ngan_sach;mat,v1.0 - MẬT
+mkt_quy_trinh_chien_dich_thang.txt,Quy trình chiến dịch marketing hàng tháng,Marketing,4,DEPARTMENT,Quy trình,marketing;chien_dich,v1.0
+mkt_quan_ly_ngan_sach_quang_cao.txt,Hướng dẫn quản lý ngân sách quảng cáo,Marketing,4,DEPARTMENT,Hướng dẫn,marketing;ngan_sach,v1.0
+mkt_brand_guidelines.txt,Bộ nhận diện thương hiệu (Brand Guidelines),Marketing,4,DEPARTMENT,Hướng dẫn,marketing;thuong_hieu,v1.0
+mkt_bao_cao_ngan_sach_kpi_q1.txt,Báo cáo ngân sách và KPI Marketing Quý 1/2026,Marketing,2,DEPARTMENT,Báo cáo,marketing;kpi;mat,v1.0 - MẬT
+sales_quy_trinh_xu_ly_lead.txt,Quy trình xử lý lead và bán hàng,Sales,4,DEPARTMENT,Quy trình,kinh_doanh;lead,v1.0
+sales_chinh_sach_chiet_khau.txt,Chính sách chiết khấu và phê duyệt giá,Sales,4,DEPARTMENT,Chính sách,kinh_doanh;chiet_khau,v1.0
+sales_kich_ban_ban_hang.txt,Kịch bản bán hàng và xử lý từ chối,Sales,4,DEPARTMENT,Hướng dẫn,kinh_doanh;kich_ban,v1.0
+sales_bang_hoa_hong_chi_tieu.txt,Bảng hoa hồng và chỉ tiêu doanh số,Sales,2,DEPARTMENT,Báo cáo,kinh_doanh;hoa_hong;mat,v1.0 - MẬT
+fin_quy_trinh_phe_duyet_chi_phi.txt,Quy trình phê duyệt chi phí,Finance,4,DEPARTMENT,Quy trình,tai_chinh;phe_duyet,v1.0
+fin_huong_dan_thanh_toan_tam_ung.txt,Hướng dẫn thanh toán và tạm ứng,Finance,4,DEPARTMENT,Hướng dẫn,tai_chinh;thanh_toan,v1.0
+fin_quy_dinh_cong_tac_phi.txt,Quy định công tác phí,Finance,4,DEPARTMENT,Chính sách,tai_chinh;cong_tac_phi,v1.0
+fin_bang_luong_thang_bac.txt,Bảng lương và thang bậc lương,Finance,2,DEPARTMENT,Báo cáo,tai_chinh;luong;mat,v1.0 - MẬT
+fin_bao_cao_tai_chinh_q1.txt,Báo cáo tài chính nội bộ Quý 1/2026,Finance,2,DEPARTMENT,Báo cáo,tai_chinh;bao_cao;mat,v1.0 - MẬT
+eng_quy_trinh_trien_khai_release.txt,Quy trình triển khai và phát hành (release),Engineering,4,DEPARTMENT,Quy trình,ky_thuat;deploy,v1.0
+eng_quy_trinh_xu_ly_su_co.txt,Quy trình xử lý sự cố và trực on-call,Engineering,4,DEPARTMENT,Quy trình,ky_thuat;su_co,v1.0
+eng_tieu_chuan_code_review.txt,Tiêu chuẩn code và quy trình review,Engineering,4,DEPARTMENT,Hướng dẫn,ky_thuat;code,v1.0
+eng_kien_truc_he_thong.txt,Tài liệu kiến trúc hệ thống nội bộ,Engineering,2,DEPARTMENT,Tài liệu kỹ thuật,ky_thuat;kien_truc;mat,v1.0 - MẬT
+hr_quy_trinh_onboarding.txt,Quy trình onboarding nhân viên mới,HR,4,DEPARTMENT,Quy trình,nhan_su;onboarding,v1.0
+hr_chinh_sach_nghi_phep_cham_cong.txt,Chính sách nghỉ phép và chấm công,HR,4,DEPARTMENT,Chính sách,nhan_su;nghi_phep,v1.0
+hr_quy_trinh_danh_gia_hieu_suat.txt,Quy trình đánh giá hiệu suất,HR,4,DEPARTMENT,Quy trình,nhan_su;danh_gia,v1.0
+hr_quy_dinh_ky_luat_nghi_viec.txt,Quy định kỷ luật và nghỉ việc,HR,2,DEPARTMENT,Chính sách,nhan_su;ky_luat;mat,v1.0 - MẬT
+ops_quy_trinh_xu_ly_don_hang.txt,Quy trình xử lý đơn hàng và giao vận,Operations,4,DEPARTMENT,Quy trình,van_hanh;don_hang,v1.0
+ops_quy_trinh_hoan_doi_hang.txt,Quy trình xử lý hoàn và đổi hàng,Operations,4,DEPARTMENT,Quy trình,van_hanh;hoan_hang,v1.0
+ops_sla_giao_hang.txt,Cam kết SLA giao hàng,Operations,4,DEPARTMENT,Chính sách,van_hanh;sla,v1.0

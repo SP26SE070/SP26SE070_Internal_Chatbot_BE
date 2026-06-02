@@ -1,0 +1,13 @@
+Quy trình xử lý hoàn và đổi hàng
+Công ty Cổ phần Công nghệ Hừng Đông (HungDong Tech JSC)
+Phân loại: Nội bộ
+------------------------------------------------------------
+
+Quy trình hoàn/đổi hàng:
+
+- Khách được đổi/trả trong vòng 7 ngày kể từ khi nhận hàng nếu sản phẩm lỗi nhà sản xuất hoặc sai mô tả (công ty chịu phí vận chuyển).
+- Nếu khách đổi ý (sản phẩm không lỗi), khách chịu phí vận chuyển chiều hoàn.
+- Hàng hoàn được kiểm tra tình trạng trước khi nhập kho lại.
+- Hoàn tiền được xử lý trong 5–7 ngày làm việc sau khi xác nhận hàng hoàn hợp lệ.
+
+Mọi yêu cầu hoàn/đổi được ghi nhận và theo dõi trên hệ thống vận hành.

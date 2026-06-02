@@ -1,0 +1,12 @@
+Tiêu chuẩn code và quy trình review
+Công ty Cổ phần Công nghệ Hừng Đông (HungDong Tech JSC)
+Phân loại: Nội bộ
+------------------------------------------------------------
+
+Tiêu chuẩn code của Phòng Kỹ thuật:
+
+- Mọi Pull Request phải được ít nhất 1 thành viên review và phê duyệt trước khi merge.
+- Độ bao phủ kiểm thử (test coverage) tối thiểu 70% cho code mới.
+- Tuyệt đối không commit thông tin nhạy cảm (mật khẩu, khóa API) vào mã nguồn.
+- PR nên giữ dưới 400 dòng thay đổi để dễ review.
+- Code phải vượt qua kiểm tra lint và quy ước đặt tên trước khi merge.

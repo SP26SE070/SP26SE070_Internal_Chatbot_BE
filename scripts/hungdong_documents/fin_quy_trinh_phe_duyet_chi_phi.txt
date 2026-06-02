@@ -1,0 +1,18 @@
+Quy trình phê duyệt chi phí
+Công ty Cổ phần Công nghệ Hừng Đông (HungDong Tech JSC)
+Phân loại: Nội bộ
+------------------------------------------------------------
+
+Quy trình phê duyệt chi phí tại HungDong Tech theo hạn mức:
+
+- Chi phí dưới 5 triệu đồng: Trưởng nhóm phê duyệt.
+- Từ 5 đến 50 triệu đồng: Trưởng phòng phê duyệt.
+- Trên 50 đến 200 triệu đồng: Giám đốc Tài chính phê duyệt.
+- Trên 200 triệu đồng: Tổng Giám đốc phê duyệt.
+
+Các bước thực hiện:
+1. Người đề nghị lập phiếu đề nghị chi kèm chứng từ.
+2. Cấp phê duyệt tương ứng duyệt trên hệ thống.
+3. Phòng Tài chính kiểm tra chứng từ và giải ngân.
+
+Chứng từ phải nộp trong vòng 3 ngày làm việc; hoàn ứng được xử lý trong 7 ngày làm việc.

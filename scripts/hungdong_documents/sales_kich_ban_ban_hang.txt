@@ -1,0 +1,12 @@
+Kịch bản bán hàng và xử lý từ chối
+Công ty Cổ phần Công nghệ Hừng Đông (HungDong Tech JSC)
+Phân loại: Nội bộ
+------------------------------------------------------------
+
+Kịch bản bán hàng chuẩn gồm 5 bước:
+
+1. Mở đầu: chào hỏi, tạo thiện cảm, xác nhận đúng người phụ trách.
+2. Khám phá nhu cầu: đặt câu hỏi mở để hiểu vấn đề khách hàng.
+3. Trình bày giá trị: gắn sản phẩm với nhu cầu cụ thể đã xác định.
+4. Xử lý từ chối phổ biến: 'giá cao' (nhấn mạnh giá trị/ROI), 'đối thủ rẻ hơn' (so sánh dịch vụ giao vận), 'chưa cần' (tạo lý do hành động).
+5. Chốt đơn: đề xuất bước tiếp theo rõ ràng và xác nhận.

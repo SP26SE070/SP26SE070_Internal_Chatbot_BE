@@ -1,0 +1,14 @@
+Quy trình xử lý sự cố và trực on-call
+Công ty Cổ phần Công nghệ Hừng Đông (HungDong Tech JSC)
+Phân loại: Nội bộ
+------------------------------------------------------------
+
+Phân mức độ ưu tiên sự cố và thời gian phản hồi (SLA):
+
+- P1 (toàn hệ thống gián đoạn): phản hồi trong 15 phút.
+- P2 (ảnh hưởng nghiêm trọng một phần): phản hồi trong 1 giờ.
+- P3 (ảnh hưởng nhỏ): phản hồi trong 4 giờ.
+
+Quy trình: Phát hiện -> Phân loại mức độ -> Khắc phục tạm thời -> Khắc phục triệt để -> Viết postmortem trong vòng 48 giờ.
+
+Lịch trực on-call xoay ca theo tuần; người trực phải phản hồi cảnh báo trong thời gian SLA tương ứng.

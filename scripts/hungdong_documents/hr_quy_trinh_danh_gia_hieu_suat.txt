@@ -1,0 +1,14 @@
+Quy trình đánh giá hiệu suất
+Công ty Cổ phần Công nghệ Hừng Đông (HungDong Tech JSC)
+Phân loại: Nội bộ
+------------------------------------------------------------
+
+Quy trình đánh giá hiệu suất:
+
+- Chu kỳ đánh giá: 6 tháng một lần (giữa năm và cuối năm).
+- Thang điểm: 1 đến 5.
+- Các bước: nhân viên tự đánh giá -> quản lý trực tiếp đánh giá -> họp 1:1 trao đổi -> chốt xếp loại.
+- Xếp loại cuối: A (xuất sắc), B (tốt), C (đạt), D (cần cải thiện).
+- Kết quả đánh giá là cơ sở để xét tăng lương và thưởng.
+
+Nhân viên xếp loại D hai kỳ liên tiếp sẽ được lập kế hoạch cải thiện hiệu suất (PIP).

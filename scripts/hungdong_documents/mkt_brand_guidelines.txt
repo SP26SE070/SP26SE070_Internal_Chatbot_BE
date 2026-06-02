@@ -1,0 +1,12 @@
+Bộ nhận diện thương hiệu (Brand Guidelines)
+Công ty Cổ phần Công nghệ Hừng Đông (HungDong Tech JSC)
+Phân loại: Nội bộ
+------------------------------------------------------------
+
+Bộ nhận diện thương hiệu HungDong Tech:
+
+- Màu chủ đạo: Cam Hừng Đông (#FF6B00) và Xanh Navy (#1A2A4F).
+- Phông chữ: tiêu đề dùng Montserrat, nội dung dùng Open Sans.
+- Logo: giữ khoảng trống tối thiểu bằng chiều cao chữ 'H' xung quanh logo; không bóp méo, không đổi màu logo.
+- Tông giọng (tone of voice): thân thiện, gần gũi, đáng tin cậy; xưng hô 'bạn' với khách hàng cá nhân.
+- Không sử dụng hình ảnh chất lượng thấp, hình có watermark của bên thứ ba.

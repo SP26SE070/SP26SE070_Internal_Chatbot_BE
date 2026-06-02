@@ -1,0 +1,16 @@
+Bảng hoa hồng và chỉ tiêu doanh số
+Công ty Cổ phần Công nghệ Hừng Đông (HungDong Tech JSC)
+Phân loại: Mật
+------------------------------------------------------------
+
+TÀI LIỆU MẬT – Chỉ dành cho cấp quản lý Phòng Kinh doanh (level 2).
+
+Chính sách hoa hồng:
+- Hoa hồng 1,5% trên doanh số khi đạt 100% chỉ tiêu.
+- Hoa hồng 2,5% trên phần doanh số vượt chỉ tiêu.
+
+Chỉ tiêu doanh số: nhân viên kinh doanh 300 triệu đồng/tháng; trưởng nhóm chịu chỉ tiêu nhóm 1,5 tỷ đồng/tháng.
+
+Thưởng quý: nếu nhóm đạt từ 110% chỉ tiêu quý, toàn nhóm được thưởng thêm 0,5% doanh số quý.
+
+Nhân viên cấp nhân viên (level 4) không được xem chi tiết bảng hoa hồng này.

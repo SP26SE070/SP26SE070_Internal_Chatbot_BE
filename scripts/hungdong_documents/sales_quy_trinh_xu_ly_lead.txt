@@ -1,0 +1,15 @@
+Quy trình xử lý lead và bán hàng
+Công ty Cổ phần Công nghệ Hừng Đông (HungDong Tech JSC)
+Phân loại: Nội bộ
+------------------------------------------------------------
+
+Quy trình xử lý lead tại Phòng Kinh doanh:
+
+1. Tiếp nhận lead từ các nguồn: website, quảng cáo, giới thiệu.
+2. Phân loại lead: Nóng (sẵn sàng mua) / Ấm (đang cân nhắc) / Lạnh (mới quan tâm).
+3. Liên hệ: lead Nóng phải được gọi trong vòng 2 giờ; lead Ấm trong 24 giờ.
+4. Tư vấn nhu cầu và gửi báo giá.
+5. Theo dõi, chăm sóc và chốt đơn.
+6. Cập nhật toàn bộ tiến trình trên hệ thống CRM ngay trong ngày.
+
+SLA: tỷ lệ phản hồi lead Nóng đúng hạn phải đạt tối thiểu 90%.
