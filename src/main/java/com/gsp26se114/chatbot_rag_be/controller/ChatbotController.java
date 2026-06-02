@@ -266,7 +266,7 @@ public class ChatbotController {
                                 .relevanceScore(similarity)
                                 .build();
                     })
-                    .filter(source -> source.getRelevanceScore() >= 0.80)
+                    .filter(source -> source.getRelevanceScore() >= 0.50)
                     .collect(Collectors.toMap(
                             ChatResponse.SourceDocument::getChunkContent,
                             source -> source,
@@ -278,7 +278,7 @@ public class ChatbotController {
                     .sorted((s1, s2) -> Double.compare(s2.getRelevanceScore(), s1.getRelevanceScore()))
                     .toList();
 
-            log.info("Filtered to {} unique highly relevant sources (>=80% similarity)", sources.size());
+            log.info("Filtered to {} unique highly relevant sources (>=50% similarity)", sources.size());
 
             // Step 4: Generate answer with Gemini
             List<ChatMessage> conversationHistory = List.of();
