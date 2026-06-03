@@ -1,13 +1,19 @@
 package com.gsp26se114.chatbot_rag_be.controller;
 
 import com.gsp26se114.chatbot_rag_be.entity.AuditLog;
+import com.gsp26se114.chatbot_rag_be.payload.request.ConfirmEmployeeImportRequest;
 import com.gsp26se114.chatbot_rag_be.payload.request.CreateUserRequest;
 import com.gsp26se114.chatbot_rag_be.payload.request.UpdateUserPermissionsRequest;
 import com.gsp26se114.chatbot_rag_be.payload.request.UpdateUserRequest;
+import com.gsp26se114.chatbot_rag_be.payload.response.EmployeeImportConfirmResponse;
+import com.gsp26se114.chatbot_rag_be.payload.response.EmployeeImportPreviewResponse;
 import com.gsp26se114.chatbot_rag_be.payload.response.MessageResponse;
 import com.gsp26se114.chatbot_rag_be.payload.response.PageResponse;
 import com.gsp26se114.chatbot_rag_be.payload.response.TenantAnalyticsResponse;
 import com.gsp26se114.chatbot_rag_be.payload.response.UserResponse;
+import com.gsp26se114.chatbot_rag_be.repository.AuditLogRepository;
+import com.gsp26se114.chatbot_rag_be.security.service.UserPrincipal;
+import com.gsp26se114.chatbot_rag_be.service.EmployeeImportService;
 import com.gsp26se114.chatbot_rag_be.service.TenantAdminService;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.Parameter;
@@ -15,16 +21,19 @@ import io.swagger.v3.oas.annotations.security.SecurityRequirement;
 import io.swagger.v3.oas.annotations.tags.Tag;
 import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
+import org.springframework.data.domain.PageRequest;
+import org.springframework.http.HttpHeaders;
 import org.springframework.http.HttpStatus;
+import org.springframework.http.MediaType;
 import org.springframework.http.ResponseEntity;
 import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.security.core.annotation.AuthenticationPrincipal;
 import org.springframework.security.core.userdetails.UserDetails;
 import org.springframework.web.bind.annotation.*;
+import org.springframework.web.multipart.MultipartFile;
 
-import com.gsp26se114.chatbot_rag_be.security.service.UserPrincipal;
+import java.io.IOException;
 import java.time.LocalDateTime;
-
 import java.util.List;
 import java.util.UUID;
 
@@ -36,7 +45,8 @@ import java.util.UUID;
 public class TenantAdminController {
 
     private final TenantAdminService tenantAdminService;
-    private final com.gsp26se114.chatbot_rag_be.repository.AuditLogRepository auditLogRepository;
+    private final EmployeeImportService employeeImportService;
+    private final AuditLogRepository auditLogRepository;
     
     /**
      * Get tenant dashboard analytics
@@ -66,7 +76,7 @@ public class TenantAdminController {
                 .findRecentForTenantAdmin(
                     userDetails.getTenantId(),
                     LocalDateTime.now().plusMinutes(1),
-                    org.springframework.data.domain.PageRequest.of(0, limit)
+                    PageRequest.of(0, limit)
                 );
 
         return ResponseEntity.ok(logs);
@@ -122,6 +132,37 @@ public class TenantAdminController {
             @Valid @RequestBody CreateUserRequest request) {
         UserResponse user = tenantAdminService.createUser(userDetails.getUsername(), request);
         return ResponseEntity.status(HttpStatus.CREATED).body(user);
+    }
+
+    @GetMapping("/users/import/template")
+    @PreAuthorize("hasRole('TENANT_ADMIN')")
+    @Operation(summary = "Tải file mẫu import nhân viên Excel")
+    public ResponseEntity<byte[]> downloadImportTemplate(
+            @AuthenticationPrincipal UserDetails userDetails) throws IOException {
+        byte[] bytes = employeeImportService.buildTemplate(userDetails.getUsername());
+        return ResponseEntity.ok()
+                .header(HttpHeaders.CONTENT_DISPOSITION, "attachment; filename=import-nhan-vien-mau.xlsx")
+                .contentType(MediaType.parseMediaType(
+                        "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"))
+                .body(bytes);
+    }
+
+    @PostMapping(value = "/users/import/preview", consumes = MediaType.MULTIPART_FORM_DATA_VALUE)
+    @PreAuthorize("hasRole('TENANT_ADMIN')")
+    @Operation(summary = "Xem trước import nhân viên từ Excel")
+    public ResponseEntity<EmployeeImportPreviewResponse> previewImport(
+            @AuthenticationPrincipal UserDetails userDetails,
+            @RequestParam("file") MultipartFile file) throws IOException {
+        return ResponseEntity.ok(employeeImportService.preview(userDetails.getUsername(), file));
+    }
+
+    @PostMapping("/users/import/confirm")
+    @PreAuthorize("hasRole('TENANT_ADMIN')")
+    @Operation(summary = "Xác nhận import nhân viên sau khi preview")
+    public ResponseEntity<EmployeeImportConfirmResponse> confirmImport(
+            @AuthenticationPrincipal UserDetails userDetails,
+            @Valid @RequestBody ConfirmEmployeeImportRequest request) {
+        return ResponseEntity.ok(employeeImportService.confirm(userDetails.getUsername(), request));
     }
     
     /**

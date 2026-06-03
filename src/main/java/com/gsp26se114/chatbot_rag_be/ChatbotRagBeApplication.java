@@ -85,4 +85,15 @@ public class ChatbotRagBeApplication {
         executor.initialize();
         return executor;
     }
+
+    @Bean(name = "mailExecutor")
+    public Executor mailExecutor() {
+        ThreadPoolTaskExecutor executor = new ThreadPoolTaskExecutor();
+        executor.setCorePoolSize(2);
+        executor.setMaxPoolSize(4);
+        executor.setQueueCapacity(500);
+        executor.setThreadNamePrefix("Mail-");
+        executor.initialize();
+        return executor;
+    }
 }

@@ -20,19 +20,29 @@ public class SubscriptionValidationService {
     private final DocumentRepository documentRepository;
 
     public void validateUserCreation(UUID tenantId) {
+        validateBulkUserCreation(tenantId, 1);
+    }
+
+    public void validateBulkUserCreation(UUID tenantId, int additionalCount) {
+        if (additionalCount <= 0) {
+            return;
+        }
         Subscription subscription = subscriptionRepository
                 .findActiveSubscriptionByTenantId(tenantId)
                 .orElse(null);
 
         if (subscription == null || subscription.getMaxUsers() == null) {
-            return; // no subscription or no limit set — allow
+            return;
         }
 
         long currentUsers = userRepository.countByTenantIdAndIsActive(tenantId, true);
-        if (currentUsers >= subscription.getMaxUsers()) {
+        if (currentUsers + additionalCount > subscription.getMaxUsers()) {
+            long remaining = Math.max(0, subscription.getMaxUsers() - currentUsers);
             throw new RuntimeException(
-                "Đã đạt giới hạn số lượng người dùng (" + subscription.getMaxUsers() +
-                ") theo gói đăng ký hiện tại."
+                    "Không thể thêm " + additionalCount + " người dùng. "
+                            + "Giới hạn gói: " + subscription.getMaxUsers()
+                            + ", hiện có: " + currentUsers
+                            + ", còn có thể thêm: " + remaining + "."
             );
         }
     }

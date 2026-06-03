@@ -46,6 +46,8 @@ public class TenantAdminService {
     private final PasswordEncoder passwordEncoder;
     private final EmailService emailService;
     private final SubscriptionValidationService subscriptionValidationService;
+    private final UserProvisioningService userProvisioningService;
+    private final WelcomeEmailDispatcher welcomeEmailDispatcher;
     
     /**
      * Get tenant dashboard analytics
@@ -200,170 +202,35 @@ public class TenantAdminService {
     public UserResponse createUser(String tenantAdminEmail, CreateUserRequest request) {
         User tenantAdmin = getUserByEmail(tenantAdminEmail);
         UUID tenantId = tenantAdmin.getTenantId();
-        Tenant tenant = tenantRepository.findById(tenantId)
-                .orElseThrow(() -> new RuntimeException("Tenant không tồn tại"));
-        
-        log.info("Creating new user in tenant: {} ({})", tenant.getName(), tenantId);
+
+        log.info("Creating new user in tenant: {}", tenantId);
         subscriptionValidationService.validateUserCreation(tenantId);
 
-        // Validate role: TENANT_ADMIN can only create roles within their tenant (not TENANT_ADMIN)
-        RoleEntity tenantAdminRole = roleRepository.findByCode("TENANT_ADMIN")
-                .orElseThrow(() -> new RuntimeException("Role TENANT_ADMIN không tồn tại"));
-        
-        RoleEntity selectedRole = roleRepository.findById(request.roleId())
-                .orElseThrow(() -> new RuntimeException("Role không tồn tại"));
-        
-        // Check role belongs to this tenant (for tenant-specific roles) or is system-wide
-        if (selectedRole.getTenantId() != null && 
-            !selectedRole.getTenantId().equals(tenantId)) {
-            throw new RuntimeException("Role không thuộc tenant này");
-        }
-        
-        List<String> forbiddenRoleCodes = List.of("SUPER_ADMIN", "STAFF", "TENANT_ADMIN");
-        if (forbiddenRoleCodes.contains(selectedRole.getCode())) {
-            throw new RuntimeException(
-                "Không thể tạo user với role hệ thống: " + selectedRole.getCode() +
-                ". Chỉ được phép gán role EMPLOYEE hoặc custom role của tenant."
-            );
-        }
-        
-        // Validate required fields
-        if (request.fullName() == null || request.fullName().trim().isEmpty()) {
-            throw new RuntimeException("Họ tên không được để trống");
-        }
-        if (request.contactEmail() == null || request.contactEmail().trim().isEmpty()) {
-            throw new RuntimeException("Contact email không được để trống");
-        }
-
-        // Validate contactEmail uniqueness
-        if (userRepository.existsByContactEmail(request.contactEmail())) {
-            throw new IllegalArgumentException(
-                "Contact email '" + request.contactEmail() + "' đã được sử dụng bởi tài khoản khác. " +
-                "Vui lòng sử dụng email khác."
-            );
-        }
-
-        // Normalize and validate phoneNumber uniqueness
-        String normalizedPhone = null;
-        if (request.phoneNumber() != null && !request.phoneNumber().isBlank()) {
-            normalizedPhone = normalizePhoneNumber(request.phoneNumber());
-            if (userRepository.existsByPhoneNumber(normalizedPhone)) {
-                throw new IllegalArgumentException(
-                    "Số điện thoại '" + request.phoneNumber() + "' đã được sử dụng bởi tài khoản khác. " +
-                    "Vui lòng sử dụng số điện thoại khác."
-                );
-            }
-        }
-
-        // Validate role and department exist
-        RoleEntity role = roleRepository.findById(request.roleId())
-                .orElseThrow(() -> new RuntimeException("Role không tồn tại"));
-        Department department = null;
-        if (request.departmentId() != null) {
-            department = departmentRepository.findById(request.departmentId())
-                    .orElseThrow(() -> new RuntimeException("Department không tồn tại"));
-        }
-
-        if (!isTenantAdmin(tenantAdmin)) {
-            if (request.departmentId() == null || !request.departmentId().equals(tenantAdmin.getDepartmentId())) {
-                throw new RuntimeException("Bạn chỉ có thể tạo user trong chính phòng ban của mình");
-            }
-        }
-        
-        // Generate login email (email ảo)
-        String loginEmail = generateLoginEmail(request.fullName(), tenant);
-        log.info("Generated login email: {} for user: {}", loginEmail, request.fullName());
-        
-        // Generate temporary password
-        String temporaryPassword = UserUtil.generateRandomPassword();
-        
-        // Validate permissions if provided
-        if (request.permissions() != null && !request.permissions().isEmpty()) {
-            for (String permission : request.permissions()) {
-                if (!RolePermissionConstants.isGrantable(permission)) {
-                    throw new IllegalArgumentException("Permission '" + permission + "' không thể được cấp");
-                }
-            }
-        }
-        
-        User newUser = new User();
-        newUser.setEmail(loginEmail);  // Email ảo để đăng nhập
-        newUser.setContactEmail(request.contactEmail());  // Email thật nhận thông báo
-        newUser.setPassword(passwordEncoder.encode(temporaryPassword));
-        newUser.setFullName(request.fullName());
-        // Set phone number (normalized if provided)
-        if (normalizedPhone != null) {
-            newUser.setPhoneNumber(normalizedPhone);
-        } else {
-            newUser.setPhoneNumber(request.phoneNumber());
-        }
-        newUser.setDateOfBirth(request.dateOfBirth());    // Ngày sinh
-        newUser.setAddress(request.address());            // Địa chỉ
-        newUser.setRoleId(request.roleId());
-        newUser.setDepartmentId(request.departmentId());
-        newUser.setTenantId(tenantId);
-        newUser.setPermissions(request.permissions());    // Set permissions bổ sung
-        newUser.setMustChangePassword(true);  // Bắt buộc đổi mật khẩu lần đầu
-        newUser.setCreatedAt(LocalDateTime.now());
-        
-        User savedUser = userRepository.save(newUser);
-        log.info("Created user: {} (login: {}) with roleId: {} in tenant: {}",
-                 savedUser.getFullName(), savedUser.getEmail(), savedUser.getRoleId(), tenantId);
+        UserProvisioningService.ProvisionedUser provisioned =
+                userProvisioningService.provisionUser(tenantAdmin, request);
 
         writeAuditLog(tenantAdmin, "USER_CREATE", "User",
-                String.valueOf(savedUser.getId()),
+                String.valueOf(provisioned.user().getId()),
                 Map.of(),
-                Map.of("email", savedUser.getEmail(), "role", selectedRole.getCode()),
-                "Created user: " + savedUser.getEmail());
-        
-        // Send welcome email with credentials to contact email
-        boolean emailSent = true;
-        try {
-            emailService.sendEmployeeWelcome(
-                savedUser.getContactEmail(),
-                savedUser.getFullName(),
-                savedUser.getEmail(),  // Login email (ảo)
-                temporaryPassword,
-                role.getName(),
-                department != null ? department.getName() : "Chưa xác định",
-                tenant.getName()
-            );
-            log.info("Sent welcome email to: {}", savedUser.getContactEmail());
-        } catch (Exception e) {
-            log.error("Failed to send welcome email to: {}", savedUser.getContactEmail(), e);
-            emailSent = false;
-        }
+                Map.of("email", provisioned.user().getEmail(), "role", provisioned.role().getCode()),
+                "Created user: " + provisioned.user().getEmail());
 
-        return mapToUserResponse(savedUser, role, department, emailSent);
-    }
-    
-    /**
-     * Generate unique login email for user
-     * Format: {username}@{tenantDomain}.com
-     * Example: quanph@vintech.com
-     */
-    private String generateLoginEmail(String fullName, Tenant tenant) {
-        // Convert full name to username
-        String username = UserUtil.convertFullNameToUsername(fullName);
-        
-        // Generate tenant domain from company name
-        String tenantDomain = UserUtil.removeAccent(tenant.getName())
-                .toLowerCase()
-                .replaceAll("\\s+", "")
-                .replaceAll("[^a-z0-9]", "");
-        
-        String baseEmail = username + "@" + tenantDomain + ".com";
-        String loginEmail = baseEmail;
-        int suffix = 1;
-        
-        // Handle collision - check if email exists
-        while (userRepository.findByEmail(loginEmail).isPresent()) {
-            loginEmail = username + suffix + "@" + tenantDomain + ".com";
-            suffix++;
-            log.info("Email collision detected, trying: {}", loginEmail);
-        }
-        
-        return loginEmail;
+        welcomeEmailDispatcher.sendEmployeeWelcomeAsync(new WelcomeEmailDispatcher.WelcomeEmailJob(
+                provisioned.user().getContactEmail(),
+                provisioned.user().getFullName(),
+                provisioned.user().getEmail(),
+                provisioned.temporaryPassword(),
+                provisioned.role().getName(),
+                provisioned.department() != null ? provisioned.department().getName() : "Chưa xác định",
+                provisioned.tenant().getName()
+        ));
+
+        return mapToUserResponse(
+                provisioned.user(),
+                provisioned.role(),
+                provisioned.department(),
+                true
+        );
     }
     
     /**
@@ -408,9 +275,6 @@ public class TenantAdminService {
                 !newRole.getTenantId().equals(user.getTenantId())) {
                 throw new RuntimeException("Role không thuộc tenant này");
             }
-            
-            RoleEntity tenantAdminRoleCheck = roleRepository.findByCode("TENANT_ADMIN")
-                    .orElseThrow(() -> new RuntimeException("Role TENANT_ADMIN không tồn tại"));
             
             List<String> forbiddenRoleCodes = List.of("SUPER_ADMIN", "STAFF", "TENANT_ADMIN");
             if (forbiddenRoleCodes.contains(newRole.getCode())) {
@@ -803,16 +667,5 @@ public class TenantAdminService {
             departmentRepository.findById(user.getDepartmentId()).orElse(null) : null;
         
         return mapToUserResponse(user, role, department);
-    }
-
-    private String normalizePhoneNumber(String phoneNumber) {
-        if (phoneNumber == null || phoneNumber.isBlank()) {
-            return phoneNumber;
-        }
-        // Convert +84xxxxxxxxx → 0xxxxxxxxx
-        if (phoneNumber.startsWith("+84")) {
-            return "0" + phoneNumber.substring(3);
-        }
-        return phoneNumber;
     }
 }
