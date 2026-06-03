@@ -4,7 +4,9 @@ import com.gsp26se114.chatbot_rag_be.payload.request.CreateOnboardingModuleReque
 import com.gsp26se114.chatbot_rag_be.payload.request.UpdateOnboardingModuleRequest;
 import com.gsp26se114.chatbot_rag_be.payload.response.MessageResponse;
 import com.gsp26se114.chatbot_rag_be.payload.response.OnboardingModuleResponse;
+import com.gsp26se114.chatbot_rag_be.payload.response.PermissionCategoryResponse;
 import com.gsp26se114.chatbot_rag_be.service.OnboardingService;
+import com.gsp26se114.chatbot_rag_be.service.PermissionService;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.security.SecurityRequirement;
 import io.swagger.v3.oas.annotations.tags.Tag;
@@ -40,6 +42,13 @@ import java.util.UUID;
 public class StaffOnboardingController {
 
     private final OnboardingService onboardingService;
+    private final PermissionService permissionService;
+
+    @GetMapping("/permissions/available")
+    @Operation(summary = "Danh sách quyền tenant có thể gán (dùng khi cấu hình onboarding)")
+    public ResponseEntity<List<PermissionCategoryResponse>> getAvailablePermissions() {
+        return ResponseEntity.ok(permissionService.getAvailablePermissions());
+    }
 
     @GetMapping("/modules")
     @Operation(summary = "Lấy danh sách onboarding modules dùng chung toàn hệ thống")
