@@ -6,7 +6,6 @@ import com.gsp26se114.chatbot_rag_be.entity.ChatMessage;
 import com.gsp26se114.chatbot_rag_be.entity.ChatSession;
 import com.gsp26se114.chatbot_rag_be.entity.DocumentChunkEntity;
 import com.gsp26se114.chatbot_rag_be.entity.DocumentEntity;
-import com.gsp26se114.chatbot_rag_be.entity.DocumentVisibility;
 import com.gsp26se114.chatbot_rag_be.payload.request.ChatRequest;
 import com.gsp26se114.chatbot_rag_be.payload.request.RateMessageRequest;
 import com.gsp26se114.chatbot_rag_be.payload.response.ChatHistoryResponse;
@@ -18,6 +17,7 @@ import com.gsp26se114.chatbot_rag_be.repository.ChatMessageRepository;
 import com.gsp26se114.chatbot_rag_be.repository.DocumentChunkRepository;
 import com.gsp26se114.chatbot_rag_be.repository.DocumentRepository;
 import com.gsp26se114.chatbot_rag_be.security.service.UserPrincipal;
+import com.gsp26se114.chatbot_rag_be.service.DocumentAccessPolicy;
 import com.gsp26se114.chatbot_rag_be.service.ChatHistoryService;
 import com.gsp26se114.chatbot_rag_be.service.ChunkEmbeddingVectorSchemaService;
 import com.gsp26se114.chatbot_rag_be.service.GeminiChatService;
@@ -58,6 +58,7 @@ public class ChatbotController {
     private final ObjectMapper objectMapper;
     private final ChatbotConfigRepository chatbotConfigRepository;
     private final ChatMessageRepository chatMessageRepository;
+    private final DocumentAccessPolicy documentAccessPolicy;
     private final RateLimiterService rateLimiterService;
     @Value("${embedding.storage-dimension:768}")
     private int storageDimension;
@@ -191,6 +192,7 @@ public class ChatbotController {
                         userDetails.getTenantId(),
                         userDetails.getId(),
                         userDetails.getRoleLevel(),
+                        documentAccessPolicy.isOrgWideViewer(userDetails),
                         vectorString,
                         userDetails.getDepartmentId(),
                         userDetails.getRoleId(),
@@ -445,49 +447,7 @@ public class ChatbotController {
      * Giống quy tắc đọc tài liệu trên {@code DocumentController}: level + visibility + uploader + tenant admin.
      */
     private boolean canUserReadDocument(UserPrincipal userDetails, DocumentEntity doc) {
-        if (!Boolean.TRUE.equals(doc.getIsActive())) {
-            return false;
-        }
-        if (!userDetails.getTenantId().equals(doc.getTenantId())) {
-            return false;
-        }
-        if (!doc.isAccessibleByLevel(userDetails.getRoleLevel())) {
-            return false;
-        }
-        // Role hierarchy override: smaller level number means higher privilege (1 highest).
-        if (userDetails.getRoleLevel() != null
-                && doc.getMinimumRoleLevel() != null
-                && userDetails.getRoleLevel() < doc.getMinimumRoleLevel()) {
-            return true;
-        }
-        if (isTenantAdminForChat(userDetails)) {
-            return true;
-        }
-        if (doc.getUploadedBy() != null && doc.getUploadedBy().equals(userDetails.getId())) {
-            return true;
-        }
-        if (doc.getVisibility() == DocumentVisibility.COMPANY_WIDE) {
-            return true;
-        }
-        if (doc.getVisibility() == DocumentVisibility.SPECIFIC_DEPARTMENTS) {
-            return doc.getAccessibleDepartments() != null
-                    && userDetails.getDepartmentId() != null
-                    && doc.getAccessibleDepartments().contains(userDetails.getDepartmentId());
-        }
-        if (doc.getVisibility() == DocumentVisibility.SPECIFIC_ROLES) {
-            return doc.getAccessibleRoles() != null
-                    && userDetails.getRoleId() != null
-                    && doc.getAccessibleRoles().contains(userDetails.getRoleId());
-        }
-        if (doc.getVisibility() == DocumentVisibility.SPECIFIC_DEPARTMENTS_AND_ROLES) {
-            return doc.getAccessibleDepartments() != null
-                    && doc.getAccessibleRoles() != null
-                    && userDetails.getDepartmentId() != null
-                    && userDetails.getRoleId() != null
-                    && doc.getAccessibleDepartments().contains(userDetails.getDepartmentId())
-                    && doc.getAccessibleRoles().contains(userDetails.getRoleId());
-        }
-        return false;
+        return documentAccessPolicy.canRead(userDetails, doc);
     }
 
     private String formatChunkForRagContext(DocumentChunkEntity chunk) {

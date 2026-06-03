@@ -24,6 +24,7 @@ import com.gsp26se114.chatbot_rag_be.repository.DocumentVersionRepository;
 import com.gsp26se114.chatbot_rag_be.repository.DepartmentRepository;
 import com.gsp26se114.chatbot_rag_be.repository.RoleRepository;
 import com.gsp26se114.chatbot_rag_be.repository.UserRepository;
+import com.gsp26se114.chatbot_rag_be.service.DocumentAccessPolicy;
 import com.gsp26se114.chatbot_rag_be.service.SubscriptionValidationService;
 import com.gsp26se114.chatbot_rag_be.service.DocumentPreviewService;
 import com.gsp26se114.chatbot_rag_be.security.service.UserPrincipal;
@@ -91,6 +92,7 @@ public class DocumentController {
     private final TenantEmbeddingService embeddingService;
     private final ObjectMapper objectMapper;
     private final SubscriptionValidationService subscriptionValidationService;
+    private final DocumentAccessPolicy documentAccessPolicy;
     private final com.gsp26se114.chatbot_rag_be.repository.AuditLogRepository auditLogRepository;
 
     private static final List<String> ALLOWED_CONTENT_TYPES = Arrays.asList(
@@ -150,44 +152,7 @@ public class DocumentController {
     }
 
     private boolean canReadDocument(UserPrincipal userDetails, DocumentEntity doc) {
-        if (!doc.isAccessibleByLevel(userDetails.getRoleLevel())) {
-            return false;
-        }
-        // Role hierarchy override: smaller level number means higher privilege (1 highest).
-        // Example: CEO level 1 can read docs scoped for Employee level 4.
-        if (userDetails.getRoleLevel() != null
-                && doc.getMinimumRoleLevel() != null
-                && userDetails.getRoleLevel() < doc.getMinimumRoleLevel()) {
-            return true;
-        }
-        if (isTenantAdmin(userDetails)) {
-            return true;
-        }
-        if (doc.getUploadedBy() != null && doc.getUploadedBy().equals(userDetails.getId())) {
-            return true;
-        }
-        if (doc.getVisibility() == DocumentVisibility.COMPANY_WIDE) {
-            return true;
-        }
-        if (doc.getVisibility() == DocumentVisibility.SPECIFIC_DEPARTMENTS) {
-            return doc.getAccessibleDepartments() != null
-                    && userDetails.getDepartmentId() != null
-                    && doc.getAccessibleDepartments().contains(userDetails.getDepartmentId());
-        }
-        if (doc.getVisibility() == DocumentVisibility.SPECIFIC_ROLES) {
-            return doc.getAccessibleRoles() != null
-                    && userDetails.getRoleId() != null
-                    && doc.getAccessibleRoles().contains(userDetails.getRoleId());
-        }
-        if (doc.getVisibility() == DocumentVisibility.SPECIFIC_DEPARTMENTS_AND_ROLES) {
-            return doc.getAccessibleDepartments() != null
-                    && doc.getAccessibleRoles() != null
-                    && userDetails.getDepartmentId() != null
-                    && userDetails.getRoleId() != null
-                    && doc.getAccessibleDepartments().contains(userDetails.getDepartmentId())
-                    && doc.getAccessibleRoles().contains(userDetails.getRoleId());
-        }
-        return false;
+        return documentAccessPolicy.canRead(userDetails, doc);
     }
 
     private String resolveContentType(String fileNameOrPath, String fallback) {
@@ -568,8 +533,6 @@ public class DocumentController {
             document.setTags(tags);
             document.setVisibility(visibility);
             document.setMinimumRoleLevel(minimumRoleLevel);
-            
-            // Force null for COMPANY_WIDE to ensure data integrity
             if (visibility == DocumentVisibility.COMPANY_WIDE) {
                 document.setAccessibleDepartments(null);
                 document.setAccessibleRoles(null);
@@ -583,8 +546,8 @@ public class DocumentController {
                 document.setAccessibleDepartments(accessibleDepartments);
                 document.setAccessibleRoles(accessibleRoles);
             }
-
-            document.setOwnerDepartmentId(userDetails.getDepartmentId());
+            documentAccessPolicy.applyUploadDefaults(userDetails, document);
+            documentAccessPolicy.applyUploadVisibilityFallback(userDetails, document);
             document.setUploadedBy(userDetails.getId());
             document.setUploadedAt(LocalDateTime.now());
             document.setEmbeddingStatus("PENDING");
@@ -759,12 +722,13 @@ public class DocumentController {
             @RequestParam(defaultValue = "0") int page,
             @RequestParam(defaultValue = "20") int size
     ) {
-        List<DocumentEntity> documents = isTenantAdmin(userDetails)
-                ? documentRepository.findByTenantIdAndIsActiveOrderByUploadedAtDesc(userDetails.getTenantId(), true)
+        int userLevel = userDetails.getRoleLevel() != null ? userDetails.getRoleLevel() : 4;
+        List<DocumentEntity> documents = documentAccessPolicy.isOrgWideViewer(userDetails)
+                ? documentRepository.findDocumentsForOrgWideViewer(userDetails.getTenantId(), userLevel)
                 : documentRepository.findAccessibleDocuments(
                         userDetails.getTenantId(),
                         userDetails.getId(),
-                        userDetails.getRoleLevel(),
+                        userLevel,
                         userDetails.getDepartmentId(),
                         userDetails.getRoleId()
                 );
