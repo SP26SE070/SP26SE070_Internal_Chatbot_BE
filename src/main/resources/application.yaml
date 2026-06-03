@@ -97,9 +97,9 @@ jwt:
 
 # RAG smart chunking (ChunkingService): theo ký tự; spreadsheet-rows = số dòng dữ liệu / chunk (header luôn lặp lại)
 rag:
-  chunk-max-chars: ${RAG_CHUNK_MAX_CHARS:1000}
+  chunk-max-chars: ${RAG_CHUNK_MAX_CHARS:512}
   chunk-min-chars: ${RAG_CHUNK_MIN_CHARS:100}
-  chunk-overlap-chars: ${RAG_CHUNK_OVERLAP_CHARS:100}
+  chunk-overlap-chars: ${RAG_CHUNK_OVERLAP_CHARS:64}
   spreadsheet-rows-per-chunk: ${RAG_SPREADSHEET_ROWS_PER_CHUNK:18}
   pdf-sparse-page-char-threshold: ${RAG_PDF_SPARSE_PAGE_CHARS:80}
 
