@@ -3,6 +3,7 @@ package com.gsp26se114.chatbot_rag_be.controller;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.gsp26se114.chatbot_rag_be.exception.PreviewRenderException;
 import com.gsp26se114.chatbot_rag_be.exception.PreviewUnsupportedFormatException;
+import com.gsp26se114.chatbot_rag_be.exception.SubscriptionLimitExceededException;
 import com.gsp26se114.chatbot_rag_be.entity.DocumentEntity;
 import com.gsp26se114.chatbot_rag_be.entity.DocumentTag;
 import com.gsp26se114.chatbot_rag_be.entity.DocumentVersion;
@@ -658,6 +659,8 @@ public class DocumentController {
             // Build response
             return ResponseEntity.ok(toResponse(document));
 
+        } catch (SubscriptionLimitExceededException e) {
+            throw e;
         } catch (Exception e) {
             log.error("Failed to upload document", e);
             return ResponseEntity.internalServerError().body("Upload failed: " + e.getMessage());

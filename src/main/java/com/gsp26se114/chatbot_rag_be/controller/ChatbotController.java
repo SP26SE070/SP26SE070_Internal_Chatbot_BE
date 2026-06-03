@@ -23,6 +23,7 @@ import com.gsp26se114.chatbot_rag_be.service.ChatHistoryService;
 import com.gsp26se114.chatbot_rag_be.service.ChunkEmbeddingVectorSchemaService;
 import com.gsp26se114.chatbot_rag_be.service.GeminiChatService;
 import com.gsp26se114.chatbot_rag_be.service.RateLimiterService;
+import com.gsp26se114.chatbot_rag_be.service.SubscriptionValidationService;
 import com.gsp26se114.chatbot_rag_be.service.TenantEmbeddingService;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.tags.Tag;
@@ -60,6 +61,7 @@ public class ChatbotController {
     private final ChatbotConfigRepository chatbotConfigRepository;
     private final ChatMessageRepository chatMessageRepository;
     private final RateLimiterService rateLimiterService;
+    private final SubscriptionValidationService subscriptionValidationService;
     @Value("${embedding.storage-dimension:768}")
     private int storageDimension;
     @Value("${embedding.local.dimension:1024}")
@@ -73,6 +75,7 @@ public class ChatbotController {
             @AuthenticationPrincipal UserPrincipal userDetails
     ) {
         long startTime = System.currentTimeMillis();
+        subscriptionValidationService.validateChatUsage(userDetails.getTenantId());
 
         try {
             log.info("User {} asking: {}", userDetails.getEmail(), request.getMessage());

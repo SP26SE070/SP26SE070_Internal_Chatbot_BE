@@ -157,6 +157,13 @@ public class GlobalExceptionHandler {
     /**
      * Xử lý các runtime exception khác
      */
+    @ExceptionHandler(SubscriptionLimitExceededException.class)
+    public ResponseEntity<ApiErrorResponse> handleSubscriptionLimitExceeded(SubscriptionLimitExceededException ex) {
+        log.warn("Subscription limit exceeded: {}", ex.getMessage());
+        return ResponseEntity.status(HttpStatus.FORBIDDEN)
+                .body(new ApiErrorResponse("SUBSCRIPTION_LIMIT_EXCEEDED", ex.getMessage(), null));
+    }
+
     @ExceptionHandler(RuntimeException.class)
     public ResponseEntity<ApiErrorResponse> handleRuntimeException(RuntimeException ex) {
         log.error("Runtime exception: ", ex);
