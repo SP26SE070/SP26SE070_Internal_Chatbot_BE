@@ -31,6 +31,20 @@ public class SubscriptionValidationService {
         enforceLimit("max_users", currentUsers, maxUsers);
     }
 
+    public void validateBulkUserCreation(UUID tenantId, int additionalCount) {
+        if (additionalCount <= 0) {
+            return;
+        }
+        Subscription subscription = activeSubscriptionOrThrow(tenantId);
+        int maxUsers = requireIntegerLimit(subscription.getMaxUsers(), "max_users", tenantId);
+
+        long currentUsers = userRepository.countByTenantIdAndIsActive(tenantId, true);
+        long projectedUsers = currentUsers + additionalCount;
+        if (projectedUsers > maxUsers) {
+            throw new SubscriptionLimitExceededException("max_users", projectedUsers, maxUsers);
+        }
+    }
+
     public void validateDocumentUpload(UUID tenantId) {
         Subscription subscription = activeSubscriptionOrThrow(tenantId);
         int maxDocuments = requireIntegerLimit(subscription.getMaxDocuments(), "max_documents", tenantId);

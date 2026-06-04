@@ -40,6 +40,9 @@ spring:
           writetimeout: 5000
 
 app:
+  import:
+    max-rows: ${IMPORT_MAX_ROWS:500}
+    session-ttl-minutes: ${IMPORT_SESSION_TTL_MINUTES:30}
   dev:
     hard-delete-enabled: ${DEV_HARD_DELETE_ENABLED:true}
   mail:
@@ -73,7 +76,7 @@ app:
 # Server configuration for proxy support (ngrok)
 server:
   forward-headers-strategy: framework
-  port: 8080
+  port: ${PORT:8080}
 
 management:
   health:

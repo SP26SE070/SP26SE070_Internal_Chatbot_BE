@@ -28,21 +28,49 @@ public interface DocumentRepository extends JpaRepository<DocumentEntity, UUID> 
      * 
      * Dùng native query vì Hibernate 6 không support MEMBER OF với JSONB
      */
+    /** Level 1–2 / tenant admin: mọi phòng ban (theo ngưỡng level). */
     @Query(value = """
-        SELECT * FROM documents 
-        WHERE tenant_id = :tenantId 
+        SELECT * FROM documents
+        WHERE tenant_id = :tenantId
+        AND is_active = true
+        AND minimum_role_level >= :userRoleLevel
+        ORDER BY uploaded_at DESC
+        """, nativeQuery = true)
+    List<DocumentEntity> findDocumentsForOrgWideViewer(
+            @Param("tenantId") UUID tenantId,
+            @Param("userRoleLevel") Integer userRoleLevel
+    );
+
+    /**
+     * Level 3–5: cùng phòng ban ({@code owner_department_id}) + ngưỡng level;
+     * hỗ trợ bản ghi cũ không có owner_department_id.
+     */
+    @Query(value = """
+        SELECT * FROM documents
+        WHERE tenant_id = :tenantId
         AND is_active = true
         AND minimum_role_level >= :userRoleLevel
         AND (
             uploaded_by = CAST(:userId AS uuid)
-            OR visibility = 'COMPANY_WIDE'
-            OR (visibility = 'SPECIFIC_DEPARTMENTS'
-                AND accessible_departments @> CAST(CONCAT('[', :userDepartmentId, ']') AS jsonb))
-            OR (visibility = 'SPECIFIC_ROLES'
-                AND accessible_roles @> CAST(CONCAT('[', :userRoleId, ']') AS jsonb))
-            OR (visibility = 'SPECIFIC_DEPARTMENTS_AND_ROLES'
-                AND accessible_departments @> CAST(CONCAT('[', :userDepartmentId, ']') AS jsonb)
-                AND accessible_roles @> CAST(CONCAT('[', :userRoleId, ']') AS jsonb))
+            OR (
+                :userDepartmentId IS NOT NULL
+                AND (
+                    owner_department_id = :userDepartmentId
+                    OR (
+                        owner_department_id IS NULL
+                        AND (
+                            visibility = 'COMPANY_WIDE'
+                            OR (visibility = 'SPECIFIC_DEPARTMENTS'
+                                AND accessible_departments @> CAST(CONCAT('[', :userDepartmentId, ']') AS jsonb))
+                            OR (visibility = 'SPECIFIC_ROLES'
+                                AND accessible_roles @> CAST(CONCAT('[', :userRoleId, ']') AS jsonb))
+                            OR (visibility = 'SPECIFIC_DEPARTMENTS_AND_ROLES'
+                                AND accessible_departments @> CAST(CONCAT('[', :userDepartmentId, ']') AS jsonb)
+                                AND accessible_roles @> CAST(CONCAT('[', :userRoleId, ']') AS jsonb))
+                        )
+                    )
+                )
+            )
         )
         ORDER BY uploaded_at DESC
         """, nativeQuery = true)
@@ -85,14 +113,25 @@ public interface DocumentRepository extends JpaRepository<DocumentEntity, UUID> 
         AND minimum_role_level >= :userRoleLevel
         AND (
             uploaded_by = CAST(:userId AS uuid)
-            OR visibility = 'COMPANY_WIDE'
-            OR (visibility = 'SPECIFIC_DEPARTMENTS'
-                AND accessible_departments @> CAST(CONCAT('[', :userDepartmentId, ']') AS jsonb))
-            OR (visibility = 'SPECIFIC_ROLES'
-                AND accessible_roles @> CAST(CONCAT('[', :userRoleId, ']') AS jsonb))
-            OR (visibility = 'SPECIFIC_DEPARTMENTS_AND_ROLES'
-                AND accessible_departments @> CAST(CONCAT('[', :userDepartmentId, ']') AS jsonb)
-                AND accessible_roles @> CAST(CONCAT('[', :userRoleId, ']') AS jsonb))
+            OR (
+                :userDepartmentId IS NOT NULL
+                AND (
+                    owner_department_id = :userDepartmentId
+                    OR (
+                        owner_department_id IS NULL
+                        AND (
+                            visibility = 'COMPANY_WIDE'
+                            OR (visibility = 'SPECIFIC_DEPARTMENTS'
+                                AND accessible_departments @> CAST(CONCAT('[', :userDepartmentId, ']') AS jsonb))
+                            OR (visibility = 'SPECIFIC_ROLES'
+                                AND accessible_roles @> CAST(CONCAT('[', :userRoleId, ']') AS jsonb))
+                            OR (visibility = 'SPECIFIC_DEPARTMENTS_AND_ROLES'
+                                AND accessible_departments @> CAST(CONCAT('[', :userDepartmentId, ']') AS jsonb)
+                                AND accessible_roles @> CAST(CONCAT('[', :userRoleId, ']') AS jsonb))
+                        )
+                    )
+                )
+            )
         )
         AND (:keyword IS NULL OR (
              LOWER(document_title) LIKE LOWER(CONCAT('%', :keyword, '%'))

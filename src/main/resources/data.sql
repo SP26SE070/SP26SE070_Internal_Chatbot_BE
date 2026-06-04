@@ -89,7 +89,7 @@ CREATE TABLE roles (
     role_id SERIAL PRIMARY KEY,
     code VARCHAR(50) NOT NULL,
     name VARCHAR(100) NOT NULL,
-    level INTEGER NOT NULL CHECK (level BETWEEN 1 AND 5),
+    level INTEGER CHECK (level BETWEEN 1 AND 5),
     description VARCHAR(500),
     tenant_id UUID REFERENCES tenants(tenant_id) ON DELETE CASCADE,
     role_type VARCHAR(20) NOT NULL DEFAULT 'FIXED',
@@ -888,8 +888,8 @@ INSERT INTO tenants (
 -------------------------------------------------------
 -- System Roles (tenant_id = NULL, role_type = 'SYSTEM')
 INSERT INTO roles (code, name, level, description, tenant_id, role_type) VALUES
-('SUPER_ADMIN', 'Super Administrator', 1, 'System administrator with full access to platform', NULL, 'SYSTEM'),
-('STAFF', 'Platform Staff', 2, 'Platform staff member', NULL, 'SYSTEM');
+('SUPER_ADMIN', 'Super Administrator', NULL, 'System administrator with full access to platform', NULL, 'SYSTEM'),
+('STAFF', 'Platform Staff', NULL, 'Platform staff member', NULL, 'SYSTEM');
 
 -- Tenant Fixed Roles (tenant_id = NULL, role_type = 'FIXED')
 -- Note: TENANT_ADMIN can manage all organization features including documents

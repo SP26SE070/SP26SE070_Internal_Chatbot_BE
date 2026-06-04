@@ -36,24 +36,32 @@ public interface DocumentChunkRepository extends JpaRepository<DocumentChunkEnti
         FROM document_chunks c
         JOIN documents d ON c.document_id = d.document_id
         WHERE c.tenant_id = :tenantId
+          AND d.is_active = true
           AND c.minimum_role_level >= :userRoleLevel
-                    AND (:categoryId IS NULL OR c.category_id = :categoryId)
-                    AND (:tagIds IS NULL OR c.tag_ids @> CAST(:tagIds AS jsonb))
+          AND (:categoryId IS NULL OR c.category_id = :categoryId)
+          AND (:tagIds IS NULL OR c.tag_ids @> CAST(:tagIds AS jsonb))
           AND (c.embedding <=> CAST(:queryEmbedding AS vector)) < :maxDistance
+          AND (d.active_version_id IS NULL OR c.version_id = d.active_version_id)
           AND (
               d.uploaded_by = CAST(:userId AS uuid)
-              OR :userRoleLevel < c.minimum_role_level
-              OR c.visibility = 'COMPANY_WIDE'
+              OR :orgWideViewer = true
               OR (
-                  (d.active_version_id IS NULL OR c.version_id = d.active_version_id)
+                  :userDepartmentId IS NOT NULL
                   AND (
-                      (c.visibility = 'SPECIFIC_DEPARTMENTS'
-                       AND c.accessible_departments @> CAST(CONCAT('[', :userDepartmentId, ']') AS jsonb))
-                      OR (c.visibility = 'SPECIFIC_ROLES'
-                       AND c.accessible_roles @> CAST(CONCAT('[', :userRoleId, ']') AS jsonb))
-                      OR (c.visibility = 'SPECIFIC_DEPARTMENTS_AND_ROLES'
-                       AND c.accessible_departments @> CAST(CONCAT('[', :userDepartmentId, ']') AS jsonb)
-                       AND c.accessible_roles @> CAST(CONCAT('[', :userRoleId, ']') AS jsonb))
+                      d.owner_department_id = :userDepartmentId
+                      OR (
+                          d.owner_department_id IS NULL
+                          AND (
+                              c.visibility = 'COMPANY_WIDE'
+                              OR (c.visibility = 'SPECIFIC_DEPARTMENTS'
+                                  AND c.accessible_departments @> CAST(CONCAT('[', :userDepartmentId, ']') AS jsonb))
+                              OR (c.visibility = 'SPECIFIC_ROLES'
+                                  AND c.accessible_roles @> CAST(CONCAT('[', :userRoleId, ']') AS jsonb))
+                              OR (c.visibility = 'SPECIFIC_DEPARTMENTS_AND_ROLES'
+                                  AND c.accessible_departments @> CAST(CONCAT('[', :userDepartmentId, ']') AS jsonb)
+                                  AND c.accessible_roles @> CAST(CONCAT('[', :userRoleId, ']') AS jsonb))
+                          )
+                      )
                   )
               )
           )
@@ -64,11 +72,12 @@ public interface DocumentChunkRepository extends JpaRepository<DocumentChunkEnti
             @Param("tenantId") UUID tenantId,
             @Param("userId") UUID userId,
             @Param("userRoleLevel") Integer userRoleLevel,
+            @Param("orgWideViewer") boolean orgWideViewer,
             @Param("queryEmbedding") String queryEmbedding,
             @Param("userDepartmentId") Integer userDepartmentId,
             @Param("userRoleId") Integer userRoleId,
-                @Param("categoryId") UUID categoryId,
-                @Param("tagIds") String tagIds,
+            @Param("categoryId") UUID categoryId,
+            @Param("tagIds") String tagIds,
             @Param("maxDistance") double maxDistance,
             @Param("limit") int limit
     );
