@@ -255,39 +255,19 @@ public class ChatbotController {
                     similarChunks.stream().map(DocumentChunkEntity::getContent).distinct().count());
 
             sources = similarChunks.stream()
-                    .map(chunk -> {
-                        DocumentEntity doc = documentRepository.findById(chunk.getDocumentId()).orElse(null);
-                        float[] chunkEmbedding = embeddingService.parseVector(chunk.getEmbedding());
-                        double distance = queryEmbeddingFinal != null
-                                ? embeddingService.cosineDistance(queryEmbeddingFinal, chunkEmbedding)
-                                : 1.0;
-                        double similarity = Math.round((1.0 - distance) * 100.0) / 100.0;
-
-                        return ChatResponse.SourceDocument.builder()
-                                .documentId(chunk.getDocumentId().toString())
-                                .documentTitle(doc != null && doc.getDocumentTitle() != null && !doc.getDocumentTitle().isBlank()
-                                        ? doc.getDocumentTitle()
-                                        : doc != null ? doc.getOriginalFileName() : "Unknown")
-                                .fileName(doc != null ? doc.getOriginalFileName() : "Unknown")
-                                .chunkContent(chunk.getContent().substring(0, Math.min(200, chunk.getContent().length())) + "...")
-                                .chunkIndex(chunk.getChunkIndex())
-                                .relevanceScore(similarity)
-                                .build();
-                    })
-                    .filter(source -> source.getRelevanceScore() >= 0.70)
                     .collect(Collectors.toMap(
-                            ChatResponse.SourceDocument::getDocumentId,
-                            source -> source,
-                            (existing, replacement) -> existing.getRelevanceScore() >= replacement.getRelevanceScore()
-                                    ? existing : replacement
+                            DocumentChunkEntity::getDocumentId,
+                            chunk -> buildSourceDocument(chunk, queryEmbeddingFinal),
+                            this::higherRelevanceSource
                     ))
                     .values()
                     .stream()
+                    .filter(source -> source.getRelevanceScore() >= 0.70)
                     .sorted((s1, s2) -> Double.compare(s2.getRelevanceScore(), s1.getRelevanceScore()))
                     .limit(3)
                     .toList();
 
-            log.info("Filtered to {} unique highly relevant sources (>=70% similarity, top 3)", sources.size());
+            log.info("Grouped to {} unique highly relevant source documents (>=70% max similarity, top 3)", sources.size());
 
             // Step 4: Generate answer with Gemini
             List<ChatMessage> conversationHistory = List.of();
@@ -454,6 +434,47 @@ public class ChatbotController {
      */
     private boolean canUserReadDocument(UserPrincipal userDetails, DocumentEntity doc) {
         return documentAccessPolicy.canRead(userDetails, doc);
+    }
+
+    private ChatResponse.SourceDocument buildSourceDocument(DocumentChunkEntity chunk, float[] queryEmbedding) {
+        DocumentEntity doc = documentRepository.findById(chunk.getDocumentId()).orElse(null);
+        float[] chunkEmbedding = embeddingService.parseVector(chunk.getEmbedding());
+        double distance = queryEmbedding != null
+                ? embeddingService.cosineDistance(queryEmbedding, chunkEmbedding)
+                : 1.0;
+        double similarity = Math.round((1.0 - distance) * 100.0) / 100.0;
+        String originalFileName = doc != null ? doc.getOriginalFileName() : null;
+        String storedFileName = doc != null ? doc.getFileName() : null;
+
+        return ChatResponse.SourceDocument.builder()
+                .documentId(chunk.getDocumentId().toString())
+                .documentTitle(firstNonBlank(
+                        doc != null ? doc.getDocumentTitle() : null,
+                        originalFileName,
+                        storedFileName,
+                        "Unknown"))
+                .fileName(firstNonBlank(originalFileName, storedFileName, "Unknown"))
+                .chunkContent(chunk.getContent().substring(0, Math.min(200, chunk.getContent().length())) + "...")
+                .chunkIndex(chunk.getChunkIndex())
+                .relevanceScore(similarity)
+                .build();
+    }
+
+    private ChatResponse.SourceDocument higherRelevanceSource(
+            ChatResponse.SourceDocument existing,
+            ChatResponse.SourceDocument replacement) {
+        return existing.getRelevanceScore() >= replacement.getRelevanceScore()
+                ? existing
+                : replacement;
+    }
+
+    private String firstNonBlank(String... values) {
+        for (String value : values) {
+            if (value != null && !value.isBlank()) {
+                return value;
+            }
+        }
+        return "Unknown";
     }
 
     private String formatChunkForRagContext(DocumentChunkEntity chunk) {
