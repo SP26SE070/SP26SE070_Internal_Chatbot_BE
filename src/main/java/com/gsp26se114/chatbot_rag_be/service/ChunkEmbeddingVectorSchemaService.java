@@ -2,12 +2,11 @@ package com.gsp26se114.chatbot_rag_be.service;
 
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
+import org.springframework.beans.factory.annotation.Value;
 import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.stereotype.Service;
 
 import java.util.List;
-import java.util.regex.Matcher;
-import java.util.regex.Pattern;
 
 /**
  * Keeps {@code document_chunks.embedding} typmod aligned with the active embedding model
@@ -19,9 +18,11 @@ import java.util.regex.Pattern;
 public class ChunkEmbeddingVectorSchemaService {
 
     private static final Object LOCK = new Object();
-    private static final Pattern VECTOR_DIM = Pattern.compile("vector\\((\\d+)\\)");
 
     private final JdbcTemplate jdbcTemplate;
+
+    @Value("${embedding.allow-destructive-dimension-migration:false}")
+    private boolean allowDestructiveDimensionMigration;
 
     public void ensureColumnDimension(int targetDimension) {
         if (targetDimension <= 0 || targetDimension > 16_384) {
@@ -33,10 +34,21 @@ public class ChunkEmbeddingVectorSchemaService {
                 if (current != null && current == targetDimension) {
                     return;
                 }
+                if (!allowDestructiveDimensionMigration) {
+                    log.warn(
+                            "CRITICAL: document_chunks.embedding is vector({}) but active embedding target is vector({}). "
+                                    + "Changing this column requires clearing all existing embeddings and a manual re-index. "
+                                    + "Refusing destructive migration because embedding.allow-destructive-dimension-migration=false.",
+                            current, targetDimension);
+                    throw new IllegalStateException(
+                            "document_chunks.embedding dimension mismatch: current=" + current
+                                    + ", target=" + targetDimension
+                                    + ". Set embedding.allow-destructive-dimension-migration=true only during a planned "
+                                    + "manual vector reset, then re-index affected documents.");
+                }
                 log.warn(
-                        "Aligning document_chunks.embedding to vector({}) (was {}); existing vectors cleared.",
-                        targetDimension,
-                        current);
+                        "CRITICAL: embedding.allow-destructive-dimension-migration=true; clearing document_chunks.embedding "
+                                + "to migrate vector dimension. Manual re-index is required immediately after this change.");
                 jdbcTemplate.execute("DROP INDEX IF EXISTS idx_chunks_embedding_cosine");
                 jdbcTemplate.update("UPDATE document_chunks SET embedding = NULL WHERE embedding IS NOT NULL");
                 jdbcTemplate.execute(
@@ -66,26 +78,26 @@ public class ChunkEmbeddingVectorSchemaService {
     }
 
     private Integer readEmbeddingColumnDimension() {
-        List<String> typeRows = jdbcTemplate.query(
+        List<Integer> dimensions = jdbcTemplate.query(
                 """
-                        SELECT pg_catalog.format_type(a.atttypid, a.atttypmod) AS t
+                        SELECT CASE
+                                   WHEN a.atttypmod > 0 THEN a.atttypmod
+                                   ELSE NULL
+                               END AS dimension
                         FROM pg_attribute a
                         JOIN pg_class c ON a.attrelid = c.oid
                         JOIN pg_namespace n ON c.relnamespace = n.oid
+                        JOIN pg_type t ON a.atttypid = t.oid
                         WHERE n.nspname = 'public'
                           AND c.relname = 'document_chunks'
                           AND a.attname = 'embedding'
+                          AND t.typname = 'vector'
                           AND NOT a.attisdropped
                         """,
-                (rs, rowNum) -> rs.getString("t"));
-        if (typeRows.isEmpty()) {
-            return null;
-        }
-        String fmt = typeRows.get(0);
-        if (fmt == null) {
-            return null;
-        }
-        Matcher m = VECTOR_DIM.matcher(fmt);
-        return m.find() ? Integer.parseInt(m.group(1)) : null;
+                (rs, rowNum) -> {
+                    int dimension = rs.getInt("dimension");
+                    return rs.wasNull() ? null : dimension;
+                });
+        return dimensions.isEmpty() ? null : dimensions.get(0);
     }
 }
