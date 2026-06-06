@@ -135,7 +135,7 @@ gemini:
   models:
     starter: ts/gemini-2.5-flash
     standard: ts/gemini-2.5-flash
-    enterprise: ts/gemini-3.1-pro
+    enterprise: csu/pro/gpt-5.5
 
 # Enterprise VPS provisioning
 enterprise:
