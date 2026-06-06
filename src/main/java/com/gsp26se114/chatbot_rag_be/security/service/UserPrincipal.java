@@ -79,7 +79,7 @@ public class UserPrincipal implements UserDetails {
                 user.getTenantId(),
                 user.getDepartmentId(),
                 user.getRoleId(),
-                clampRoleLevel(role != null ? role.getLevel() : 4),
+                clampRoleLevel(role != null && role.getLevel() != null ? role.getLevel() : 4),
                 roleCode,
                 user.getTokenVersion(),
                 authorities

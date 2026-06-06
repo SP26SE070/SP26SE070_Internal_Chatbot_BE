@@ -29,7 +29,8 @@ public class SchemaCompatibilityRunner {
             jdbcTemplate.execute("""
                     UPDATE roles
                     SET level = CASE
-                        WHEN code IN ('SUPER_ADMIN', 'STAFF') THEN NULL
+                        WHEN code = 'SUPER_ADMIN' THEN 1
+                        WHEN code = 'STAFF' THEN 2
                         WHEN code = 'TENANT_ADMIN' THEN COALESCE(level, 2)
                         WHEN code = 'EMPLOYEE' THEN COALESCE(level, 4)
                         ELSE COALESCE(level, 4)
