@@ -22,6 +22,9 @@ public class SchemaCompatibilityRunner {
     @Value("${embedding.storage-dimension:768}")
     private int embeddingStorageDimension;
 
+    @Value("${embedding.allow-destructive-dimension-migration:false}")
+    private boolean allowDestructiveDimensionMigration;
+
     @EventListener(ApplicationReadyEvent.class)
     public void applyCompatibilityMigrations() {
         try {
@@ -112,31 +115,33 @@ public class SchemaCompatibilityRunner {
     }
 
     /**
-     * When {@code embedding.storage-dimension} is not the baseline 768, align PostgreSQL
-     * {@code document_chunks.embedding} with the configured vector dimension. Clears existing vectors so re-index is required.
+     * Align PostgreSQL {@code document_chunks.embedding} with the configured vector
+     * dimension only when explicitly permitted. Changing vector typmod requires
+     * clearing existing vectors first, so routine deploys must be a no-op.
      */
     private void maybeUpgradeChunkEmbeddingVectorDimension() {
-        if (embeddingStorageDimension == 768) {
-            return;  // 768 is the baseline, no migration needed
+        if (embeddingStorageDimension <= 0 || embeddingStorageDimension > 16_384) {
+            log.warn("Skipping document_chunks.embedding dimension check: invalid target dimension={}",
+                    embeddingStorageDimension);
+            return;
         }
         try {
-            var typeRows = jdbcTemplate.query(
-                    """
-                            SELECT pg_catalog.format_type(a.atttypid, a.atttypmod) AS t
-                            FROM pg_attribute a
-                            JOIN pg_class c ON a.attrelid = c.oid
-                            JOIN pg_namespace n ON c.relnamespace = n.oid
-                            WHERE n.nspname = 'public'
-                              AND c.relname = 'document_chunks'
-                              AND a.attname = 'embedding'
-                              AND NOT a.attisdropped
-                            """,
-                    (rs, rowNum) -> rs.getString("t"));
-            String fmt = typeRows.isEmpty() ? null : typeRows.get(0);
-            if (fmt != null && fmt.contains(String.valueOf(embeddingStorageDimension))) {
+            Integer currentDimension = readEmbeddingColumnDimension();
+            if (currentDimension != null && currentDimension == embeddingStorageDimension) {
                 log.debug("document_chunks.embedding already vector({}); skip column migration.", embeddingStorageDimension);
                 return;
             }
+            if (!allowDestructiveDimensionMigration) {
+                log.warn(
+                        "CRITICAL: document_chunks.embedding is vector({}) but configured target is vector({}). "
+                                + "Changing this column requires clearing all existing embeddings and a manual re-index. "
+                                + "Skipping destructive migration because embedding.allow-destructive-dimension-migration=false.",
+                        currentDimension, embeddingStorageDimension);
+                return;
+            }
+            log.warn(
+                    "CRITICAL: embedding.allow-destructive-dimension-migration=true; clearing document_chunks.embedding "
+                            + "to migrate vector dimension. Manual re-index is required immediately after startup.");
             jdbcTemplate.execute("DROP INDEX IF EXISTS idx_chunks_embedding_cosine");
             jdbcTemplate.update("UPDATE document_chunks SET embedding = NULL WHERE embedding IS NOT NULL");
             jdbcTemplate.execute("ALTER TABLE document_chunks ALTER COLUMN embedding TYPE vector(" + embeddingStorageDimension + ")");
@@ -150,10 +155,34 @@ public class SchemaCompatibilityRunner {
                         "USING hnsw (embedding vector_cosine_ops)");
             }
             log.info(
-                    "document_chunks.embedding set to vector({}) for configured embeddings; prior vectors cleared - re-index documents.",
+                    "document_chunks.embedding set to vector({}) for configured embeddings; prior vectors cleared - manual re-index required.",
                     embeddingStorageDimension);
         } catch (Exception ex) {
             log.warn("Chunk embedding vector({}) migration skipped: {}", embeddingStorageDimension, ex.getMessage());
         }
+    }
+
+    private Integer readEmbeddingColumnDimension() {
+        var dimensions = jdbcTemplate.query(
+                """
+                        SELECT CASE
+                                   WHEN a.atttypmod > 0 THEN a.atttypmod
+                                   ELSE NULL
+                               END AS dimension
+                        FROM pg_attribute a
+                        JOIN pg_class c ON a.attrelid = c.oid
+                        JOIN pg_namespace n ON c.relnamespace = n.oid
+                        JOIN pg_type t ON a.atttypid = t.oid
+                        WHERE n.nspname = 'public'
+                          AND c.relname = 'document_chunks'
+                          AND a.attname = 'embedding'
+                          AND t.typname = 'vector'
+                          AND NOT a.attisdropped
+                        """,
+                (rs, rowNum) -> {
+                    int dimension = rs.getInt("dimension");
+                    return rs.wasNull() ? null : dimension;
+                });
+        return dimensions.isEmpty() ? null : dimensions.get(0);
     }
 }
