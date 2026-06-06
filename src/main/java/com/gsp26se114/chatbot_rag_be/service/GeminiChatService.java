@@ -63,7 +63,7 @@ public class GeminiChatService {
     @Value("${gemini.models.standard:gemini-2.5-flash}")
     private String standardModel;
 
-    @Value("${gemini.models.enterprise:gemini-2.5-pro}")
+    @Value("${gemini.models.enterprise:csu/pro/gpt-5.5}")
     private String enterpriseModel;
 
     @Value("${gemini.models.starter:ts/gemini-2.5-flash}")
@@ -396,7 +396,7 @@ public class GeminiChatService {
 
     /**
      * Resolves which Gemini model to use based on current tenant tier.
-     * - ENTERPRISE → enterpriseModel (Gemini Pro)
+     * - ENTERPRISE → enterpriseModel
      * - STANDARD → standardModel (Gemini Flash) 
      * - STARTER/TRIAL → starterModel (Gemini Flash)
      * - No tenant context → defaultModel
