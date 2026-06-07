@@ -22,6 +22,19 @@ import java.util.UUID;
 @Slf4j
 public class EnterpriseBackupService {
 
+    public static class BackupUnavailableException extends RuntimeException {
+        public BackupUnavailableException(String message) {
+            super(message);
+        }
+
+        public BackupUnavailableException(String message, Throwable cause) {
+            super(message, cause);
+        }
+    }
+
+    private static final String RUNTIME_UNAVAILABLE_MESSAGE =
+            "Enterprise backup is available only on the admin/VPS environment because pg_dump runtime is not available in this deployment.";
+
     @Value("${backup.docker-container:chatbot-postgres}")
     private String dockerContainer;
 
@@ -43,7 +56,7 @@ public class EnterpriseBackupService {
 
     public BackupResult backupTenant(UUID tenantId) {
         var ds = tenantDatasourceRepository.findByTenantIdAndIsActiveTrue(tenantId)
-                .orElseThrow(() -> new RuntimeException(
+                .orElseThrow(() -> new BackupUnavailableException(
                         "No active enterprise datasource for tenant " + tenantId));
 
         String dbName = extractDatabaseName(ds.getDatasourceUrl());
@@ -71,10 +84,10 @@ public class EnterpriseBackupService {
             int exit = process.waitFor();
 
             if (exit != 0) {
-                String err = Files.readString(errFile);
+                String err = sanitizeProcessError(Files.readString(errFile));
                 Files.deleteIfExists(outFile);
                 Files.deleteIfExists(errFile);
-                throw new RuntimeException("pg_dump failed (exit " + exit + "): " + err);
+                throw new BackupUnavailableException("pg_dump failed (exit " + exit + "): " + err);
             }
             Files.deleteIfExists(errFile);
 
@@ -83,11 +96,22 @@ public class EnterpriseBackupService {
             return new BackupResult(tenantId, dbName, outFile, size);
 
         } catch (IOException e) {
-            throw new RuntimeException("Backup failed for tenant " + tenantId + ": " + e.getMessage(), e);
+            throw new BackupUnavailableException(RUNTIME_UNAVAILABLE_MESSAGE, e);
         } catch (InterruptedException e) {
             Thread.currentThread().interrupt();
-            throw new RuntimeException("Backup interrupted for tenant " + tenantId, e);
+            throw new BackupUnavailableException("Backup interrupted for tenant " + tenantId, e);
         }
+    }
+
+    private String sanitizeProcessError(String error) {
+        if (error == null || error.isBlank()) {
+            return "pg_dump command did not return diagnostic output";
+        }
+        return error
+                .replace(pgPassword, "[REDACTED]")
+                .replaceAll("(?i)(password=)[^\\s]+", "$1[REDACTED]")
+                .replaceAll("(?i)(PGPASSWORD=)[^\\s]+", "$1[REDACTED]")
+                .trim();
     }
 
     /**

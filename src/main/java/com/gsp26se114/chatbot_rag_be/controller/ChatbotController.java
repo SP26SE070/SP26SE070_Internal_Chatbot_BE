@@ -269,6 +269,10 @@ public class ChatbotController {
 
             log.info("Grouped to {} unique highly relevant source documents (>=70% max similarity, top 3)", sources.size());
 
+            if (chatbotMode == ChatbotMode.STRICT && sources.isEmpty()) {
+                return handleAndSaveRestrictedResponse(request, userDetails, startTime, "no_match");
+            }
+
             // Step 4: Generate answer with Gemini
             List<ChatMessage> conversationHistory = List.of();
 

@@ -87,6 +87,13 @@ public class EnterpriseProvisioningController {
                     .contentType(MediaType.APPLICATION_OCTET_STREAM)
                     .contentLength(result.sizeBytes())
                     .body(resource);
+        } catch (EnterpriseBackupService.BackupUnavailableException e) {
+            log.warn("Backup unavailable for tenant {}: {}", tenantId, e.getMessage());
+            Map<String, Object> error = new HashMap<>();
+            error.put("success", false);
+            error.put("tenantId", tenantId.toString());
+            error.put("error", e.getMessage());
+            return ResponseEntity.status(503).body(error);
         } catch (Exception e) {
             log.error("Backup failed for tenant {}: {}", tenantId, e.getMessage(), e);
             Map<String, Object> error = new HashMap<>();
