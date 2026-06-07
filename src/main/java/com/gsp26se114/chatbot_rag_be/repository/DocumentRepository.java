@@ -20,6 +20,12 @@ public interface DocumentRepository extends JpaRepository<DocumentEntity, UUID> 
     List<DocumentEntity> findByTenantIdAndIsActiveOrderByUploadedAtDesc(UUID tenantId, Boolean isActive);
     
     /**
+     * Sum active document file sizes (bytes) for quota display.
+     */
+    @Query("SELECT COALESCE(SUM(d.fileSize), 0) FROM DocumentEntity d WHERE d.tenantId = :tenantId AND d.isActive = true")
+    Long sumActiveFileSizeByTenantId(@Param("tenantId") UUID tenantId);
+
+    /**
      * Lấy documents mà user có quyền xem (cho RAG query)
      * Logic:
      * 1. COMPANY_WIDE → Tất cả xem được

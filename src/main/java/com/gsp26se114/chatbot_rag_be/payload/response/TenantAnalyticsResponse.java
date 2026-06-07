@@ -30,4 +30,10 @@ public class TenantAnalyticsResponse {
     // ========== RECENT ACTIVITY ==========
     private Integer usersCreatedLast7Days;
     private Integer usersCreatedLast30Days;
+
+    // ========== DOCUMENT STATISTICS ==========
+    private Integer totalDocuments;
+
+    // ========== STORAGE USAGE ==========
+    private Double storageUsedGb;
 }

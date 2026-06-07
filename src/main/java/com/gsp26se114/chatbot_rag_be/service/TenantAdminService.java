@@ -13,6 +13,7 @@ import com.gsp26se114.chatbot_rag_be.payload.response.TenantAnalyticsResponse;
 import com.gsp26se114.chatbot_rag_be.payload.response.UserResponse;
 import com.gsp26se114.chatbot_rag_be.repository.AuditLogRepository;
 import com.gsp26se114.chatbot_rag_be.repository.DepartmentRepository;
+import com.gsp26se114.chatbot_rag_be.repository.DocumentRepository;
 import com.gsp26se114.chatbot_rag_be.repository.RoleRepository;
 import com.gsp26se114.chatbot_rag_be.repository.TenantRepository;
 import com.gsp26se114.chatbot_rag_be.repository.UserRepository;
@@ -42,6 +43,7 @@ public class TenantAdminService {
     private final TenantRepository tenantRepository;
     private final RoleRepository roleRepository;
     private final DepartmentRepository departmentRepository;
+    private final DocumentRepository documentRepository;
     private final AuditLogRepository auditLogRepository;
     private final PasswordEncoder passwordEncoder;
     private final EmailService emailService;
@@ -115,7 +117,11 @@ public class TenantAdminService {
                 usersByDepartment.put("Chưa có phòng ban", usersByDepartment.getOrDefault("Chưa có phòng ban", 0L) + 1);
             }
         }
-        
+
+            long activeDocumentBytes = documentRepository.sumActiveFileSizeByTenantId(tenantId);
+            double storageUsedGb = activeDocumentBytes / 1024.0 / 1024.0 / 1024.0;
+            int totalDocuments = documentRepository.countByTenantIdAndIsActive(tenantId, true).intValue();
+
         // ========== BUILD RESPONSE ==========
         return TenantAnalyticsResponse.builder()
                 .totalUsers(totalUsers)
@@ -125,6 +131,8 @@ public class TenantAdminService {
                 .usersByDepartment(usersByDepartment)
                 .usersCreatedLast7Days((int) usersCreatedLast7Days)
                 .usersCreatedLast30Days((int) usersCreatedLast30Days)
+                .totalDocuments(totalDocuments)
+                .storageUsedGb(storageUsedGb)
                 .build();
     }
     
