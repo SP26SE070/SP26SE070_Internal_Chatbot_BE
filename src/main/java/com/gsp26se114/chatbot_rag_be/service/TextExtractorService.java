@@ -6,6 +6,7 @@ import org.apache.pdfbox.pdmodel.PDDocument;
 import org.apache.pdfbox.text.PDFTextStripper;
 import org.apache.poi.ss.usermodel.Cell;
 import org.apache.poi.ss.usermodel.DataFormatter;
+import org.apache.poi.ss.usermodel.FormulaEvaluator;
 import org.apache.poi.ss.usermodel.Row;
 import org.apache.poi.ss.usermodel.Sheet;
 import org.apache.poi.ss.usermodel.Workbook;
@@ -221,6 +222,7 @@ public class TextExtractorService {
     private String extractFromXlsx(byte[] fileContent) throws IOException {
         try (Workbook wb = new XSSFWorkbook(new ByteArrayInputStream(fileContent))) {
             DataFormatter fmt = new DataFormatter();
+            FormulaEvaluator evaluator = wb.getCreationHelper().createFormulaEvaluator();
             StringBuilder sb = new StringBuilder();
             for (int s = 0; s < wb.getNumberOfSheets(); s++) {
                 Sheet sheet = wb.getSheetAt(s);
@@ -234,7 +236,7 @@ public class TextExtractorService {
                         continue;
                     }
                     for (Cell cell : row) {
-                        sb.append(fmt.formatCellValue(cell)).append('\t');
+                        sb.append(fmt.formatCellValue(cell, evaluator)).append('\t');
                     }
                     sb.append('\n');
                 }
