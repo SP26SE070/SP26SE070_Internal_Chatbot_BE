@@ -27,11 +27,15 @@ public class TenantRegistrationService {
      */
     @Transactional
     public void registerTenant(TenantRegistrationRequest request) {
+        String normalizedEmail = request.getContactEmail().trim().toLowerCase();
+        validateEmailDomain(normalizedEmail);
+        request.setContactEmail(normalizedEmail);
+
         // Basic uniqueness checks
         if (tenantRepository.existsByName(request.getCompanyName())) {
             throw new RuntimeException("Tên công ty đã được đăng ký. Vui lòng dùng tên khác hoặc liên hệ hỗ trợ.");
         }
-        if (tenantRepository.existsByContactEmail(request.getContactEmail())) {
+        if (tenantRepository.existsByContactEmail(normalizedEmail)) {
             throw new RuntimeException("Email người đại diện đã được sử dụng để đăng ký. Vui lòng dùng email khác hoặc liên hệ hỗ trợ.");
         }
 
@@ -76,6 +80,21 @@ public class TenantRegistrationService {
             log.info("Sent tenant registration confirmation email to {}", saved.getContactEmail());
         } catch (Exception e) {
             log.error("Failed to send tenant registration confirmation email to {}", saved.getContactEmail(), e);
+        }
+    }
+
+    static void validateEmailDomain(String email) {
+        int atIndex = email.lastIndexOf('@');
+        if (atIndex < 0) {
+            return;
+        }
+        String domain = email.substring(atIndex + 1);
+        String[] labels = domain.split("\\.");
+        if (labels.length >= 2
+                && labels[labels.length - 1].equalsIgnoreCase(labels[labels.length - 2])
+                && !labels[labels.length - 1].isEmpty()) {
+            throw new RuntimeException(
+                    "Email người đại diện không hợp lệ. Vui lòng kiểm tra lại tên miền email.");
         }
     }
 }

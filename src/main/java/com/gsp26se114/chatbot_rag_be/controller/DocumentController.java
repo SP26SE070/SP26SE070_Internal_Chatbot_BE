@@ -230,6 +230,8 @@ public class DocumentController {
             headers.setContentLength(body.length);
             headers.set(HttpHeaders.CACHE_CONTROL, CacheControl.noCache().cachePrivate().mustRevalidate().getHeaderValue());
             headers.set("X-Preview-Mode", "text");
+            headers.set("X-Preview-Kind", "extracted-text");
+            headers.set("X-Preview-Description", "Extracted text for search/RAG, not original visual layout");
             headers.set("X-Source-Content-Type", resolveContentType(originalFileName, fileType));
             headers.setContentDisposition(
                     ContentDisposition.builder("inline")
