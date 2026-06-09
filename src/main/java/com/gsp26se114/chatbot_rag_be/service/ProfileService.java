@@ -2,6 +2,7 @@ package com.gsp26se114.chatbot_rag_be.service;
 
 import com.gsp26se114.chatbot_rag_be.config.TenantContext;
 import com.gsp26se114.chatbot_rag_be.entity.User;
+import com.gsp26se114.chatbot_rag_be.exception.BadRequestException;
 import com.gsp26se114.chatbot_rag_be.repository.UserRepository;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
@@ -114,15 +115,15 @@ public class ProfileService {
 
             if (!user.getMustChangePassword()) {
                 if (oldPassword == null || oldPassword.isEmpty()) {
-                    throw new RuntimeException("Mật khẩu cũ không được để trống!");
+                    throw new BadRequestException("Mật khẩu cũ không được để trống!");
                 }
                 if (!passwordEncoder.matches(oldPassword, user.getPassword())) {
-                    throw new RuntimeException("Mật khẩu cũ không đúng!");
+                    throw new BadRequestException("Mật khẩu cũ không đúng!");
                 }
             }
 
             if (oldPassword != null && oldPassword.equals(newPassword)) {
-                throw new RuntimeException("Mật khẩu mới phải khác mật khẩu cũ!");
+                throw new BadRequestException("Mật khẩu mới phải khác mật khẩu cũ!");
             }
 
             user.setPassword(passwordEncoder.encode(newPassword));

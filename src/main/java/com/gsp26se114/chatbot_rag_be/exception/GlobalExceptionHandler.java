@@ -99,6 +99,13 @@ public class GlobalExceptionHandler {
                 .body(new ApiErrorResponse("BAD_REQUEST", ex.getMessage(), null));
     }
 
+    @ExceptionHandler(BadRequestException.class)
+    public ResponseEntity<ApiErrorResponse> handleBadRequest(BadRequestException ex) {
+        log.warn("Bad request: {}", ex.getMessage());
+        return ResponseEntity.status(HttpStatus.BAD_REQUEST)
+                .body(new ApiErrorResponse("BAD_REQUEST", ex.getMessage(), null));
+    }
+
     @ExceptionHandler(ConflictException.class)
     public ResponseEntity<ApiErrorResponse> handleConflict(ConflictException ex) {
         log.warn("Conflict: {}", ex.getMessage());

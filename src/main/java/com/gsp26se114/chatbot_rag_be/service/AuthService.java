@@ -5,7 +5,9 @@ import com.gsp26se114.chatbot_rag_be.entity.BlacklistedToken;
 import com.gsp26se114.chatbot_rag_be.entity.RefreshToken;
 import com.gsp26se114.chatbot_rag_be.entity.RoleEntity;
 import com.gsp26se114.chatbot_rag_be.entity.User;
+import com.gsp26se114.chatbot_rag_be.exception.BadRequestException;
 import com.gsp26se114.chatbot_rag_be.exception.ForbiddenException;
+import com.gsp26se114.chatbot_rag_be.exception.ResourceNotFoundException;
 import com.gsp26se114.chatbot_rag_be.payload.request.*;
 import com.gsp26se114.chatbot_rag_be.payload.response.JwtResponse;
 import com.gsp26se114.chatbot_rag_be.payload.response.VerifyResetOtpResponse;
@@ -157,7 +159,7 @@ public class AuthService {
     public void forgotPassword(String email) {
         User user = TenantContext.withDefaultDataSource(() -> {
             User u = userRepository.findByEmail(email)
-                    .orElseThrow(() -> new RuntimeException("Email không tồn tại!"));
+                    .orElseThrow(() -> new ResourceNotFoundException("Email không tồn tại!"));
             String otp = String.format("%06d", new Random().nextInt(999999));
             u.setResetPasswordToken(otp);
             u.setTokenExpiry(LocalDateTime.now().plusMinutes(OTP_VALID_MINUTES));
@@ -186,15 +188,15 @@ public class AuthService {
     public VerifyResetOtpResponse verifyResetOtp(String email, String otp) {
         return TenantContext.withDefaultDataSource(() -> {
             User user = userRepository.findByEmail(email)
-                    .orElseThrow(() -> new RuntimeException("Email không tồn tại!"));
+                    .orElseThrow(() -> new ResourceNotFoundException("Email không tồn tại!"));
             if (user.getResetPasswordToken() == null || user.getTokenExpiry() == null) {
-                throw new RuntimeException("Chưa có mã OTP hợp lệ. Vui lòng gửi lại OTP.");
+                throw new BadRequestException("Chưa có mã OTP hợp lệ. Vui lòng gửi lại OTP.");
             }
             if (user.getTokenExpiry().isBefore(LocalDateTime.now())) {
-                throw new RuntimeException("OTP đã hết hạn!");
+                throw new BadRequestException("OTP đã hết hạn!");
             }
             if (!user.getResetPasswordToken().equals(otp.trim())) {
-                throw new RuntimeException("Mã OTP không đúng!");
+                throw new BadRequestException("Mã OTP không đúng!");
             }
 
             String sessionToken = UUID.randomUUID().toString();
@@ -217,7 +219,7 @@ public class AuthService {
             User user = userRepository.findByPasswordResetSessionToken(request.resetSessionToken())
                     .filter(u -> u.getPasswordResetSessionExpiry() != null
                             && u.getPasswordResetSessionExpiry().isAfter(LocalDateTime.now()))
-                    .orElseThrow(() -> new RuntimeException("Phiên đặt lại mật khẩu hết hạn hoặc không hợp lệ!"));
+                    .orElseThrow(() -> new BadRequestException("Phiên đặt lại mật khẩu hết hạn hoặc không hợp lệ!"));
             user.setPassword(passwordEncoder.encode(request.newPassword()));
             user.setResetPasswordToken(null);
             user.setTokenExpiry(null);
